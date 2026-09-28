@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Casebox.Server/Casebox.Server.csproj" />
+  <Project Path="Casebox.Server.Tests/Casebox.Server.Tests.csproj" />
+</Solution>

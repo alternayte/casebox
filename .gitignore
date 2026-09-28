@@ -1,0 +1,15 @@
+# Design doc stays local
+docs/SDD.md
+
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+.vs/
+.idea/
+.DS_Store
+node_modules/
+server/Casebox.Server/wwwroot/
+cli/dist/
+*.tsbuildinfo

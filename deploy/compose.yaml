@@ -1,0 +1,52 @@
+# The local stack that `casebox up` starts: server, QueueBox and Postgres on one database.
+# QueueBox is pinned by version; checks/queuebox-pin.sh keeps the server tests on the same image.
+name: casebox
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: casebox
+      POSTGRES_USER: casebox
+      POSTGRES_PASSWORD: ${CASEBOX_DB_PASSWORD:-casebox}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U casebox -d casebox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  queuebox:
+    image: ghcr.io/alternayte/queuebox:0.5.0
+    environment:
+      QUEUEBOX_DATABASE_URL: jdbc:postgresql://postgres:5432/casebox
+      QUEUEBOX_DATABASE_USERNAME: casebox
+      QUEUEBOX_DATABASE_PASSWORD: ${CASEBOX_DB_PASSWORD:-casebox}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  server:
+    image: ghcr.io/alternayte/casebox-server:${CASEBOX_VERSION:-dev}
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      ConnectionStrings__Casebox: Host=postgres;Database=casebox;Username=casebox;Password=${CASEBOX_DB_PASSWORD:-casebox}
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "${CASEBOX_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      queuebox:
+        condition: service_healthy
+
+volumes:
+  postgres:

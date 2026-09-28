@@ -1,0 +1,7 @@
+**/bin
+**/obj
+**/node_modules
+artifacts
+server/Casebox.Server/wwwroot
+docs/SDD.md
+.git

@@ -1,0 +1,12 @@
+Casebox is licensed per directory.
+
+  cli/      Apache License 2.0      cli/LICENSE
+  action/   Apache License 2.0      action/LICENSE
+  server/   GNU AGPL v3.0 only      server/LICENSE
+  web/      GNU AGPL v3.0 only      web/LICENSE
+  ee/       Commercial              ee/LICENSE
+
+Every other file in this repository is licensed under the Apache License 2.0,
+with the text in cli/LICENSE.
+
+Contributions are accepted under the Contributor License Agreement in CLA.md.

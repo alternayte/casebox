@@ -1,0 +1,9 @@
+namespace Casebox.Server.Tests.Infrastructure;
+
+// The images every server test runs against. deploy/compose.yaml pins the same QueueBox version;
+// checks/queuebox-pin.sh fails when the two differ.
+internal static class Images
+{
+    public const string Postgres = "postgres:16-alpine";
+    public const string QueueBox = "ghcr.io/alternayte/queuebox:0.5.0";
+}

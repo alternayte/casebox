@@ -1,0 +1,25 @@
+<Project>
+  <!-- The Deedbox family ships in lockstep; every package pins the same version. -->
+  <PropertyGroup>
+    <DeedboxVersion>0.3.1</DeedboxVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Deedbox" Version="$(DeedboxVersion)" />
+    <PackageVersion Include="Deedbox.Postgres" Version="$(DeedboxVersion)" />
+    <PackageVersion Include="Deedbox.QueueBox" Version="$(DeedboxVersion)" />
+    <PackageVersion Include="QueueBox.Inbox" Version="0.3.1" />
+    <PackageVersion Include="Npgsql" Version="10.0.2" />
+  </ItemGroup>
+
+  <!-- Tests only. -->
+  <ItemGroup>
+    <PackageVersion Include="Deedbox.Testing" Version="$(DeedboxVersion)" />
+    <PackageVersion Include="Testcontainers" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.8" />
+  </ItemGroup>
+</Project>

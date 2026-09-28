@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Casebox.Server</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Deedbox" />
+    <PackageReference Include="Deedbox.Postgres" />
+    <PackageReference Include="Deedbox.QueueBox" />
+    <PackageReference Include="QueueBox.Inbox" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Casebox.Server.Tests" />
+  </ItemGroup>
+
+</Project>

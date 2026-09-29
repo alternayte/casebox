@@ -191,7 +191,8 @@ public sealed class Planner(
             Math.Round(sandboxMinutes, 1),
             Math.Round(longest * repeats, 1),
             Math.Round(sandboxMinutes, 1),
-            Math.Round(total / repeats, 2)
+            Math.Round(total / repeats, 2),
+            repeats is >= 1 and <= 10 ? Statistics.DetectableEffect(cases.Count, repeats) : null
         );
 
         var monthStart = new DateTimeOffset(

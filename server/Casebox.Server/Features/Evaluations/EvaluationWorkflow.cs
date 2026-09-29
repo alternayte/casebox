@@ -132,7 +132,21 @@ public sealed class EvaluationSteps(
             await store.Execute<Evaluation>(
                 streamId,
                 s =>
-                    EvaluationDecider.Conclude(s, Verdict(s, checkpoint, checkpoint.Verdict, null)),
+                    EvaluationDecider.Conclude(
+                        s,
+                        Verdict(
+                            s,
+                            checkpoint,
+                            checkpoint.Verdict,
+                            Statistics.InconclusiveReason(
+                                checkpoint.Verdict,
+                                checkpoint.Lower,
+                                checkpoint.Upper,
+                                s.Delta,
+                                checkpoint.Cases
+                            )
+                        )
+                    ),
                 ct
             );
             return;

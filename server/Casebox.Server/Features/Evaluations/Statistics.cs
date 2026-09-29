@@ -18,9 +18,23 @@ public static class Statistics
     public const double MinimumFinalError = 0.025;
     public const int MinimumCases = 10;
 
-    // The smallest case count, at 3 repeats, at which the sequential procedure detects a
-    // 10-point effect with power of at least 0.8, found by the simulation in StatisticsTests.
-    public const int DocumentedCasesFor10PointEffect = 120;
+    // Per repeat count (index 1 to 10), the smallest case count at which the sequential
+    // procedure detects a 10-point effect with power of at least 0.8, found by the simulation in
+    // StatisticsTests (base rates uniform in [0.2, 0.8]).
+    public static readonly IReadOnlyList<int> CasesFor10PointEffect =
+    [
+        0,
+        340,
+        170,
+        120,
+        90,
+        70,
+        70,
+        50,
+        50,
+        40,
+        40,
+    ];
 
     private const double Z95 = 1.959963984540054;
 
@@ -168,6 +182,43 @@ public static class Statistics
         }
         return Verdict.Inconclusive;
     }
+
+    // The smallest pass-rate difference an evaluation of this size detects with power 0.8, from
+    // the simulation table: the interval's width shrinks with the square root of the case count,
+    // so the effect detected at n cases is 10 points × √(cases for 10 points ÷ n). Null below the
+    // minimum case count, where no verdict is given.
+    public static double? DetectableEffect(int cases, int repeats)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(repeats, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(repeats, CasesFor10PointEffect.Count - 1);
+        if (cases < MinimumCases)
+        {
+            return null;
+        }
+        return 0.10 * Math.Sqrt((double)CasesFor10PointEffect[repeats] / cases);
+    }
+
+    // Why an inconclusive verdict is inconclusive, when its interval says more than "unclear":
+    // "no_difference" when it straddles 0 and lies within ±2δ, so any real difference is small,
+    // though not small enough to call the sides equivalent. Null for every other verdict.
+    public static string? InconclusiveReason(
+        Verdict verdict,
+        double lower,
+        double upper,
+        double delta,
+        int cases
+    )
+    {
+        if (verdict != Verdict.Inconclusive || cases < MinimumCases)
+        {
+            return null;
+        }
+        return lower <= 0 && upper >= 0 && lower > -2 * delta && upper < 2 * delta
+            ? NoDifference
+            : null;
+    }
+
+    public const string NoDifference = "no_difference";
 
     // The interval level of the check after `round` of `rounds`: 99.9% at an interim look, and
     // 1 − (0.05 − 0.001 × interim looks) at the final look (never below 97.5%), so by the union

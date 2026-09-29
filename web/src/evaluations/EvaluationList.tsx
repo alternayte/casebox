@@ -121,7 +121,7 @@ function Row({ e }: { e: EvaluationRow }) {
           </div>
         )}
       </td>
-      <td className={td}>{v ? <VerdictBadge verdict={v.verdict} cheaper={v.equivalentAndCheaper} /> : <span className="text-xs text-muted-foreground">None yet</span>}</td>
+      <td className={td}>{v ? <VerdictBadge verdict={v.verdict} cheaper={v.equivalentAndCheaper} reason={v.reason} /> : <span className="text-xs text-muted-foreground">None yet</span>}</td>
       <td className={cn(td, "whitespace-nowrap text-right font-mono tabular-nums")}>{v ? pts(v.delta) : "—"}</td>
       <td className={cn(td, "whitespace-nowrap font-mono text-xs tabular-nums")}>
         {v ? (

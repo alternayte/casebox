@@ -27,6 +27,8 @@ export type Estimate = {
   minMinutes: number;
   maxMinutes: number;
   perRoundUsd: number;
+  // The smallest pass-rate difference this size detects with power 0.8; absent on older evaluations.
+  detectableEffect?: number | null;
 };
 
 export type Verdict = "better" | "worse" | "equivalent" | "inconclusive";

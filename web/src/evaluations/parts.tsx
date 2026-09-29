@@ -34,6 +34,13 @@ export function ratioInterval(lower: number | null, upper: number | null): strin
   return lower == null || upper == null ? "no interval" : `${lower.toFixed(2)} to ${upper.toFixed(2)}`;
 }
 
+// What an evaluation of this size can detect: the server's Statistics.DetectableEffect.
+export function detectable(effect: number | null | undefined): string {
+  if (effect == null) return `Nothing: no verdict is given below ${minimumCases} cases.`;
+  if (effect >= 1) return "No realistic difference at this size; power 0.8 needs more cases or repeats.";
+  return `A pass-rate difference of about ${Math.round(effect * 100)} pts or more (power 0.8). A smaller real difference likely comes out inconclusive.`;
+}
+
 export function minutes(m: number): string {
   return m < 90 ? `${num(Math.round(m))} min` : `${(m / 60).toFixed(1)} h`;
 }
@@ -66,7 +73,10 @@ const purposeNames: Record<string, string> = {
 export const statusName = (s: string) => statusNames[s] ?? s.replaceAll("_", " ");
 export const purposeName = (p: string) => purposeNames[p] ?? p.replaceAll("_", " ");
 
-export function VerdictBadge({ verdict, cheaper }: { verdict: Verdict | string; cheaper?: boolean }) {
+// The server's Statistics.NoDifference: inconclusive, but the interval straddles 0 within ±2δ.
+export const noDifference = "no_difference";
+
+export function VerdictBadge({ verdict, cheaper, reason }: { verdict: Verdict | string; cheaper?: boolean; reason?: string | null }) {
   return (
     <span
       className={cn(
@@ -79,6 +89,7 @@ export function VerdictBadge({ verdict, cheaper }: { verdict: Verdict | string; 
     >
       {verdictNames[verdict] ?? verdict}
       {cheaper ? " and cheaper" : ""}
+      {verdict === "inconclusive" && reason === noDifference ? ": no difference detected" : ""}
     </span>
   );
 }
@@ -147,6 +158,8 @@ export function verdictRule(v: VerdictReached, delta: number): string {
       return `The ${l} interval lies within ${margin} (δ).`;
   }
   if (v.reason === "budget") return "Inconclusive: the budget ran out. The next round would have passed the cap.";
+  if (v.reason === noDifference)
+    return `No difference detected: the ${l} interval straddles 0 and lies within ±${(delta * 200).toFixed(1)} pts (2δ), but not within ${margin} (δ), so the sides are not shown equivalent.`;
   if (v.reason) return `Inconclusive: ${v.reason}.`;
   if (v.cases < minimumCases) return `Inconclusive: only ${num(v.cases)} cases have completed runs on both sides. A verdict needs at least ${minimumCases}.`;
   return `Inconclusive: the ${l} interval neither lies on one side of 0 nor within ${margin}.`;

@@ -87,7 +87,9 @@ public sealed record Estimate(
     double SandboxMinutes,
     double MinMinutes,
     double MaxMinutes,
-    decimal PerRoundUsd
+    decimal PerRoundUsd,
+    // The smallest pass-rate difference this size detects with power 0.8 (Statistics.DetectableEffect).
+    double? DetectableEffect
 );
 
 // A case in the evaluation, with the weight its validation gave it.

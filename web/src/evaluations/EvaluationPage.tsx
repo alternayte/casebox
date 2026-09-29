@@ -26,6 +26,7 @@ import {
   usd,
   VerdictBadge,
   verdictRule,
+  detectable,
 } from "./parts";
 
 // One evaluation: the change, both sides, the estimate against the spend, each checkpoint, the
@@ -58,7 +59,7 @@ export function EvaluationPage({ id }: { id: string }) {
           </span>
           <span className="flex items-center gap-1.5 self-center text-base">
             <StatusTag status={e.status} />
-            {e.verdict && <VerdictBadge verdict={e.verdict.verdict} cheaper={e.verdict.equivalentAndCheaper} />}
+            {e.verdict && <VerdictBadge verdict={e.verdict.verdict} cheaper={e.verdict.equivalentAndCheaper} reason={e.verdict.reason} />}
           </span>
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -169,7 +170,7 @@ function VerdictBlock({ e }: { e: EvaluationRow }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <VerdictBadge verdict={v.verdict} cheaper={v.equivalentAndCheaper} />
+        <VerdictBadge verdict={v.verdict} cheaper={v.equivalentAndCheaper} reason={v.reason} />
         <span className="font-mono text-2xl tabular-nums">{pts(v.delta)}</span>
         <span className="font-mono text-sm tabular-nums text-muted-foreground">
           {level(v.level)} interval {ptsInterval(v.lower, v.upper)}
@@ -391,6 +392,7 @@ function Cost({ e }: { e: EvaluationRow }) {
           {num(e.runsCompleted)} completed, {num(e.runsFailed)} failed to run, of {num(est.runs)} planned
         </Fact>
         <Fact term="Per round">{usd(est.perRoundUsd)}</Fact>
+        {"detectableEffect" in est && <Fact term="Detects">{detectable(est.detectableEffect)}</Fact>}
         <Fact term="Sandbox time">{minutes(est.sandboxMinutes)}</Fact>
         <Fact term="Duration range">
           {minutes(est.minMinutes)} to {minutes(est.maxMinutes)}

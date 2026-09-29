@@ -71,6 +71,8 @@ type evaluationEstimate struct {
 	MinMinutes      float64 `json:"minMinutes"`
 	MaxMinutes      float64 `json:"maxMinutes"`
 	PerRoundUsd     float64 `json:"perRoundUsd"`
+	// DetectableEffect is the smallest pass-rate difference this size detects with power 0.8.
+	DetectableEffect *float64 `json:"detectableEffect"`
 }
 
 // estimateView is the answer of POST /api/v1/evaluations/estimate.
@@ -556,6 +558,7 @@ func printEstimate(out io.Writer, req evaluationRequest, est estimateView) {
 	fmt.Fprintf(out, "  Total:        %s (%s a round)\n", usd(e.TotalUsd), usd(e.PerRoundUsd))
 	fmt.Fprintf(out, "  Sandbox time: %s\n", minutesText(e.SandboxMinutes))
 	fmt.Fprintf(out, "  Duration:     %s to %s, by how many sandboxes the workers run at once\n", minutesText(e.MinMinutes), minutesText(e.MaxMinutes))
+	fmt.Fprintf(out, "  Detects:      %s\n", detectableText(e.DetectableEffect))
 	fmt.Fprintf(out, "  Cap:          %s for this evaluation\n", usd(est.CapUsd))
 	fmt.Fprintf(out, "  This month:   %s spent of the %s monthly limit\n", usd(est.MonthSpentUsd), usd(est.MonthlyUsd))
 	if est.NeedsConfirmation {
@@ -584,7 +587,11 @@ func printVerdict(out io.Writer, e evaluationRow) {
 		fmt.Fprintln(out, "The evaluation is done, but the server shows no verdict.")
 		return
 	}
-	fmt.Fprintf(out, "Verdict: %s\n", v.Verdict)
+	if v.Reason != nil && *v.Reason == noDifference {
+		fmt.Fprintln(out, "Verdict: inconclusive, no difference detected")
+	} else {
+		fmt.Fprintf(out, "Verdict: %s\n", v.Verdict)
+	}
 	fmt.Fprintf(out, "  Δ pass rate (candidate − baseline): %s, %s interval %s\n", points(v.Delta), levelText(v.Level), intervalPoints(v.Lower, v.Upper))
 	fmt.Fprintf(out, "  Rule: %s\n", verdictRule(*v, e.Delta))
 	fmt.Fprintf(out, "  Pass rate: baseline %.1f%%, candidate %.1f%%, over %d cases and %d runs\n", v.BaselineRate*100, v.CandidateRate*100, v.Cases, v.Runs)
@@ -618,6 +625,9 @@ func verdictRule(v verdictView, delta float64) string {
 	switch {
 	case v.Reason != nil && *v.Reason == "budget":
 		return "inconclusive, because the budget ran out: the next round would have passed the cap"
+	case v.Reason != nil && *v.Reason == noDifference:
+		return fmt.Sprintf("no difference detected: the %s interval straddles 0 and lies within ±%s (2δ), but not within ±%s (δ), so the sides are not shown equivalent",
+			level, strings.TrimPrefix(points(2*delta), "+"), strings.TrimPrefix(points(delta), "+"))
 	case v.Reason != nil && *v.Reason != "":
 		return "inconclusive: " + *v.Reason
 	case v.Cases < minimumVerdictCases:
@@ -668,6 +678,21 @@ func modelsText(a, b string) string {
 func usd(v float64) string { return fmt.Sprintf("%.2f USD", v) }
 
 // points is a share as signed percentage points, such as +4.0 points.
+// noDifference is the server's reason for an inconclusive verdict whose interval straddles 0
+// within ±2δ (Statistics.NoDifference).
+const noDifference = "no_difference"
+
+// detectableText says what an evaluation of this size can detect, from the simulation table.
+func detectableText(effect *float64) string {
+	if effect == nil {
+		return fmt.Sprintf("nothing: no verdict is given below %d cases", minimumVerdictCases)
+	}
+	if *effect >= 1 {
+		return "no realistic difference at this size (power 0.8 needs more cases or repeats)"
+	}
+	return fmt.Sprintf("a pass-rate difference of about %.0f points or more (power 0.8); a smaller real difference likely comes out inconclusive", *effect*100)
+}
+
 func points(share float64) string { return fmt.Sprintf("%+.1f points", share*100) }
 
 func intervalPoints(lo, hi float64) string {

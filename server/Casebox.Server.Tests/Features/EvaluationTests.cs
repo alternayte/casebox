@@ -37,7 +37,7 @@ public sealed class EvaluationDeciderTests
         3,
         0.05,
         10m,
-        new Estimate(1, 6, 1, 1, 1m, 1m, 2m, 60, 20, 60, 0.67m),
+        new Estimate(1, 6, 1, 1, 1m, 1m, 2m, 60, 20, 60, 0.67m, null),
         Purpose.HarnessVsNone,
         false,
         false,

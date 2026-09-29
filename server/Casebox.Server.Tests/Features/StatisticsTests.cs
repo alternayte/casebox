@@ -13,28 +13,11 @@ public sealed class StatisticsTests(ITestOutputHelper output)
     private const int SimulationResamples = 2_000;
     private const double Delta = 0.05;
 
+    // 10 to 200 in steps of 10, then to 400 in steps of 20.
     private static readonly int[] CaseCounts =
     [
-        10,
-        20,
-        30,
-        40,
-        50,
-        60,
-        70,
-        80,
-        90,
-        100,
-        110,
-        120,
-        130,
-        140,
-        150,
-        160,
-        180,
-        200,
-        250,
-        300,
+        .. Enumerable.Range(1, 20).Select(i => i * 10),
+        .. Enumerable.Range(1, 10).Select(i => 200 + i * 20),
     ];
 
     // Under no effect the whole sequential procedure (interim looks at 99.9%, the final look at
@@ -63,26 +46,62 @@ public sealed class StatisticsTests(ITestOutputHelper output)
         Assert.True(rate <= bound, $"false positive rate {rate} exceeds {bound}");
     }
 
-    [Fact]
-    public void A_10_point_effect_is_detected_at_the_documented_case_count()
-    {
-        var found = SmallestCasesWithPower(3);
-
-        Assert.NotNull(found);
-        Assert.Equal(DocumentedCasesFor10PointEffect, found);
-        Assert.True(Power(DocumentedCasesFor10PointEffect, 3) >= 0.8);
-    }
-
+    // The table behind every detectable effect Casebox prints: per repeat count, the smallest
+    // case count with power 0.8 for a 10-point effect.
     [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
     [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
     [InlineData(10)]
-    public void A_10_point_effect_needs_fewer_cases_with_more_repeats(int repeats)
+    public void A_10_point_effect_is_detected_at_the_tabled_case_count(int repeats)
     {
         var found = SmallestCasesWithPower(repeats);
 
         Assert.NotNull(found);
-        Assert.True(found <= DocumentedCasesFor10PointEffect);
+        Assert.Equal(CasesFor10PointEffect[repeats], found);
     }
+
+    // The square-root scaling holds at the small sizes people run: the effect Casebox prints for
+    // 30 cases × 3 repeats and for the 10-case smoke suite × 1 repeat is detected with power 0.8,
+    // within 3 standard errors of the simulation.
+    [Theory]
+    [InlineData(30, 3)]
+    [InlineData(10, 1)]
+    public void The_printed_detectable_effect_has_power_0_8(int cases, int repeats)
+    {
+        var effect = DetectableEffect(cases, repeats)!.Value;
+        var power = Power(cases, repeats, effect);
+        output.WriteLine(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"{cases} cases x {repeats}: detectable effect {effect:F3}, power {power:F3}"
+            )
+        );
+        Assert.True(power >= 0.8 - 3 * Math.Sqrt(0.8 * 0.2 / 500), $"power {power}");
+    }
+
+    // "No difference detected": inconclusive, straddling 0, and within ±2δ.
+    [Theory]
+    [InlineData(Verdict.Inconclusive, -0.06, 0.04, 30, NoDifference)]
+    [InlineData(Verdict.Inconclusive, -0.02, 0.0999, 30, NoDifference)]
+    [InlineData(Verdict.Inconclusive, -0.12, 0.04, 30, null)]
+    [InlineData(Verdict.Inconclusive, -0.02, 0.10, 30, null)]
+    [InlineData(Verdict.Inconclusive, -0.06, 0.04, 9, null)]
+    [InlineData(Verdict.Equivalent, -0.04, 0.04, 30, null)]
+    [InlineData(Verdict.Better, 0.01, 0.08, 30, null)]
+    public void No_difference_is_a_narrow_inconclusive_interval_around_0(
+        Verdict verdict,
+        double lower,
+        double upper,
+        int cases,
+        string? reason
+    ) => Assert.Equal(reason, InconclusiveReason(verdict, lower, upper, Delta, cases));
 
     [Fact]
     public void Equivalence_under_no_effect_is_reported_at_30_60_and_120_cases()
@@ -361,14 +380,14 @@ public sealed class StatisticsTests(ITestOutputHelper output)
         return null;
     }
 
-    private static double Power(int cases, int repeats)
+    private static double Power(int cases, int repeats, double effect = 0.10)
     {
         const int evaluations = 500;
         var verdicts = Simulations(
             evaluations,
             cases,
             repeats,
-            0.10,
+            effect,
             0xB0B + (ulong)(cases * 100 + repeats)
         );
         return (double)verdicts.Count(v => v == Verdict.Better) / evaluations;

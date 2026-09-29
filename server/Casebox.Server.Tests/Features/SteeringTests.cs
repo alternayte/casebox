@@ -55,6 +55,15 @@ public sealed partial class SteeringTests(StackFixture stack)
         // abandonment; plus Grace's restart.
         Assert.Equal((13, 7), (status.GetProperty("interventions").GetInt32(), status.GetProperty("pending").GetInt32()));
 
+        // A waiting task-type job for a session does not hold back its interventions' job.
+        await using (var db = new NpgsqlConnection(stack.ConnectionString))
+            Assert.Equal(3, await db.QuerySingleAsync<int>(
+                """
+                SELECT count(DISTINCT payload->>'stream') FROM casebox.jobs
+                WHERE org_id = @Org AND kind = 'steering.classify' AND jsonb_array_length(payload->'interventionIds') > 0 AND payload->>'stream' = ANY(@Streams)
+                """,
+                new { Org = StackFixture.OrgA, Streams = sessions.Values.Select(id => $"steering:session:{id}").ToArray() }));
+
         await ClassifyAllAsync(admin, worker, [repo, small], window =>
         {
             var human = window["human"]?.GetValue<string>() ?? "";

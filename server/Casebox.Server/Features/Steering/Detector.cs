@@ -344,8 +344,9 @@ public sealed class SteeringScan(NpgsqlDataSource db, IEventStore store, Deedbox
         await transaction.CommitAsync(ct);
     }
 
-    // Pending interventions get a classification job, 20 at a time, unless a job for their stream
-    // is still waiting. A failed job is retried by the next day's key.
+    // Pending interventions get a classification job, 20 at a time, unless a job for their
+    // interventions is still waiting; a task-only job does not count. A failed job is retried by
+    // the next day's key.
     private async Task EnqueuePendingAsync(CancellationToken ct)
     {
         await using var connection = await db.OpenConnectionAsync(ct);
@@ -353,7 +354,8 @@ public sealed class SteeringScan(NpgsqlDataSource db, IEventStore store, Deedbox
             """
             SELECT f.stream_id, f.intervention_id FROM casebox.steering_facts f
             WHERE f.org_id = @Org AND f.status = 'pending'
-              AND NOT EXISTS (SELECT 1 FROM casebox.jobs j WHERE j.org_id = @Org AND j.kind = @Kind AND j.status IN ('queued', 'leased') AND j.payload->>'stream' = f.stream_id)
+              AND NOT EXISTS (SELECT 1 FROM casebox.jobs j WHERE j.org_id = @Org AND j.kind = @Kind AND j.status IN ('queued', 'leased') AND j.payload->>'stream' = f.stream_id
+                              AND jsonb_array_length(j.payload->'interventionIds') > 0)
             ORDER BY f.stream_id, f.intervention_id
             """,
             new { Org, Kind = SteeringJobs.Classify }, cancellationToken: ct))).ToList();

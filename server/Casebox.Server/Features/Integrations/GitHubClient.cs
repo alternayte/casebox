@@ -72,26 +72,6 @@ public sealed class GitHubClient(
         return (await response.Content.ReadFromJsonAsync<JsonElement>(Json, ct)).Clone();
     }
 
-    public async Task<JsonElement> GraphQLAsync(
-        string query,
-        object variables,
-        CancellationToken ct
-    )
-    {
-        using var response = await SendAsync(
-            HttpMethod.Post,
-            "graphql",
-            new { query, variables },
-            ct
-        );
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(Json, ct);
-        if (body.TryGetProperty("errors", out var errors) && errors.GetArrayLength() > 0)
-            throw new HttpRequestException(
-                $"GitHub GraphQL: {errors[0].GetProperty("message").GetString()}"
-            );
-        return body.GetProperty("data").Clone();
-    }
-
     private async Task<HttpResponseMessage> SendAsync(
         HttpMethod method,
         string path,

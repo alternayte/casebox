@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
-using Casebox.Server.Features.Blobs;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Tokens;
 using Casebox.Server.Features.Workspaces;
@@ -39,25 +38,12 @@ public sealed class WorkerTests(StackFixture stack)
     }
 
     [Fact]
-    public async Task An_ingest_token_uploads_blobs_but_cannot_lease_jobs_or_read_blobs()
+    public async Task An_ingest_token_cannot_lease_jobs()
     {
         var ingest = await stack.ServerA.TokenClientAsync(TokenKind.Ingest);
         Assert.Equal(
             HttpStatusCode.Forbidden,
             (await Lease(ingest, "w1", TestJobHandler.JobKind)).StatusCode
-        );
-
-        var data = Encoding.UTF8.GetBytes($"ingest {Guid.NewGuid()}");
-        var hash = BlobStore.HashOf(data);
-        Assert.Equal(
-            HttpStatusCode.Created,
-            (
-                await ingest.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)
-            ).StatusCode
-        );
-        Assert.Equal(
-            HttpStatusCode.Forbidden,
-            (await ingest.GetAsync($"/worker/v1/blobs/{hash}", Ct)).StatusCode
         );
     }
 
@@ -203,48 +189,6 @@ public sealed class WorkerTests(StackFixture stack)
 
         var leased = leases.Where(id => id is not null && jobs.Contains(id)).ToList();
         Assert.Equal(leased.Count, leased.Distinct().Count());
-    }
-
-    [Fact]
-    public async Task Blobs_are_content_addressed_and_stored_once()
-    {
-        var worker = await stack.ServerA.TokenClientAsync(TokenKind.Worker);
-        var data = Encoding.UTF8.GetBytes(
-            string.Concat(Enumerable.Repeat($"transcript line {Guid.NewGuid()}\n", 500))
-        );
-        var hash = BlobStore.HashOf(data);
-
-        Assert.Equal(
-            HttpStatusCode.Created,
-            (
-                await worker.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)
-            ).StatusCode
-        );
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (
-                await worker.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)
-            ).StatusCode
-        );
-        Assert.Equal(data, await worker.GetByteArrayAsync($"/worker/v1/blobs/{hash}", Ct));
-
-        var wrong = BlobStore.HashOf([1, 2, 3]);
-        Assert.Equal(
-            HttpStatusCode.UnprocessableEntity,
-            (
-                await worker.PutAsync($"/worker/v1/blobs/{wrong}", new ByteArrayContent(data), Ct)
-            ).StatusCode
-        );
-
-        await using var db = new NpgsqlConnection(stack.ConnectionString);
-        var stored = await db.QuerySingleAsync<int>(
-            "SELECT length(data) FROM casebox.blobs WHERE org_id = @Org AND hash = @Hash",
-            new { Org = StackFixture.OrgA, Hash = hash }
-        );
-        Assert.True(
-            stored < data.Length / 10,
-            $"zstd should shrink {data.Length} repetitive bytes; stored {stored}."
-        );
     }
 
     private async Task<string> CreateWorkspaceAsync()

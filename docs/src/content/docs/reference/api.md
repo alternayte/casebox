@@ -36,45 +36,6 @@ This page lists every route of the API under `/api/v1`, grouped as the server gr
 | --- | --- |
 | GET | `/worker/v1/patterns/{id}/evidence` |
 
-## Cases
-
-| Method | Path |
-| --- | --- |
-| GET | `/api/v1/cases` |
-| POST | `/api/v1/cases/approvals` |
-| GET | `/api/v1/cases/queue` |
-| GET | `/api/v1/cases/{id}` |
-| POST | `/api/v1/cases/{id}/approval` |
-| POST | `/api/v1/cases/{id}/assertions` |
-| PUT | `/api/v1/cases/{id}/instruction` |
-| GET | `/api/v1/cases/{id}/oracle` |
-| POST | `/api/v1/cases/{id}/rejection` |
-| POST | `/api/v1/cases/{id}/retirement` |
-| GET | `/api/v1/cases/{id}/validations` |
-| POST | `/api/v1/workspaces/{name}/mining` |
-
-## Evaluations
-
-| Method | Path |
-| --- | --- |
-| GET | `/api/v1/evaluations` |
-| POST | `/api/v1/evaluations` |
-| POST | `/api/v1/evaluations/estimate` |
-| GET | `/api/v1/evaluations/offer` |
-| GET | `/api/v1/evaluations/{id}` |
-| POST | `/api/v1/evaluations/{id}/cancellation` |
-| GET | `/api/v1/evaluations/{id}/cases` |
-| POST | `/api/v1/evaluations/{id}/confirmation` |
-| GET | `/api/v1/evaluations/{id}/runs/{runId}` |
-
-## Harness CI
-
-| Method | Path |
-| --- | --- |
-| POST | `/api/v1/ci/baselines` |
-| POST | `/api/v1/ci/pull-requests` |
-| GET | `/api/v1/ci/runs/{id}` |
-
 ## Ingest
 
 | Method | Path |
@@ -121,8 +82,9 @@ This page lists every route of the API under `/api/v1`, grouped as the server gr
 | --- | --- |
 | GET | `/api/v1/proposals` |
 | GET | `/api/v1/proposals/{id}` |
+| POST | `/api/v1/proposals/{id}/applied` |
+| POST | `/api/v1/proposals/{id}/approval` |
 | POST | `/api/v1/proposals/{id}/rejection` |
-| POST | `/api/v1/proposer/runs` |
 
 ## Steering
 
@@ -157,9 +119,6 @@ This page lists every route of the API under `/api/v1`, grouped as the server gr
 | Method | Path |
 | --- | --- |
 | POST | `/worker/v1/attributions` |
-| GET | `/worker/v1/blobs/{hash}` |
-| PUT | `/worker/v1/blobs/{hash}` |
-| GET | `/worker/v1/cases/{id}/source` |
 | POST | `/worker/v1/jobs/lease` |
 | POST | `/worker/v1/jobs/{id}/complete` |
 | POST | `/worker/v1/jobs/{id}/fail` |
@@ -175,9 +134,5 @@ This page lists every route of the API under `/api/v1`, grouped as the server gr
 | GET | `/api/v1/workspaces` |
 | POST | `/api/v1/workspaces` |
 | GET | `/api/v1/workspaces/{name}` |
-| PUT | `/api/v1/workspaces/{name}/harness` |
-| PUT | `/api/v1/workspaces/{name}/recipe` |
-| POST | `/api/v1/workspaces/{name}/recipe/confirmation` |
-| POST | `/api/v1/workspaces/{name}/recipe/validation` |
 | POST | `/api/v1/workspaces/{name}/repos` |
 | DELETE | `/api/v1/workspaces/{name}/repos/{repo}` |

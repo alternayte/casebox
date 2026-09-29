@@ -8,7 +8,7 @@ using Npgsql;
 
 namespace Casebox.Server.Features.Patterns;
 
-// The pattern board (docs/specs/self-evolution.md, API). A pattern shows only with k mapped people
+// The pattern board (docs/specs/simple-evolution.md). A pattern shows only with k mapped people
 // behind its corrections; quotes carry no author and the day only.
 public static class PatternEndpoints
 {
@@ -16,7 +16,7 @@ public static class PatternEndpoints
 
     public sealed record Quote(string Ref, string Text, string Day);
 
-    public sealed record ProposalRef(string Id, string Kind, string Status, string? PrUrl);
+    public sealed record ProposalRef(string Id, string Kind, string Title, string Status);
 
     public sealed record PatternView(
         string Id,
@@ -28,6 +28,7 @@ public static class PatternEndpoints
         string Title,
         string Summary,
         bool Advisory,
+        string? AdvisoryNote,
         string Status,
         string? Reason,
         int Corrections,
@@ -40,12 +41,9 @@ public static class PatternEndpoints
 
     public sealed record PatternList(IReadOnlyList<PatternView> Patterns, int Hidden, int K);
 
-    public sealed record CaseRef(string Id, string Status, string? Split);
-
     public sealed record PatternDetail(
         PatternView Pattern,
         IReadOnlyList<Quote> Quotes,
-        IReadOnlyList<CaseRef> Cases,
         IReadOnlyList<ProposalRef> Proposals
     );
 
@@ -61,6 +59,7 @@ public static class PatternEndpoints
         string Title,
         string Summary,
         bool Advisory,
+        string? AdvisoryNote,
         string Status,
         string? Reason,
         string Refs,
@@ -128,26 +127,11 @@ public static class PatternEndpoints
                         Cbx.BelowK,
                         $"Fewer than {k.K} people are behind this pattern, so it is not shown."
                     );
-                var refs = JsonSerializer.Deserialize<string[]>(row.Refs)!;
-                var cases = (
-                    await connection.QueryAsync<CaseRef>(
-                        new CommandDefinition(
-                            "SELECT id, status, split FROM casebox.case_catalog WHERE org_id = @Org AND source = ANY(@Sources) ORDER BY id",
-                            new
-                            {
-                                Org = org,
-                                Sources = refs.Select(r => $"steering:{r}").ToArray(),
-                            },
-                            cancellationToken: ct
-                        )
-                    )
-                ).ToList();
                 var proposals = await ProposalsAsync(connection, org, row.Id, ct);
                 return Results.Ok(
                     new PatternDetail(
                         View(row, facts, proposals.FirstOrDefault(), k),
                         Quotes(facts),
-                        cases,
                         proposals
                     )
                 );
@@ -191,11 +175,10 @@ public static class PatternEndpoints
         int Corrections,
         int People,
         bool MeetsK,
-        IReadOnlyList<Quote> Quotes,
-        IReadOnlyList<CaseRef> Cases
+        IReadOnlyList<Quote> Quotes
     );
 
-    // A pattern's evidence for its pull request: counts and quotes only when k people are behind it.
+    // A pattern's evidence: counts and quotes only when k people are behind it.
     public static async Task<Evidence?> EvidenceAsync(
         System.Data.Common.DbConnection connection,
         string org,
@@ -208,16 +191,6 @@ public static class PatternEndpoints
         if (row is null)
             return null;
         var facts = await FactsAsync(connection, org, row, ct);
-        var refs = JsonSerializer.Deserialize<string[]>(row.Refs)!;
-        var cases = (
-            await connection.QueryAsync<CaseRef>(
-                new CommandDefinition(
-                    "SELECT id, status, split FROM casebox.case_catalog WHERE org_id = @Org AND source = ANY(@Sources) ORDER BY id",
-                    new { Org = org, Sources = refs.Select(r => $"steering:{r}").ToArray() },
-                    cancellationToken: ct
-                )
-            )
-        ).ToList();
         var meets = Meets(facts, k);
         return new Evidence(
             row.Title,
@@ -227,8 +200,7 @@ public static class PatternEndpoints
                 ? KRule.People(facts.Select(f => new Person(f.Person, f.PersonMapped, f.Period)), k)
                 : 0,
             meets,
-            meets ? Quotes(facts) : [],
-            cases
+            meets ? Quotes(facts) : []
         );
     }
 
@@ -246,7 +218,7 @@ public static class PatternEndpoints
             await connection.QueryAsync<Row>(
                 new CommandDefinition(
                     """
-                    SELECT id, workspace, went_wrong, label, prevention, path, title, summary, advisory, status, reason, refs::text AS refs, detected_at, updated_at
+                    SELECT id, workspace, went_wrong, label, prevention, path, title, summary, advisory, advisory_note, status, reason, refs::text AS refs, detected_at, updated_at
                     FROM casebox.patterns
                     WHERE org_id = @Org AND (@Id::text IS NULL OR id = @Id) AND (@Workspace::text IS NULL OR workspace = @Workspace)
                     ORDER BY status = 'dismissed', jsonb_array_length(refs) DESC, id
@@ -291,7 +263,7 @@ public static class PatternEndpoints
         (
             await connection.QueryAsync<ProposalRef>(
                 new CommandDefinition(
-                    "SELECT id, kind, status, pr_url FROM casebox.proposals WHERE org_id = @Org AND pattern = @Pattern ORDER BY created_at DESC",
+                    "SELECT id, kind, title, status FROM casebox.proposals WHERE org_id = @Org AND pattern = @Pattern ORDER BY created_at DESC",
                     new { Org = org, Pattern = pattern },
                     cancellationToken: ct
                 )
@@ -314,6 +286,7 @@ public static class PatternEndpoints
             r.Title,
             r.Summary,
             r.Advisory,
+            r.AdvisoryNote,
             r.Status,
             r.Reason,
             facts.Count,
@@ -328,14 +301,18 @@ public static class PatternEndpoints
             latest
         );
 
-    // Up to three quotes from different people: masked, without authors, dated by day.
-    private static IReadOnlyList<Quote> Quotes(IReadOnlyList<Fact> facts) =>
-        facts
+    // Up to three quotes, from different people when there are three: masked, without authors,
+    // dated by day.
+    private static IReadOnlyList<Quote> Quotes(IReadOnlyList<Fact> facts)
+    {
+        var candidates = facts
             .Where(f => !string.IsNullOrWhiteSpace(f.Text))
             .OrderByDescending(f => f.LabelSource == "human")
             .ThenByDescending(f => f.At)
-            .DistinctBy(f => f.Person)
-            .Take(3)
+            .ToList();
+        var picked = candidates.DistinctBy(f => f.Person).Take(3).ToList();
+        picked.AddRange(candidates.Where(c => !picked.Contains(c)).Take(3 - picked.Count));
+        return picked
             .Select(f =>
             {
                 var text = Masking.Mask(f.Text)!;
@@ -347,6 +324,7 @@ public static class PatternEndpoints
                 );
             })
             .ToList();
+    }
 
     private static DateTimeOffset Utc(DateTime at) =>
         new(DateTime.SpecifyKind(at, DateTimeKind.Utc));

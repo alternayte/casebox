@@ -1,7 +1,6 @@
 Casebox is licensed per directory.
 
   cli/      Apache License 2.0      cli/LICENSE
-  action/   Apache License 2.0      action/LICENSE
   server/   GNU AGPL v3.0 only      server/LICENSE
   web/      GNU AGPL v3.0 only      web/LICENSE
   ee/       Commercial              ee/LICENSE

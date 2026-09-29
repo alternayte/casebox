@@ -11,40 +11,12 @@ public static class WorkspaceEvents
     public sealed record RepoAdded(string Repo);
 
     public sealed record RepoRemoved(string Repo);
-
-    // The recipe is the environment block of casebox.yml as JSON; its hash identifies it.
-    public sealed record RecipeProposed(string Recipe, string Hash);
-
-    public sealed record RecipeValidated(string Hash, bool Passed, string? ReportBlob);
-
-    public sealed record RecipeConfirmed(string Hash);
-
-    // casebox.yml's harness globs and shared harness repository (docs/specs/harness-ci.md).
-    public sealed record HarnessConfigured(IReadOnlyList<string> Globs, string? Shared);
 }
 
-public enum RecipeStatus
+public sealed record Workspace(bool Exists, string Name, ImmutableSortedSet<string> Repos)
+    : IState<Workspace>
 {
-    None,
-    Proposed,
-    Validated,
-    ValidationFailed,
-    Confirmed,
-}
-
-public sealed record Workspace(
-    bool Exists,
-    string Name,
-    ImmutableSortedSet<string> Repos,
-    string? RecipeHash,
-    RecipeStatus RecipeStatus,
-    string? Recipe = null,
-    ImmutableList<string>? HarnessGlobs = null,
-    string? SharedHarness = null
-) : IState<Workspace>
-{
-    public static Workspace Initial { get; } =
-        new(false, "", ImmutableSortedSet<string>.Empty, null, RecipeStatus.None);
+    public static Workspace Initial { get; } = new(false, "", ImmutableSortedSet<string>.Empty);
 
     public static Workspace Evolve(Workspace state, object @event) =>
         @event switch
@@ -52,27 +24,8 @@ public sealed record Workspace(
             WorkspaceEvents.Created e => state with { Exists = true, Name = e.Name },
             WorkspaceEvents.RepoAdded e => state with { Repos = state.Repos.Add(e.Repo) },
             WorkspaceEvents.RepoRemoved e => state with { Repos = state.Repos.Remove(e.Repo) },
-            WorkspaceEvents.RecipeProposed e => state with
-            {
-                RecipeHash = e.Hash,
-                Recipe = e.Recipe,
-                RecipeStatus = RecipeStatus.Proposed,
-            },
-            WorkspaceEvents.RecipeValidated e => state with
-            {
-                RecipeStatus = e.Passed ? RecipeStatus.Validated : RecipeStatus.ValidationFailed,
-            },
-            WorkspaceEvents.RecipeConfirmed => state with { RecipeStatus = RecipeStatus.Confirmed },
-            WorkspaceEvents.HarnessConfigured e => state with
-            {
-                HarnessGlobs = [.. e.Globs],
-                SharedHarness = e.Shared,
-            },
             _ => state,
         };
-
-    // Cases are mined only in a workspace with a confirmed recipe.
-    public bool CanMine => RecipeStatus == RecipeStatus.Confirmed;
 
     public static string StreamIdFor(string name) => $"workspace:{name}";
 }
@@ -127,70 +80,6 @@ public static partial class WorkspaceDecider
         return workspace.Repos.Contains(normalized)
             ? [new WorkspaceEvents.RepoRemoved(normalized)]
             : [];
-    }
-
-    public static IEnumerable<object> ProposeRecipe(Workspace workspace, string recipe, string hash)
-    {
-        Require(workspace);
-        if (string.IsNullOrWhiteSpace(recipe))
-            throw new DomainException("The recipe is empty.");
-        return workspace.RecipeHash == hash && workspace.RecipeStatus != RecipeStatus.None
-            ? []
-            : [new WorkspaceEvents.RecipeProposed(recipe, hash)];
-    }
-
-    public static IEnumerable<object> RecordValidation(
-        Workspace workspace,
-        string hash,
-        bool passed,
-        string? reportBlob
-    )
-    {
-        Require(workspace);
-        if (workspace.RecipeHash != hash)
-            throw new ConflictException(
-                "The validation is for a recipe that is no longer the proposed one."
-            );
-        if (workspace.RecipeStatus == RecipeStatus.Confirmed)
-            throw new ConflictException("The recipe is already confirmed.");
-        return [new WorkspaceEvents.RecipeValidated(hash, passed, reportBlob)];
-    }
-
-    // Recorded only when the globs or the shared repository changed.
-    public static IEnumerable<object> ConfigureHarness(
-        Workspace workspace,
-        IReadOnlyList<string> globs,
-        string? shared
-    )
-    {
-        if (!workspace.Exists)
-            throw new NotFoundException("The workspace does not exist.", Cbx.NoWorkspace);
-        var normalized = string.IsNullOrWhiteSpace(shared) ? null : NormalizeRepo(shared);
-        var clean = globs.Select(g => g.Trim()).Where(g => g.Length > 0).Distinct().ToList();
-        if (
-            workspace.HarnessGlobs is { } current
-            && current.SequenceEqual(clean)
-            && workspace.SharedHarness == normalized
-        )
-            return [];
-        return [new WorkspaceEvents.HarnessConfigured(clean, normalized)];
-    }
-
-    public static IEnumerable<object> ConfirmRecipe(Workspace workspace, string hash)
-    {
-        Require(workspace);
-        if (workspace.RecipeHash != hash)
-            throw new ConflictException(
-                "The confirmation is for a recipe that is no longer the proposed one."
-            );
-        return workspace.RecipeStatus switch
-        {
-            RecipeStatus.Confirmed => [],
-            RecipeStatus.Validated => [new WorkspaceEvents.RecipeConfirmed(hash)],
-            _ => throw new DomainException(
-                "Only a recipe whose check passed can be confirmed. Run casebox env check first."
-            ),
-        };
     }
 
     private static void Require(Workspace workspace)

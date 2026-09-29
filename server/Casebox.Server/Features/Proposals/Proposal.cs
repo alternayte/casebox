@@ -1,93 +1,72 @@
-using System.Collections.Immutable;
-using Casebox.Server.Features.Evaluations;
 using Deedbox;
 
 namespace Casebox.Server.Features.Proposals;
 
+// What a proposal changes (docs/specs/simple-evolution.md). Casebox writes the first three; a code
+// note is carried out by the person's own agent.
 public enum ProposalKind
 {
-    Edit,
-    Removal,
+    HarnessEdit,
+    Skill,
+    Mcp,
+    CodeNote,
 }
 
 public enum ProposalStatus
 {
-    Searching,
-    Gating,
-    GatePassed,
-    GateFailed,
-    GateInconclusive,
-    PrOpened,
-    Merged,
+    Open,
+    Approved,
     Rejected,
+    Applied,
 }
 
-// One edit of a candidate (docs/specs/self-evolution.md, The proposal stream).
-public sealed record Edit(string Op, string File, string? Heading, string? Old, string? New);
+// Private: its own untracked file on the person's machine. Commit: an edit of the shared files.
+public enum ApplyMode
+{
+    Private,
+    Commit,
+}
 
-// A candidate: its edits, the blob of its files ({ repo, files }) laid over the harness, the hash
-// of its sorted edits, and the model's one-sentence reason.
-public sealed record Candidate(
-    int Index,
-    IReadOnlyList<Edit> Edits,
-    string Overrides,
-    string ContentHash,
-    string Rationale,
-    IReadOnlyList<int>? MergedFrom = null
+// One edit, applied by `casebox apply` on the working tree with the same rules the draft used.
+public sealed record Edit(
+    string Op,
+    string File,
+    string? Heading = null,
+    string? Old = null,
+    string? New = null
 );
 
-public sealed record GateCheck(string Name, bool Passed, string Evidence, string Detail);
+// A changed file as the draft saw it at its base commit, for review: before is null for a new file.
+public sealed record FilePreview(string Path, string? Before, string After);
+
+// What a code note asks the person's agent to do, and the prompt that asks it.
+public sealed record CodeNote(string What, string Why, string Prompt);
 
 public static class ProposalEvents
 {
     public sealed record Drafted(
-        string? Pattern,
+        string Pattern,
         string Workspace,
-        ProposalKind Kind,
         string Repo,
+        ProposalKind Kind,
+        string Title,
+        string Rationale,
+        IReadOnlyList<Edit> Edits,
+        IReadOnlyList<FilePreview> Preview,
+        CodeNote? Note,
+        string ContentHash,
         string BaseCommit,
-        IReadOnlyList<Candidate> Candidates,
-        HarnessSpec Spec,
-        IReadOnlyDictionary<string, Price> Prices,
-        int Repeats,
-        int BudgetRuns,
-        IReadOnlyList<string> Batch,
-        // The proposer run of casebox propose, whose inline worker may run the proposal's jobs.
-        string? CiRun = null
+        string? Model
     );
 
-    public sealed record CandidateScored(
-        int Index,
-        string Evaluation,
-        double Delta,
-        double Lower,
-        double Upper,
-        IReadOnlyList<string> Wins,
-        double? CostRatio,
-        int Runs
-    );
-
-    // Two candidates that won on different cases, merged when they change different files.
-    public sealed record CandidateMerged(Candidate Candidate);
-
-    public sealed record GateRequested(int Index, string Evaluation);
-
-    public sealed record GatePassed(string Evaluation, IReadOnlyList<GateCheck> Checks);
-
-    public sealed record GateFailed(string Evaluation, IReadOnlyList<GateCheck> Checks);
-
-    public sealed record GateInconclusive(
-        string? Evaluation,
-        IReadOnlyList<GateCheck> Checks,
-        string Reason
-    );
-
-    public sealed record PrOpened(string Repo, int Number, string Branch, string Url);
-
-    public sealed record Merged(DateTimeOffset At, string? Commit);
+    public sealed record Approved(string By);
 
     public sealed record Rejected(string Reason, string By);
 
+    public sealed record Applied(ApplyMode Mode, string By, DateTimeOffset At);
+
+    // The pattern's corrections per 100 sessions of the workspace, 30 days before and after the
+    // first apply (observational).
     public sealed record OutcomeObserved(
         double Before,
         double After,
@@ -101,198 +80,107 @@ public sealed record Proposal(
     bool Exists,
     ProposalStatus Status,
     ProposalEvents.Drafted? Draft,
-    ImmutableList<Candidate> Candidates,
-    ImmutableDictionary<int, ProposalEvents.CandidateScored> Scores,
-    int? GateIndex,
-    string? GateEvaluation,
-    ProposalEvents.PrOpened? Pr,
-    DateTimeOffset? MergedAt,
-    bool OutcomeObserved,
-    IReadOnlyList<GateCheck>? GateChecks = null
+    ApplyMode? AppliedMode,
+    DateTimeOffset? AppliedAt,
+    bool OutcomeObserved
 ) : IState<Proposal>
 {
     public static Proposal Initial { get; } =
-        new(
-            false,
-            ProposalStatus.Searching,
-            null,
-            [],
-            ImmutableDictionary<int, ProposalEvents.CandidateScored>.Empty,
-            null,
-            null,
-            null,
-            null,
-            false
-        );
+        new(false, ProposalStatus.Open, null, null, null, false);
 
     public static Proposal Evolve(Proposal s, object e) =>
         e switch
         {
-            ProposalEvents.Drafted x => s with
-            {
-                Exists = true,
-                Draft = x,
-                Candidates = [.. x.Candidates],
-            },
-            ProposalEvents.CandidateScored x => s with { Scores = s.Scores.SetItem(x.Index, x) },
-            ProposalEvents.CandidateMerged x => s with
-            {
-                Candidates = s.Candidates.Add(x.Candidate),
-            },
-            ProposalEvents.GateRequested x => s with
-            {
-                Status = ProposalStatus.Gating,
-                GateIndex = x.Index,
-                GateEvaluation = x.Evaluation,
-            },
-            ProposalEvents.GatePassed x => s with
-            {
-                Status = ProposalStatus.GatePassed,
-                GateChecks = x.Checks,
-            },
-            ProposalEvents.GateFailed x => s with
-            {
-                Status = ProposalStatus.GateFailed,
-                GateChecks = x.Checks,
-            },
-            ProposalEvents.GateInconclusive x => s with
-            {
-                Status = ProposalStatus.GateInconclusive,
-                GateChecks = x.Checks,
-            },
-            ProposalEvents.PrOpened x => s with { Status = ProposalStatus.PrOpened, Pr = x },
-            ProposalEvents.Merged x => s with { Status = ProposalStatus.Merged, MergedAt = x.At },
+            ProposalEvents.Drafted x => s with { Exists = true, Draft = x },
+            ProposalEvents.Approved => s with { Status = ProposalStatus.Approved },
             ProposalEvents.Rejected => s with { Status = ProposalStatus.Rejected },
+            ProposalEvents.Applied x => s with
+            {
+                Status = ProposalStatus.Applied,
+                AppliedMode = x.Mode,
+                AppliedAt = s.AppliedAt ?? x.At,
+            },
             ProposalEvents.OutcomeObserved => s with { OutcomeObserved = true },
             _ => s,
         };
 
     public static string StreamId(string id) => $"proposal:{id}";
 
-    public Candidate? Gated =>
-        GateIndex is { } i ? Candidates.FirstOrDefault(c => c.Index == i) : null;
-
-    // Still working or waiting for a person: another proposal for its pattern would compete.
-    public bool InFlight =>
-        Status
-            is ProposalStatus.Searching
-                or ProposalStatus.Gating
-                or ProposalStatus.GatePassed
-                or ProposalStatus.PrOpened;
+    // Waiting for a person: open, or approved and not yet applied. At most MaxOpen per workspace.
+    public bool Pending => Status is ProposalStatus.Open or ProposalStatus.Approved;
 }
 
-// The rules of the proposal stream: a PR only after gate_passed and once; a gate once, after a
-// score; a rejection needs a reason and never follows a merge; an outcome only after a merge.
+// The rules of the proposal stream: drafted once; approved or rejected while open; a rejection
+// needs a reason; applied only after approval, privately first or straight to a commit, and once
+// committed never private again; an outcome only after an apply, once.
 public static class ProposalDecider
 {
-    public const int MaxCandidates = 5;
     public const int MaxEdits = 3;
 
     public static IEnumerable<object> Draft(Proposal p, ProposalEvents.Drafted drafted)
     {
         if (p.Exists)
             return [];
-        if (drafted.Candidates.Count is < 1 or > MaxCandidates)
-            throw new DomainException($"A proposal has 1 to {MaxCandidates} candidates.");
-        foreach (var c in drafted.Candidates)
-            if (c.Edits.Count is < 1 or > MaxEdits)
-                throw new DomainException($"A candidate has 1 to {MaxEdits} edits.");
-        if (drafted.Kind == ProposalKind.Edit && drafted.Pattern is null)
-            throw new DomainException("An edit proposal names its pattern.");
+        if (string.IsNullOrWhiteSpace(drafted.Title))
+            throw new DomainException("A proposal needs a title.");
+        if (drafted.Kind == ProposalKind.CodeNote)
+        {
+            if (drafted.Note is null || drafted.Edits.Count > 0)
+                throw new DomainException("A code note has its note and no edits.");
+        }
+        else if (drafted.Edits.Count is < 1 or > MaxEdits || drafted.Note is not null)
+            throw new DomainException($"A proposal makes 1 to {MaxEdits} edits.");
         return [drafted];
     }
 
-    public static IEnumerable<object> Score(Proposal p, ProposalEvents.CandidateScored scored)
+    public static IEnumerable<object> Approve(Proposal p, string by)
     {
         Require(p);
-        if (p.Candidates.All(c => c.Index != scored.Index))
-            throw new DomainException($"The proposal has no candidate {scored.Index}.");
-        return p.Scores.ContainsKey(scored.Index) || p.Status != ProposalStatus.Searching
-            ? []
-            : [scored];
-    }
-
-    public static IEnumerable<object> Merge(Proposal p, Candidate merged)
-    {
-        Require(p);
-        if (merged.Edits.Count > MaxEdits)
-            throw new DomainException($"A merged candidate has at most {MaxEdits} edits.");
-        return
-            p.Candidates.Any(c => c.Index == merged.Index) || p.Status != ProposalStatus.Searching
-            ? []
-            : [new ProposalEvents.CandidateMerged(merged)];
-    }
-
-    public static IEnumerable<object> RequestGate(Proposal p, int index, string evaluation)
-    {
-        Require(p);
-        if (!p.Scores.ContainsKey(index))
-            throw new DomainException("Only a scored candidate goes to the gate.");
-        return p.Status == ProposalStatus.Searching
-            ? [new ProposalEvents.GateRequested(index, evaluation)]
-            : [];
-    }
-
-    public static IEnumerable<object> Conclude(Proposal p, object outcome)
-    {
-        Require(p);
-        if (
-            outcome
-            is not (
-                ProposalEvents.GatePassed
-                or ProposalEvents.GateFailed
-                or ProposalEvents.GateInconclusive
-            )
-        )
-            throw new ArgumentException("Not a gate outcome.", nameof(outcome));
-        // A concluded proposal takes no second outcome: the verdict can be delivered again.
-        if (p.Status is not (ProposalStatus.Searching or ProposalStatus.Gating))
-            return [];
-        if (
-            outcome is ProposalEvents.GatePassed or ProposalEvents.GateFailed
-            && p.Status != ProposalStatus.Gating
-        )
-            throw new DomainException("A gate verdict needs a gate request.");
-        return [outcome];
-    }
-
-    public static IEnumerable<object> OpenPr(Proposal p, ProposalEvents.PrOpened pr)
-    {
-        Require(p);
-        if (p.Pr is not null)
-            return [];
-        if (p.Status != ProposalStatus.GatePassed)
-            throw new DomainException("A pull request opens only after the gate passed.");
-        return [pr];
-    }
-
-    public static IEnumerable<object> Merge(Proposal p, DateTimeOffset at, string? commit)
-    {
-        Require(p);
-        if (p.Status == ProposalStatus.Merged)
-            return [];
-        if (p.Status != ProposalStatus.PrOpened)
-            throw new DomainException("Only an opened pull request merges.");
-        return [new ProposalEvents.Merged(at, commit)];
+        return p.Status switch
+        {
+            ProposalStatus.Open => [new ProposalEvents.Approved(by)],
+            ProposalStatus.Approved or ProposalStatus.Applied => [],
+            _ => throw new DomainException("A rejected proposal cannot be approved."),
+        };
     }
 
     public static IEnumerable<object> Reject(Proposal p, string reason, string by)
     {
         Require(p);
         if (string.IsNullOrWhiteSpace(reason))
-            throw new DomainException("A rejection needs a reason.");
-        if (p.Status == ProposalStatus.Merged)
-            throw new DomainException("A merged proposal is undone by reverting its pull request.");
-        return p.Status == ProposalStatus.Rejected
-            ? []
-            : [new ProposalEvents.Rejected(reason.Trim(), by)];
+            throw new DomainException("A rejection needs a reason; the next draft reads it.");
+        return p.Status switch
+        {
+            ProposalStatus.Rejected => [],
+            ProposalStatus.Applied => throw new DomainException(
+                "An applied proposal is undone by reverting its change."
+            ),
+            _ => [new ProposalEvents.Rejected(reason.Trim(), by)],
+        };
+    }
+
+    public static IEnumerable<object> Apply(
+        Proposal p,
+        ApplyMode mode,
+        string by,
+        DateTimeOffset at
+    )
+    {
+        Require(p);
+        if (p.Status is ProposalStatus.Open or ProposalStatus.Rejected)
+            throw new DomainException("Only an approved proposal is applied.");
+        if (p.Draft!.Kind == ProposalKind.CodeNote && mode == ApplyMode.Private)
+            throw new DomainException("A code note changes code, which cannot stay private.");
+        if (p.AppliedMode == mode || p.AppliedMode == ApplyMode.Commit)
+            return [];
+        return [new ProposalEvents.Applied(mode, by, at)];
     }
 
     public static IEnumerable<object> Observe(Proposal p, ProposalEvents.OutcomeObserved outcome)
     {
         Require(p);
-        if (p.Status != ProposalStatus.Merged)
-            throw new DomainException("An outcome is observed only after the merge.");
+        if (p.Status != ProposalStatus.Applied)
+            throw new DomainException("An outcome is observed only after an apply.");
         return p.OutcomeObserved ? [] : [outcome];
     }
 

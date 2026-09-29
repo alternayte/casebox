@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
-using Casebox.Server.Features.Effects;
 using Casebox.Server.Features.Inbox;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Workspaces;
@@ -8,20 +7,6 @@ using Deedbox;
 using QueueBox.Inbox;
 
 namespace Casebox.Server.Tests.Infrastructure;
-
-// Records every notify effect QueueBox delivers.
-public sealed class RecordingEffects : IEffectHandler
-{
-    public string Kind => "notify";
-
-    public ConcurrentQueue<EffectMessage> Received { get; } = new();
-
-    public Task HandleAsync(EffectMessage message, CancellationToken ct)
-    {
-        Received.Enqueue(message);
-        return Task.CompletedTask;
-    }
-}
 
 // test.create_workspace: creates the named workspace in the inbox transaction, then fails when
 // the payload asks it to, so a test can see the events roll back with the inbox row.

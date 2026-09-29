@@ -2,12 +2,12 @@
 
 ## What this is
 
-Casebox measures how often people must steer their coding agents, turns that history into replayable cases, and tests harness changes on those cases before a human merges them.
-It is a Go CLI and worker, a .NET server on Deedbox and Postgres, QueueBox for every outbox and inbox, and a React UI served by the server; work follows the step list and decisions in `PROGRESS.md`, and the design doc is local only.
+Casebox measures how often people must steer their coding agents, groups the corrections into patterns, and proposes small repository changes that a person approves or rejects.
+It is a Go CLI and worker, a .NET server on Deedbox and Postgres, QueueBox for the poll inbox, and a React UI served by the server; work follows the step list and decisions in `PROGRESS.md`, and the design doc is local only.
 
 ## Run
 
-- `CASEBOX_ADMIN_PASSWORD=pw CASEBOX_EFFECTS_TOKEN=ef CASEBOX_POLL_TOKEN=po CASEBOX_QUEUEBOX_ADMIN_TOKEN=qa docker compose -f deploy/compose.yaml up --build` starts Postgres, QueueBox and the server on port 8080; the four secrets are required, and casebox up generates them.
+- `CASEBOX_ADMIN_PASSWORD=pw CASEBOX_POLL_TOKEN=po CASEBOX_QUEUEBOX_ADMIN_TOKEN=qa docker compose -f deploy/compose.yaml up --build` starts Postgres, QueueBox and the server on port 8080; the three secrets are required, and casebox up generates them.
 - `cd cli && go run ./cmd/casebox --help` runs the CLI; set CASEBOX_HOME to a scratch directory to keep its files out of ~/.casebox.
 - `cd web && bun run dev` serves the UI with hot reload.
 
@@ -24,28 +24,23 @@ It is a Go CLI and worker, a .NET server on Deedbox and Postgres, QueueBox for e
 - The web UI builds into the server's static files; there is no separate web deployable.
 - Business decisions are Deedbox events; high-volume telemetry and blobs are plain Postgres tables.
 - Queries are Dapper over explicit SQL.
-- Side effects leave through the QueueBox outbox; webhooks and poll results enter through the QueueBox inbox.
+- Webhooks and poll results enter through the QueueBox inbox; the server writes nothing to a git host.
 - Never persist a raw identity; people exist only as pseudonymous tokens.
-- The server never runs case code and never holds model API keys; workers do both.
-- A gap in Deedbox, QueueBox or Kiln is fixed in that repository, not worked around here.
+- The server never holds model API keys; workers run the analysis model, and the apply command runs the person's own agent on their machine.
+- A gap in Deedbox or QueueBox is fixed in that repository, not worked around here.
 - Never weaken, skip or delete a test to make it pass.
 
 ## Domain words
 
 - work item: a Jira or GitHub issue; every report groups by it.
-- workspace: one or more repos with one environment recipe.
+- workspace: one or more repos whose corrections are grouped and proposed on together.
 - session: one agent run, captured live or imported.
 - steering event: a human intervention in or after a session.
 - correction: a steering event that fixes the agent's work; only corrections count as steering.
 - harness: the repo's agent instruction files, skills and MCP config, plus the agent, model and settings.
 - harness version: the hash of the harness files plus the agent and model identifiers.
-- case: a replayable task from history, rewound to its base commit.
-- oracle: what decides a case: fail-to-pass and pass-to-pass tests, trace assertions and narrow judge questions.
-- suite: a named set of approved cases, split into a dev set and a held-out set.
-- evaluation: a controlled comparison of a baseline and a candidate harness on a suite.
-- verdict: better, worse, equivalent or inconclusive, with sample size and interval.
 - pattern: a cluster of corrections or failures that share a cause.
-- proposal: a small harness edit, delivered as a pull request after it passes the gate.
+- proposal: a small change to a workspace's repository files (a harness edit, a skill, an MCP entry, or a code note that the person's agent carries out), drafted from a pattern and approved or rejected by a person. Avoid: suggestion, recommendation.
 - token: the pseudonymous ID of a person, stable within a period.
 - identity mark: an identity the CLI wraps as ⟦cbx:kind:value⟧; only the server turns it into a token.
 - k: the minimum number of distinct people behind any shown group.

@@ -22,9 +22,6 @@ public static class CaseboxClaims
             ? role
             : null;
 
-    public static bool IsCiToken(this ClaimsPrincipal user) =>
-        user.FindFirstValue(TokenKind) == "ci";
-
     public static string? TokenId(this ClaimsPrincipal user) => user.FindFirstValue(Token);
 
     // Who acted, for event metadata: an account or a token, never a captured person.
@@ -43,7 +40,4 @@ public static class Policies
     public const string Worker = "worker";
     public const string Ingest = "ingest";
     public const string WorkerOrIngest = "worker_or_ingest";
-    public const string WorkerOrCi = "worker_or_ci";
-    public const string CiOrMember = "ci_or_member";
-    public const string CiOrViewer = "ci_or_viewer";
 }

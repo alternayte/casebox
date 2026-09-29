@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Casebox.Server.Features.Effects;
 using Casebox.Server.Features.Inbox;
 using Casebox.Server.Features.Workspaces;
 using Casebox.Server.Tests.Infrastructure;
@@ -14,53 +13,6 @@ namespace Casebox.Server.Tests.Features;
 public sealed class QueueBoxTests(StackFixture stack)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    [Fact]
-    public async Task QueueBox_delivers_an_outbox_row_to_the_effects_endpoint_of_its_kind()
-    {
-        var marker = Guid.NewGuid().ToString();
-        await using (var db = new NpgsqlConnection(stack.ConnectionString))
-        {
-            await db.ExecuteAsync(
-                "INSERT INTO outbox (topic, key, payload, headers) VALUES ('effect.notify', @Key, @Payload::jsonb, '{}')",
-                new
-                {
-                    Key = marker,
-                    Payload = $$"""{"org":"{{StackFixture.OrgA}}","marker":"{{marker}}"}""",
-                }
-            );
-        }
-
-        var delivered = await Eventually(() =>
-            stack.ServerA.Effects.Received.FirstOrDefault(m =>
-                m.Payload.GetProperty("marker").GetString() == marker
-            )
-        );
-        Assert.NotNull(delivered);
-        Assert.Equal("notify", delivered.Kind);
-        Assert.False(string.IsNullOrEmpty(delivered.MessageId));
-    }
-
-    [Fact]
-    public async Task The_effects_endpoint_answers_only_QueueBox_and_only_on_the_management_port()
-    {
-        using var management = stack.ServerA.Management();
-        Assert.Equal(
-            HttpStatusCode.Unauthorized,
-            (
-                await management.PostAsJsonAsync("/internal/effects/notify", new { org = "x" }, Ct)
-            ).StatusCode
-        );
-
-        var wrongPort = stack.ServerA.Anonymous();
-        wrongPort.DefaultRequestHeaders.Add(EffectEndpoints.TokenHeader, StackFixture.EffectsToken);
-        var response = await wrongPort.PostAsJsonAsync(
-            "/internal/effects/notify",
-            new { org = "x" },
-            Ct
-        );
-        Assert.NotEqual(HttpStatusCode.NoContent, response.StatusCode);
-    }
 
     [Fact]
     public async Task A_repeated_poll_of_the_same_state_is_handled_once()

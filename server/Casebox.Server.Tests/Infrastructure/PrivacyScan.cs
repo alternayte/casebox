@@ -1,5 +1,4 @@
 using System.Text;
-using Casebox.Server.Features.Blobs;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -39,35 +38,6 @@ public static class PrivacyScan
             );
             if (hits > 0)
                 found.Add($"{schema}.{table}.{column}");
-        }
-
-        // Blobs are zstd-compressed, so they are scanned after decompression. A row without bytes
-        // points at the S3-compatible store.
-        var postgres = stack.ServerA.Services.GetRequiredService<BlobStore>();
-        using var s3Client = new Amazon.S3.AmazonS3Client(
-            new Amazon.Runtime.BasicAWSCredentials(
-                StackFixture.S3AccessKey,
-                StackFixture.S3SecretKey
-            ),
-            new Amazon.S3.AmazonS3Config
-            {
-                ServiceURL = stack.S3Url,
-                ForcePathStyle = true,
-                AuthenticationRegion = "us-east-1",
-            }
-        );
-        await using var dataSource = NpgsqlDataSource.Create(stack.ConnectionString);
-        var s3 = new S3BlobStore(dataSource, TimeProvider.System, s3Client, StackFixture.Bucket);
-        foreach (
-            var (org, hash, inline) in await db.QueryAsync<(string, string, bool)>(
-                "SELECT org_id, hash, data IS NOT NULL FROM casebox.blobs"
-            )
-        )
-        {
-            var blob = await (inline ? postgres : s3).GetAsync(org, hash, Ct);
-            var text = Encoding.UTF8.GetString(blob!.Data).ToLowerInvariant();
-            if (needles.Any(n => text.Contains(n, StringComparison.Ordinal)))
-                found.Add($"blob {hash}");
         }
 
         return found;

@@ -26,13 +26,9 @@ spec:
           env:
             - name: CASEBOX_SERVER
               value: {{ printf "http://%s-server:8080" (include "casebox.fullname" .) | quote }}
-            - name: CASEBOX_SANDBOX
-              value: {{ .Values.worker.sandbox | quote }}
-            - name: CASEBOX_SANDBOX_CONCURRENCY
-              value: {{ .Values.worker.concurrency | quote }}
           envFrom:
             - secretRef:
-                name: {{ required "worker.envSecret is required: it holds CASEBOX_WORKER_TOKEN and the provider's credentials" .Values.worker.envSecret }}
+                name: {{ required "worker.envSecret is required: it holds CASEBOX_WORKER_TOKEN and the analysis model settings" .Values.worker.envSecret }}
           volumeMounts:
             - name: home
               mountPath: /home/casebox

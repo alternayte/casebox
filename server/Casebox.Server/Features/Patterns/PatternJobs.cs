@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Casebox.Server.Features.Evaluations;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Orgs;
 using Casebox.Server.Features.Privacy;
@@ -21,16 +20,17 @@ public sealed class ClusterResultHandler : IJobResultHandler
 
     public async Task HandleAsync(JobResult result, CancellationToken ct)
     {
+        result.Services.GetService<PatternScheduler>()?.Nudge();
         var payload = result.Job.Payload;
         var workspace = payload.GetProperty("workspace").GetString()!;
-        var key = payload.GetProperty("key").Deserialize<PatternKey>(EvaluationResults.Json)!;
+        var key = payload.GetProperty("key").Deserialize<PatternKey>(PatternJobs.Json)!;
         var asked = payload
             .GetProperty("corrections")
             .EnumerateArray()
             .Select(c => c.GetProperty("ref").GetString()!)
             .ToHashSet(StringComparer.Ordinal);
         var answer =
-            result.Result.Deserialize<ClusterAnswer>(EvaluationResults.Json)
+            result.Result.Deserialize<ClusterAnswer>(PatternJobs.Json)
             ?? throw new DomainException("The result is empty.");
 
         var scan = result.Services.GetRequiredService<PatternScan>();

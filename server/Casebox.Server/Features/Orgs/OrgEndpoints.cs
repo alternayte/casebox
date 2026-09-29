@@ -23,7 +23,7 @@ public static class OrgEndpoints
             )
             .RequireAuthorization(Policies.Viewer);
 
-        // Privacy settings (prompt mode, k, pseudonym period) and budgets. Every change is an
+        // Privacy settings: prompt mode, k, pseudonym period and retention. Every change is an
         // audited org.settings_changed event carrying the acting account.
         org.MapPut(
                 "/settings",

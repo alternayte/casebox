@@ -1,14 +1,16 @@
-// Package propose runs the proposer's worker jobs (docs/specs/self-evolution.md): drafting small
-// harness edits for a pattern with the analysis model, and listing removal candidates for the
-// harness diet. Edits are applied here, so the server only ever writes whole files.
+// Package propose drafts proposals (docs/specs/simple-evolution.md): one small change to a
+// repository's harness files per pattern, drafted by the worker's analysis model. The same edits
+// are applied twice: by the worker, to show the change for review, and by `casebox apply` on the
+// person's working tree.
 package propose
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path"
 	"regexp"
-	"sort"
 	"strings"
 )
 
@@ -21,17 +23,28 @@ type Edit struct {
 	New     string `json:"new,omitempty"`
 }
 
-// Ops are the edits a candidate may make (SDD section 9, Proposals).
-var Ops = []string{"add_bullet", "replace_bullet", "delete_bullet", "delete_section", "write_skill", "delete_skill"}
+// Ops are the edits a proposal may make.
+var Ops = []string{"add_bullet", "replace_bullet", "delete_bullet", "delete_section", "write_skill", "delete_skill", "write_rule", "add_mcp_server"}
 
-// MaxEdits is the most edits one candidate makes.
+// MaxEdits is the most edits one proposal makes.
 const MaxEdits = 3
 
-var skillFile = regexp.MustCompile(`^\.(claude|agents)/skills/[a-z0-9][a-z0-9_-]{0,63}/SKILL\.md$`)
+var (
+	skillFile = regexp.MustCompile(`^\.(claude|agents)/skills/[a-z0-9][a-z0-9_-]{0,63}/SKILL\.md$`)
+	ruleFile  = regexp.MustCompile(`^\.cursor/rules/[a-z0-9][a-z0-9_-]{0,63}\.mdc$`)
+	mcpFile   = regexp.MustCompile(`^(\.mcp\.json|\.cursor/mcp\.json)$`)
+	mcpName   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+	envRef    = regexp.MustCompile(`^\$\{[A-Z][A-Z0-9_]*\}$`)
+)
+
+// whole reports whether a file is written whole by its op: a skill, a rule or an MCP config.
+func whole(name string) bool {
+	return skillFile.MatchString(name) || ruleFile.MatchString(name) || mcpFile.MatchString(name)
+}
 
 // Apply applies edits to the harness files (path to content) and returns the changed files: a new
 // content, or nil for a removed file. It refuses more than 3 edits, a file the globs do not match,
-// an edit that finds nothing to change, and a change that keeps less than half of a non-skill
+// an edit that finds nothing to change, and a change that keeps less than half of an instruction
 // file's lines: a proposal never rewrites a whole file.
 func Apply(files map[string]string, edits []Edit, matches func(string) bool) (map[string]*string, error) {
 	if len(edits) == 0 || len(edits) > MaxEdits {
@@ -59,6 +72,14 @@ func Apply(files map[string]string, edits []Edit, matches func(string) bool) (ma
 		case "write_skill", "delete_skill":
 			if !skillFile.MatchString(name) {
 				return nil, fmt.Errorf("%s names %q, which is not .claude/skills/<name>/SKILL.md or .agents/skills/<name>/SKILL.md", e.Op, e.File)
+			}
+		case "write_rule":
+			if !ruleFile.MatchString(name) {
+				return nil, fmt.Errorf("write_rule names %q, which is not .cursor/rules/<name>.mdc", e.File)
+			}
+		case "add_mcp_server":
+			if !mcpFile.MatchString(name) {
+				return nil, fmt.Errorf("add_mcp_server names %q, which is not .mcp.json or .cursor/mcp.json", e.File)
 			}
 		}
 		if !matches(name) {
@@ -97,12 +118,18 @@ func Apply(files map[string]string, edits []Edit, matches func(string) bool) (ma
 				return nil, fmt.Errorf("delete_section: no heading %q in %s", e.Heading, name)
 			}
 			set(name, &next)
-		case "write_skill":
+		case "write_skill", "write_rule":
 			if strings.TrimSpace(e.New) == "" {
-				return nil, errors.New("write_skill needs the skill's text")
+				return nil, fmt.Errorf("%s needs the file's text", e.Op)
 			}
 			body := strings.TrimRight(e.New, "\n") + "\n"
 			set(name, &body)
+		case "add_mcp_server":
+			next, err := addMCPServer(content, e.Heading, e.New)
+			if err != nil {
+				return nil, err
+			}
+			set(name, &next)
 		case "delete_skill":
 			if !exists {
 				return nil, fmt.Errorf("delete_skill: %s does not exist", name)
@@ -119,7 +146,7 @@ func Apply(files map[string]string, edits []Edit, matches func(string) bool) (ma
 		if next != nil && existed && *next == old {
 			continue
 		}
-		if next != nil && existed && !skillFile.MatchString(name) && kept(old, *next) < 0.5 {
+		if next != nil && existed && !whole(name) && kept(old, *next) < 0.5 {
 			return nil, fmt.Errorf("the change keeps less than half of %s; a proposal never rewrites a whole file", name)
 		}
 		out[name] = next
@@ -263,29 +290,72 @@ func deleteSection(content, title string) (string, bool) {
 	return strings.Join(append(lines[:start:start], lines[end:]...), "\n"), true
 }
 
-// Sections lists the "##" sections of a Markdown file with their sizes in bytes, largest first.
-func Sections(content string) []Part {
-	lines := strings.Split(content, "\n")
-	var out []Part
-	for i, l := range lines {
-		h, ok := headingOf(l)
-		if !ok || h.level != 2 {
-			continue
-		}
-		_, end, _ := section(lines, h.text)
-		size := 0
-		for _, x := range lines[i:end] {
-			size += len(x) + 1
-		}
-		out = append(out, Part{Heading: h.text, Size: size})
+// addMCPServer adds one server under "mcpServers" of an MCP config (name in heading, its JSON in
+// text). The entry must start a local command or name a URL, and it names every secret as ${VAR}:
+// a proposal never holds a key. Existing entries keep their text.
+func addMCPServer(content, name, text string) (string, error) {
+	if !mcpName.MatchString(name) {
+		return "", fmt.Errorf("add_mcp_server needs a server name of lower-case letters, digits, - and _, not %q", name)
 	}
-	sort.SliceStable(out, func(a, b int) bool { return out[a].Size > out[b].Size })
-	return out
-}
-
-// Part is a removable part of the harness: a section of a file, or a skill.
-type Part struct {
-	File    string
-	Heading string
-	Size    int
+	var server map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(text), &server); err != nil {
+		return "", fmt.Errorf("the MCP server %s is not a JSON object: %w", name, err)
+	}
+	if server["command"] == nil && server["url"] == nil {
+		return "", fmt.Errorf("the MCP server %s names neither a command nor a url", name)
+	}
+	for _, key := range []string{"env", "headers"} {
+		var values map[string]string
+		if raw := server[key]; raw != nil {
+			if err := json.Unmarshal(raw, &values); err != nil {
+				return "", fmt.Errorf("the MCP server %s: %s is not a map of strings", name, key)
+			}
+			for k, v := range values {
+				if !envRef.MatchString(v) {
+					return "", fmt.Errorf("the MCP server %s sets %s.%s to a value; name it as ${VARIABLE} instead", name, key, k)
+				}
+			}
+		}
+	}
+	entry, _ := json.MarshalIndent(server, "    ", "  ")
+	if strings.TrimSpace(content) == "" {
+		return fmt.Sprintf("{\n  \"mcpServers\": {\n    %q: %s\n  }\n}\n", name, entry), nil
+	}
+	var doc struct {
+		Servers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(content), &doc); err != nil {
+		return "", fmt.Errorf("the MCP config is not valid JSON: %w", err)
+	}
+	if _, taken := doc.Servers[name]; taken {
+		return "", fmt.Errorf("the MCP config already has a server %s", name)
+	}
+	// Insert after the opening brace of "mcpServers", so the rest of the file keeps its text.
+	if at := strings.Index(content, `"mcpServers"`); at >= 0 {
+		if brace := strings.Index(content[at:], "{"); brace >= 0 {
+			pos := at + brace + 1
+			sep := ","
+			if len(doc.Servers) == 0 {
+				sep = ""
+			}
+			next := content[:pos] + fmt.Sprintf("\n    %q: %s%s", name, entry, sep) + content[pos:]
+			if json.Valid([]byte(next)) {
+				return next, nil
+			}
+		}
+	}
+	// No "mcpServers" yet: add it as the first key of the top-level object.
+	open := strings.Index(content, "{")
+	if open < 0 {
+		return "", errors.New("the MCP config is not a JSON object")
+	}
+	sep := ","
+	if bytes.Equal(bytes.TrimSpace([]byte(content[open+1:])), []byte("}")) {
+		sep = ""
+	}
+	next := content[:open+1] + fmt.Sprintf("\n  \"mcpServers\": {\n    %q: %s\n  }%s", name, entry, sep) + content[open+1:]
+	if !json.Valid([]byte(next)) {
+		return "", errors.New("adding the server does not give valid JSON")
+	}
+	return next, nil
 }

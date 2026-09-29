@@ -11,6 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/alternayte/casebox/cli/internal/api"
+	"github.com/alternayte/casebox/cli/internal/repo"
 	"github.com/alternayte/casebox/cli/internal/skill"
 )
 
@@ -28,7 +30,7 @@ func newAPICommand() *cobra.Command {
 				return errors.New("the path starts with /api/v1/, such as /api/v1/steering/report")
 			}
 			_, cfg, _ := repoConfig(cmd.Context())
-			client, err := proposerClient(cfg)
+			client, err := tokenClient(cfg)
 			if err != nil {
 				return err
 			}
@@ -102,4 +104,19 @@ func newSkillCommand() *cobra.Command {
 	_ = install.MarkFlagRequired("agent")
 	cmd.AddCommand(install)
 	return cmd
+}
+
+// tokenClient is CASEBOX_TOKEN's client when set, else this machine's login.
+func tokenClient(cfg repo.Config) (*api.Client, error) {
+	if token := os.Getenv("CASEBOX_TOKEN"); token != "" {
+		server := os.Getenv("CASEBOX_SERVER")
+		if server == "" {
+			server = cfg.Server
+		}
+		if server == "" {
+			return nil, errors.New("set CASEBOX_SERVER, or server in casebox.yml")
+		}
+		return api.New(server, token), nil
+	}
+	return cliClient()
 }

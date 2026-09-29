@@ -15,8 +15,8 @@ public sealed class WorkspaceProjection : Projection
                 ctx.Connection.ExecuteAsync(
                     new CommandDefinition(
                         """
-                        INSERT INTO casebox.workspaces (org_id, id, name, repos, recipe_status, updated_at)
-                        VALUES (@Org, @Id, @Name, '[]', 'none', @At)
+                        INSERT INTO casebox.workspaces (org_id, id, name, repos, updated_at)
+                        VALUES (@Org, @Id, @Name, '[]', @At)
                         """,
                         new
                         {
@@ -47,25 +47,6 @@ public sealed class WorkspaceProjection : Projection
                     "repos = COALESCE((SELECT jsonb_agg(r ORDER BY r) FROM jsonb_array_elements_text(repos) r WHERE r <> @Repo), '[]')",
                     new { e.Repo }
                 )
-        );
-
-        On<WorkspaceEvents.HarnessConfigured>(
-            (e, ctx) => Update(ctx, "shared_harness = @Shared", new { e.Shared })
-        );
-
-        On<WorkspaceEvents.RecipeProposed>(
-            (_, ctx) => Update(ctx, "recipe_status = 'proposed'", null)
-        );
-        On<WorkspaceEvents.RecipeValidated>(
-            (e, ctx) =>
-                Update(
-                    ctx,
-                    "recipe_status = @Status",
-                    new { Status = e.Passed ? "validated" : "validation_failed" }
-                )
-        );
-        On<WorkspaceEvents.RecipeConfirmed>(
-            (_, ctx) => Update(ctx, "recipe_status = 'confirmed'", null)
         );
     }
 

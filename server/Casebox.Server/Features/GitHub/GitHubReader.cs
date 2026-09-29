@@ -11,9 +11,6 @@ namespace Casebox.Server.Features.GitHub;
 // holds a login, name or email of a person.
 public sealed partial class GitHubReader(Identities identities)
 {
-    // Blame is expensive; a fix is judged on at most this many files.
-    private const int MaxBlameFiles = 20;
-
     // Check runs are read for the last commits of a pull request only.
     private const int MaxCheckedCommits = 5;
 
@@ -25,9 +22,6 @@ public sealed partial class GitHubReader(Identities identities)
 
     [GeneratedRegex(@"(?i)this reverts commit (?<sha>[0-9a-f]{7,40})")]
     private static partial Regex RevertsCommit();
-
-    [GeneratedRegex(@"^@@ -(?<a>\d+)(?:,(?<b>\d+))? \+(?<c>\d+)(?:,(?<d>\d+))? @@")]
-    private static partial Regex Hunk();
 
     public static (string Owner, string Name) Split(string repo)
     {
@@ -55,13 +49,11 @@ public sealed partial class GitHubReader(Identities identities)
         var files = new List<ChangedFile>();
         foreach (var f in await client.ListAsync($"{path}/files", null, 30, ct))
         {
-            var patch = f.TryGetProperty("patch", out var p) ? p.GetString() : null;
             files.Add(
                 new ChangedFile(
                     f.GetProperty("filename").GetString()!,
                     f.GetProperty("additions").GetInt32(),
-                    f.GetProperty("deletions").GetInt32(),
-                    BaseRanges(patch)
+                    f.GetProperty("deletions").GetInt32()
                 )
             );
         }
@@ -168,10 +160,6 @@ public sealed partial class GitHubReader(Identities identities)
                 ? ma.GetDateTimeOffset()
                 : null;
         var baseSha = pr.GetProperty("base").GetProperty("sha").GetString()!;
-        var blamed =
-            mergedAt is not null && reverts is null
-                ? await BlameAsync(client, owner, name, baseSha, number, files, ct)
-                : [];
 
         return new PullRequestSnapshot(
             repo,
@@ -198,7 +186,6 @@ public sealed partial class GitHubReader(Identities identities)
             reviews,
             comments,
             checks,
-            blamed,
             reverts
         );
     }
@@ -266,119 +253,6 @@ public sealed partial class GitHubReader(Identities identities)
             await CommitAuthorAsync(commit, period, ct),
             await identities.TokenizeExternalAsync(message, period, ct)
         );
-    }
-
-    // Blames the lines a merged pull request changed, at its base commit: each line blames to the
-    // pull request that last wrote it.
-    private static async Task<IReadOnlyList<BlamedPr>> BlameAsync(
-        GitHubClient client,
-        string owner,
-        string name,
-        string baseSha,
-        int self,
-        List<ChangedFile> files,
-        CancellationToken ct
-    )
-    {
-        const string query = """
-            query($owner: String!, $name: String!, $oid: GitObjectID!, $path: String!) {
-              repository(owner: $owner, name: $name) {
-                object(oid: $oid) { ... on Commit { blame(path: $path) { ranges {
-                  startingLine endingLine
-                  commit { associatedPullRequests(first: 1) { nodes { number } } }
-                } } } }
-              }
-            }
-            """;
-        var lines = new Dictionary<int, int>();
-        foreach (var file in files.Where(f => f.BaseRanges.Count > 0).Take(MaxBlameFiles))
-        {
-            JsonElement data;
-            try
-            {
-                data = await client.GraphQLAsync(
-                    query,
-                    new
-                    {
-                        owner,
-                        name,
-                        oid = baseSha,
-                        path = file.Path,
-                    },
-                    ct
-                );
-            }
-            catch (HttpRequestException)
-            {
-                continue; // a file new in this pull request has no blame at its base
-            }
-
-            if (
-                data.GetProperty("repository").GetProperty("object")
-                    is not { ValueKind: JsonValueKind.Object } commit
-                || !commit.TryGetProperty("blame", out var blame)
-            )
-                continue;
-            foreach (var range in blame.GetProperty("ranges").EnumerateArray())
-            {
-                var nodes = range
-                    .GetProperty("commit")
-                    .GetProperty("associatedPullRequests")
-                    .GetProperty("nodes");
-                if (nodes.GetArrayLength() == 0)
-                    continue;
-                var pr = nodes[0].GetProperty("number").GetInt32();
-                if (pr == self)
-                    continue;
-                int start = range.GetProperty("startingLine").GetInt32(),
-                    end = range.GetProperty("endingLine").GetInt32();
-                var overlap = file.BaseRanges.Sum(r =>
-                    Math.Max(0, Math.Min(end, r[1]) - Math.Max(start, r[0]) + 1)
-                );
-                if (overlap > 0)
-                    lines[pr] = lines.GetValueOrDefault(pr) + overlap;
-            }
-        }
-
-        return lines
-            .Select(l => new BlamedPr(
-                $"github.com/{owner}/{name}".ToLowerInvariant(),
-                l.Key,
-                l.Value
-            ))
-            .ToList();
-    }
-
-    // The base-side line numbers a unified diff removes or changes, as [start, end] ranges.
-    public static IReadOnlyList<int[]> BaseRanges(string? patch)
-    {
-        var ranges = new List<int[]>();
-        if (string.IsNullOrEmpty(patch))
-            return ranges;
-        var old = 0;
-        foreach (var line in patch.Split('\n'))
-        {
-            if (Hunk().Match(line) is { Success: true } h)
-            {
-                old = int.Parse(h.Groups["a"].Value, CultureInfo.InvariantCulture);
-                continue;
-            }
-
-            if (line.StartsWith('-'))
-            {
-                if (ranges.Count > 0 && ranges[^1][1] == old - 1)
-                    ranges[^1][1] = old;
-                else
-                    ranges.Add([old, old]);
-                old++;
-            }
-            else if (!line.StartsWith('+') && !line.StartsWith('\\'))
-            {
-                old++;
-            }
-        }
-
-        return ranges;
     }
 
     private async Task<PersonRef?> PersonAsync(

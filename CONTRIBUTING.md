@@ -21,7 +21,6 @@ Run one part alone with `just cli`, `just web` or `just server`.
 | `cli/` | The Go CLI and worker, one static binary | Apache-2.0 |
 | `server/` | The .NET server | AGPL-3.0 |
 | `web/` | The React UI, built into the server's static files | AGPL-3.0 |
-| `action/` | The GitHub Action | Apache-2.0 |
 | `deploy/` | The compose file and the Helm chart | Apache-2.0 |
 | `ee/` | Reserved for commercial features; empty in 0.1.0 | Commercial |
 

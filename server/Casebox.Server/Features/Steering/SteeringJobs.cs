@@ -44,6 +44,7 @@ public sealed class ClassifyResultHandler : IJobResultHandler
 
     public async Task HandleAsync(JobResult result, CancellationToken ct)
     {
+        result.Services.GetService<Patterns.PatternScheduler>()?.Nudge();
         var payload = result.Job.Payload;
         var stream = payload.GetProperty("stream").GetString()!;
         var answer =

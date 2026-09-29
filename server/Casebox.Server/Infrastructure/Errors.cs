@@ -26,20 +26,10 @@ public static class Cbx
     public const string Conflict = "CBX003";
     public const string Unauthenticated = "CBX010";
     public const string Forbidden = "CBX011";
-    public const string MissingPrice = "CBX024";
-    public const string MonthlyBudget = "CBX030";
-    public const string EvaluationCap = "CBX031";
-    public const string ProposerShare = "CBX032";
     public const string NoWorkspace = "CBX040";
-    public const string RecipeNotConfirmed = "CBX041";
-    public const string NoCases = "CBX042";
-    public const string NoBaselineScore = "CBX043";
-    public const string SharedHarnessAgent = "CBX063";
-    public const string GitHubNotConnected = "CBX070";
     public const string GitHubRefused = "CBX071";
     public const string JiraRefused = "CBX072";
     public const string BelowK = "CBX080";
-    public const string HeldOut = "CBX081";
     public const string NoPromptMode = "CBX090";
 
     public static string Url(string code) => $"{Docs}{code.ToLowerInvariant()}/";

@@ -60,13 +60,3 @@ func recordJob(ctx context.Context, kind, outcome string, took time.Duration) {
 	}
 	h.Record(ctx, took.Seconds(), metric.WithAttributes(attribute.String("kind", kind), attribute.String("outcome", outcome)))
 }
-
-// RecordSandboxStart records the time to prepare and start an agent's sandbox.
-func RecordSandboxStart(ctx context.Context, provider string, took time.Duration) {
-	h, err := otel.Meter("casebox").Float64Histogram("casebox.worker.sandbox.start",
-		metric.WithUnit("s"), metric.WithDescription("Time to prepare and start an agent's sandbox."))
-	if err != nil {
-		return
-	}
-	h.Record(ctx, took.Seconds(), metric.WithAttributes(attribute.String("provider", provider)))
-}

@@ -14,9 +14,14 @@ namespace Casebox.Server.Features.Patterns;
 public static class PatternJobs
 {
     public const string Cluster = "pattern.cluster";
+
+    public static readonly System.Text.Json.JsonSerializerOptions Json = new(
+        System.Text.Json.JsonSerializerDefaults.Web
+    );
 }
 
-// Runs the pattern scan once an hour for every organisation with corrections.
+// Runs the pattern scan once an hour for every organisation with corrections, and 30 seconds
+// after a classification or clustering result nudges it, so proposals follow an import soon.
 public sealed class PatternScheduler(
     IServiceScopeFactory scopes,
     NpgsqlDataSource db,
@@ -24,6 +29,20 @@ public sealed class PatternScheduler(
     ILogger<PatternScheduler> logger
 ) : BackgroundService
 {
+    private readonly SemaphoreSlim _nudged = new(0, 1);
+
+    public void Nudge()
+    {
+        try
+        {
+            _nudged.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+            // Already nudged; the next scan covers this result too.
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -37,7 +56,8 @@ public sealed class PatternScheduler(
                 logger.LogError(e, "The pattern scan failed; it runs again in an hour.");
             }
 
-            await Task.Delay(TimeSpan.FromHours(1), clock, stoppingToken);
+            if (await _nudged.WaitAsync(TimeSpan.FromHours(1), stoppingToken))
+                await Task.Delay(TimeSpan.FromSeconds(30), clock, stoppingToken);
         }
     }
 
@@ -138,7 +158,7 @@ public sealed class PatternScan(
                                 interventionId = c.InterventionId,
                             }),
                         },
-                        Evaluations.EvaluationResults.Json
+                        PatternJobs.Json
                     ),
                     3,
                     ct
@@ -147,13 +167,14 @@ public sealed class PatternScan(
             }
         }
 
+        await Proposals.ProposalJobs.EnqueueDraftsAsync(connection, jobs, Org, workspaces, ct);
         await ObserveOutcomesAsync(connection, workspaces, ct);
     }
 
     public static readonly TimeSpan OutcomeWindow = TimeSpan.FromDays(30);
 
-    // 30 days after a proposal's merge: the pattern group's corrections per 100 sessions of the
-    // workspace in the 30 days before and after (observational). A fall resolves the pattern.
+    // 30 days after a proposal's first apply: the pattern group's corrections per 100 sessions of
+    // the workspace in the 30 days before and after (observational). A fall resolves the pattern.
     private async Task ObserveOutcomesAsync(
         System.Data.Common.DbConnection connection,
         Dictionary<string, HashSet<string>> workspaces,
@@ -164,12 +185,12 @@ public sealed class PatternScan(
             string Id,
             string Workspace,
             string Pattern,
-            DateTime MergedAt
+            DateTime AppliedAt
         )>(
             new CommandDefinition(
                 """
-                SELECT id, workspace, pattern, merged_at FROM casebox.proposals
-                WHERE org_id = @Org AND status = 'merged' AND outcome IS NULL AND pattern IS NOT NULL AND merged_at <= @Due
+                SELECT id, workspace, pattern, applied_at FROM casebox.proposals
+                WHERE org_id = @Org AND status = 'applied' AND outcome IS NULL AND applied_at <= @Due
                 """,
                 new { Org, Due = clock.GetUtcNow() - OutcomeWindow },
                 cancellationToken: ct
@@ -180,7 +201,7 @@ public sealed class PatternScan(
             var (pattern, _) = await store.Load<Pattern>(Pattern.StreamId(d.Pattern), ct);
             if (!pattern.Exists || !workspaces.TryGetValue(d.Workspace, out var repos))
                 continue;
-            var merged = new DateTimeOffset(DateTime.SpecifyKind(d.MergedAt, DateTimeKind.Utc));
+            var applied = new DateTimeOffset(DateTime.SpecifyKind(d.AppliedAt, DateTimeKind.Utc));
             async Task<(int Corrections, int Sessions)> CountAsync(
                 DateTimeOffset from,
                 DateTimeOffset to
@@ -220,8 +241,8 @@ public sealed class PatternScan(
                 );
                 return (corrections, sessions);
             }
-            var before = await CountAsync(merged - OutcomeWindow, merged);
-            var after = await CountAsync(merged, merged + OutcomeWindow);
+            var before = await CountAsync(applied - OutcomeWindow, applied);
+            var after = await CountAsync(applied, applied + OutcomeWindow);
             double Rate((int Corrections, int Sessions) c) =>
                 c.Sessions == 0 ? 0 : 100.0 * c.Corrections / c.Sessions;
             var rateBefore = Math.Round(Rate(before), 2);

@@ -2,8 +2,6 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Casebox.Server.Features.Ci;
-using Casebox.Server.Features.Evaluations;
 using Casebox.Server.Tests.Infrastructure;
 
 namespace Casebox.Server.Tests.Features;
@@ -46,112 +44,6 @@ public sealed class DocsTests(StackFixture stack)
     }
 
     // The harness CI tutorial shows the comment the effect writes, from the renderer itself.
-    [Fact]
-    public void The_harness_CI_tutorial_shows_the_comment_as_Casebox_writes_it()
-    {
-        var cases = Enumerable
-            .Range(1, 10)
-            .Select(i => new CiEndpoints.CaseRow(
-                $"3f9a1c{i:D2}e7b2d4",
-                i == 4 ? 3 : 2 + i % 2,
-                3,
-                i == 4 ? 0 : 1,
-                1,
-                0,
-                i == 4
-            ))
-            .ToList();
-        var verdict = new EvaluationEvents.VerdictReached(
-            Statistics.Verdict.Inconclusive,
-            -0.067,
-            -0.39,
-            0.21,
-            0.95,
-            10,
-            10,
-            1.02,
-            0.91,
-            1.14,
-            0.97,
-            0.88,
-            1.07,
-            false,
-            0.77,
-            0.7,
-            null,
-            Purpose.HarnessCi,
-            [cases[3].CaseId]
-        );
-        var estimate = new Estimate(
-            10,
-            10,
-            0,
-            4_000_000,
-            0,
-            6.2m,
-            6.2m,
-            150,
-            15,
-            150,
-            6.2m,
-            Statistics.DetectableEffect(10, 1)
-        );
-        var run = new CiRun(
-            "01JDOCS",
-            CiRuns.PullRequest,
-            "payments",
-            "github.com/acme/payments",
-            57,
-            "8d2f41c09a7e3b5f6e1d2c3b4a596877",
-            "main",
-            "https://casebox.example.com",
-            "01JDOCSEVAL",
-            CiRuns.Started,
-            null,
-            "{}",
-            "token:ci",
-            DateTime.UnixEpoch
-        );
-        var view = new CiEndpoints.RunView(
-            run.Id,
-            run.Kind,
-            run.Workspace,
-            run.Repo,
-            run.Number,
-            run.HeadSha,
-            "done",
-            null,
-            run.EvaluationId,
-            "harness_ci",
-            1,
-            0.05,
-            estimate,
-            5.87m,
-            150m,
-            10,
-            0,
-            verdict,
-            null,
-            verdict.Reason,
-            cases,
-            new CiEndpoints.BaselineInfo(
-                "c41e9b0d7a2f5e3c8b1d",
-                new DateTimeOffset(2026, 9, 28, 3, 17, 0, TimeSpan.Zero)
-            )
-        );
-        var comment = CiCommentEffect.Render(view, run, CiCommentEffect.Marker(run.Workspace));
-        // The hidden marker is for finding the comment on GitHub; the page shows the rest.
-        var body = string.Join('\n', comment.Split('\n').Skip(1)).Trim();
-        var page = Path.Combine(Docs, "src", "content", "docs", "tutorials", "harness-ci.md");
-        var text = File.ReadAllText(page);
-        const string start = "<div id=\"harness-ci-comment\" class=\"gh-comment\">";
-        const string end = "</div>";
-        var from = text.IndexOf(start, StringComparison.Ordinal);
-        Assert.True(from >= 0, $"{page} has no {start} block");
-        var to = text.IndexOf(end, from, StringComparison.Ordinal);
-        var expected = text[..from] + start + "\n\n" + body + "\n\n" + text[to..];
-        Compare(page, expected);
-    }
 
     private static string ApiPage(JsonObject document)
     {

@@ -47,6 +47,14 @@ public sealed class PatternBoard : Projection
         On<PatternEvents.Dismissed>((e, ctx) => Status(ctx, "dismissed", e.Reason));
         On<PatternEvents.Resolved>((_, ctx) => Status(ctx, "resolved", null));
         On<PatternEvents.Reopened>((e, ctx) => Status(ctx, "open", e.Reason));
+        On<PatternEvents.AdvisoryNoted>(
+            (e, ctx) =>
+                Exec(
+                    ctx,
+                    "UPDATE casebox.patterns SET advisory = true, advisory_note = @Note, updated_at = @At WHERE org_id = @Org AND id = @Id",
+                    new { e.Note }
+                )
+        );
     }
 
     protected override Task ResetAsync(WriteContext context) =>

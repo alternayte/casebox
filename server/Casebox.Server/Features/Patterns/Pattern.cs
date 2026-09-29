@@ -46,6 +46,9 @@ public static class PatternEvents
     public sealed record Resolved(string Proposal, double Before, double After);
 
     public sealed record Reopened(string Reason);
+
+    // The analysis model found no repository change that prevents this pattern.
+    public sealed record AdvisoryNoted(string Note);
 }
 
 public sealed record Pattern(
@@ -54,7 +57,8 @@ public sealed record Pattern(
     PatternKey? Key,
     PatternStatus Status,
     ImmutableHashSet<string> Refs,
-    bool Advisory
+    bool Advisory,
+    string? AdvisoryNote = null
 ) : IState<Pattern>
 {
     public static Pattern Initial { get; } =
@@ -76,6 +80,7 @@ public sealed record Pattern(
             PatternEvents.Dismissed => s with { Status = PatternStatus.Dismissed },
             PatternEvents.Resolved => s with { Status = PatternStatus.Resolved },
             PatternEvents.Reopened => s with { Status = PatternStatus.Open },
+            PatternEvents.AdvisoryNoted x => s with { Advisory = true, AdvisoryNote = x.Note },
             _ => s,
         };
 
@@ -96,7 +101,7 @@ public sealed record Pattern(
             )
         )[..20];
 
-    // The prevention classes Casebox does not change by pull request (SDD section 9).
+    // The prevention classes no repository change addresses (docs/specs/simple-evolution.md).
     public static bool IsAdvisory(string prevention) =>
         prevention is "clearer_ticket" or "stronger_model" or "tool_access";
 
@@ -168,6 +173,14 @@ public static class PatternDecider
     {
         Require(p);
         return p.Status == PatternStatus.Resolved ? [new PatternEvents.Reopened(reason)] : [];
+    }
+
+    public static IEnumerable<object> NoteAdvisory(Pattern p, string note)
+    {
+        Require(p);
+        return p.AdvisoryNote is not null || string.IsNullOrWhiteSpace(note)
+            ? []
+            : [new PatternEvents.AdvisoryNoted(note.Trim())];
     }
 
     private static void Require(Pattern p)

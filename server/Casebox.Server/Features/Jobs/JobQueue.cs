@@ -96,8 +96,7 @@ public sealed class JobQueue(
         string workerId,
         string version,
         IReadOnlyCollection<string> kinds,
-        CancellationToken ct,
-        string? ciRun = null
+        CancellationToken ct
     )
     {
         var now = clock.GetUtcNow();
@@ -140,7 +139,7 @@ public sealed class JobQueue(
                 """
                 WITH next AS (
                     SELECT id, status = 'leased' AS expired FROM casebox.jobs
-                    WHERE org_id = @Org AND kind = ANY(@Kinds) AND (@CiRun::text IS NULL OR payload->>'ciRun' = @CiRun)
+                    WHERE org_id = @Org AND kind = ANY(@Kinds)
                       AND ((status = 'queued' AND available_at <= @Now) OR (status = 'leased' AND lease_expires_at < @Now))
                     ORDER BY available_at, id
                     FOR UPDATE SKIP LOCKED
@@ -158,7 +157,6 @@ public sealed class JobQueue(
                     Worker = workerId,
                     Now = now,
                     Expires = now + Lease,
-                    CiRun = ciRun,
                 },
                 transaction,
                 cancellationToken: ct

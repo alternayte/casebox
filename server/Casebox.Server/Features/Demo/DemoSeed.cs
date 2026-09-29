@@ -1,10 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using Casebox.Server.Features.Blobs;
 using Casebox.Server.Features.Capture;
-using Casebox.Server.Features.Cases;
-using Casebox.Server.Features.Evaluations;
 using Casebox.Server.Features.Orgs;
 using Casebox.Server.Features.Patterns;
 using Casebox.Server.Features.Proposals;
@@ -17,14 +13,13 @@ using Npgsql;
 
 namespace Casebox.Server.Features.Demo;
 
-// `casebox up --demo` (docs/specs/operations.md, Demo data): a synthetic team of five on one
-// repository, written through the streams and projections as real data would be. Every person is
+// `casebox up --demo`: a synthetic team of five on one repository, written through the streams and
+// projections as real data would be. Every person is
 // a synthetic token; no name, email or login exists anywhere. It loads only into an organisation
 // with no session.
 public sealed class DemoSeed(
     IEventStore store,
     NpgsqlDataSource db,
-    BlobStore blobs,
     DeedboxContext context,
     TimeProvider clock
 )
@@ -101,7 +96,7 @@ public sealed class DemoSeed(
             return false;
 
         var now = clock.GetUtcNow();
-        var rng = new Statistics.Rng(Statistics.SeedOf("casebox-demo"));
+        var rng = new Random(20260929);
         var (org, _) = await store.Load<Organisation>(Organisation.StreamId, ct);
         if (org.Settings.PromptMode is null)
             await store.Execute<Organisation>(
@@ -119,7 +114,7 @@ public sealed class DemoSeed(
         var period = (DateTimeOffset at) => Identities.PeriodOf(org.Settings.PseudonymPeriod, at);
         var people = Enumerable.Range(1, 5).Select(i => Token($"demo-person-{i}")).ToArray();
 
-        var recipeHash = await WorkspaceAsync(ct);
+        await WorkspaceAsync(ct);
 
         // 24 work items over the last 28 days, each with a session and a merged pull request.
         var agents = new[]
@@ -131,7 +126,7 @@ public sealed class DemoSeed(
         for (var i = 1; i <= 24; i++)
         {
             // Inside the report's default 30 days, so the first page shows the whole team.
-            var at = now.AddDays(-29 + i * 1.1).AddHours(rng.NextInt(8));
+            var at = now.AddDays(-29 + i * 1.1).AddHours(rng.Next(8));
             var person = people[(i - 1) % people.Length];
             var (agent, model) = agents[i % 2];
             var session = $"{agent}:demo-{i:D2}";
@@ -156,7 +151,7 @@ public sealed class DemoSeed(
                         Person = person,
                         Period = period(at),
                         At = at,
-                        Ended = at.AddMinutes(35 + rng.NextInt(40)),
+                        Ended = at.AddMinutes(35 + rng.Next(40)),
                         Harness = new string('a', 64),
                         HarnessVersion = Hash("demo-harness|" + agent + "|" + model),
                         Task = i % 3 == 0 ? "bug" : "feature",
@@ -292,123 +287,8 @@ public sealed class DemoSeed(
             );
         }
 
-        // Cases: 14 dev and 10 held-out; four of the held-out ones come from the outbox corrections.
-        var dev = new List<string>();
-        var heldOut = new List<string>();
-        for (var c = 0; c < 24; c++)
-        {
-            var own = c >= 20;
-            var source = own ? $"steering:{refs[0][c - 20]}" : $"pr:{Repo}#{101 + c}";
-            var id = Case.IdFor(Org, source);
-            var split = c < 14 ? CaseSplit.Dev : CaseSplit.HeldOut;
-            (split == CaseSplit.Dev ? dev : heldOut).Add(id);
-            await store.Append(
-                Case.StreamId(id),
-                ExpectedVersion.Any,
-                [
-                    new CaseEvents.Mined(
-                        own ? CaseKind.Steering : CaseKind.Capability,
-                        Workspace,
-                        source,
-                        own ? null : $"wi:jira:PAY-{c + 1}",
-                        CaseScope.Single,
-                        [
-                            new CaseRepo(
-                                Repo,
-                                Hash($"base-{c}")[..40],
-                                Hash($"merged-{c}")[..40],
-                                RepoRole.Sealed
-                            ),
-                        ],
-                        recipeHash,
-                        new string('a', 64),
-                        c
-                    ),
-                    new CaseEvents.Validated(
-                        Hash($"oracle-{c}"),
-                        1 + c % 3,
-                        12 + c,
-                        40 + c * 3,
-                        false,
-                        1
-                    ),
-                    new CaseEvents.InstructionDrafted(
-                        $"Payments change {c + 1}: implement the behaviour the ticket describes, with tests.",
-                        "system",
-                        [],
-                        [],
-                        [],
-                        "demo"
-                    ),
-                    new CaseEvents.Approved("system:demo"),
-                    new CaseEvents.SplitAssigned(split),
-                ],
-                ct
-            );
-        }
-
-        var baseline = new HarnessSpec(
-            "claude-code",
-            "2.1.284",
-            "claude-sonnet-5-20260801",
-            null,
-            "HEAD",
-            new AgentSettings(null, 30, null),
-            null
-        );
-        var prices = new Dictionary<string, Price>
-        {
-            ["claude-sonnet-5-20260801"] = new(3m, 15m, 0.3m, null),
-        };
-
-        // Your harness versus none: the harness passes more often, at the same cost.
-        var versusNone = Ids.New();
-        await EvaluationAsync(
-            connection,
-            versusNone,
-            Purpose.HarnessVsNone,
-            "dev",
-            dev,
-            baseline,
-            baseline with
-            {
-                Harness = "none",
-            },
-            prices,
-            3,
-            (c, side) => side == Side.Baseline ? 0.72 : 0.46,
-            rng,
-            now.AddDays(-9),
-            ct
-        );
-
-        // The pattern of the outbox corrections, and its proposal through the gate to a pull request.
-        var pattern = Pattern.IdFor(
-            Org,
-            Workspace,
-            new PatternKey("broke_convention", null, "instruction", "api"),
-            refs[0]
-        );
-        await store.Execute<Pattern>(
-            Pattern.StreamId(pattern),
-            p =>
-                PatternDecider.Detect(
-                    p,
-                    new PatternEvents.Detected(
-                        Workspace,
-                        "broke_convention",
-                        null,
-                        "instruction",
-                        "api",
-                        "Mocks the database in integration tests",
-                        "The agent mocks the repository in integration tests where the team uses the real database.",
-                        refs[0],
-                        false
-                    )
-                ),
-            ct
-        );
-        foreach (var (t, advisory) in new[] { (1, false), (2, true) })
+        // The patterns, and a proposal for each in a different state (docs/specs/simple-evolution.md).
+        async Task<string> PatternAsync(int t, string title, string summary)
         {
             var key = new PatternKey(
                 SteeringFacts.Enum(Themes[t].WentWrong),
@@ -416,8 +296,9 @@ public sealed class DemoSeed(
                 SteeringFacts.Enum(Themes[t].Prevention),
                 Themes[t].Path
             );
+            var id = Pattern.IdFor(Org, Workspace, key, refs[t]);
             await store.Execute<Pattern>(
-                Pattern.StreamId(Pattern.IdFor(Org, Workspace, key, refs[t])),
+                Pattern.StreamId(id),
                 p =>
                     PatternDecider.Detect(
                         p,
@@ -427,159 +308,161 @@ public sealed class DemoSeed(
                             null,
                             key.Prevention,
                             key.Path,
-                            t == 1
-                                ? "Says done without running the tests"
-                                : "Misses acceptance criteria in the ticket",
-                            t == 1
-                                ? "The agent reports the change as finished before the test suite passes."
-                                : "The agent implements part of the ticket; the missing criteria were in its text.",
+                            title,
+                            summary,
                             refs[t],
-                            advisory
+                            Pattern.IsAdvisory(key.Prevention)
                         )
                     ),
                 ct
             );
+            return id;
         }
 
-        var overrides = JsonSerializer.SerializeToUtf8Bytes(
-            new
-            {
-                repo = Repo,
-                files = new Dictionary<string, string>
-                {
-                    ["AGENTS.md"] =
-                        "# Payments\n\n## Testing\n\n- Run just test before you say a change is done.\n- Integration tests use the real database; do not mock it.\n",
-                },
-            }
+        var mocks = await PatternAsync(
+            0,
+            "Mocks the database in integration tests",
+            "The agent mocks the repository in integration tests where the team uses the real database."
         );
-        var overridesHash = BlobStore.HashOf(overrides);
-        await blobs.PutAsync(Org, overridesHash, "application/json", overrides, ct);
-        var proposal = Ids.New();
-        var edit = new Edit(
+        var untested = await PatternAsync(
+            1,
+            "Says done without running the tests",
+            "The agent reports the change as finished before the test suite passes."
+        );
+        var tickets = await PatternAsync(
+            2,
+            "Misses acceptance criteria in the ticket",
+            "The agent implements part of the ticket; the missing criteria were in its text."
+        );
+        await store.Execute<Pattern>(
+            Pattern.StreamId(tickets),
+            p =>
+                PatternDecider.NoteAdvisory(
+                    p,
+                    "The criteria were in the tickets; a clearer ticket template helps more than a rule in the repository."
+                ),
+            ct
+        );
+        var outbox = await PatternAsync(
+            3,
+            "Calls the ledger directly instead of the outbox",
+            "The agent calls other services synchronously where the team publishes an event through the outbox."
+        );
+
+        const string agentsMd =
+            "# Payments\n\n## Testing\n\n- Run `just test` before you say a change is done.\n";
+        var mocksEdit = new Proposals.Edit(
             "add_bullet",
             "AGENTS.md",
             "Testing",
             null,
-            "Integration tests use the real database; do not mock it."
+            "Integration tests use the real database from the test container; never mock the repository or the DbContext."
         );
-        var candidate = new Proposals.Candidate(
-            0,
-            [edit],
-            overridesHash,
-            ProposalSteps.ContentHash([edit]),
-            "Names the team's rule where the agent looks for test conventions."
-        );
-        var gate = ProposalSteps.GateId(proposal);
-        var (gateVerdict, gateRuns, ranTests) = await EvaluationAsync(
-            connection,
-            gate,
-            Purpose.Gate,
-            "held_out",
-            heldOut,
-            baseline,
-            baseline with
-            {
-                Overrides = overridesHash,
-            },
-            prices,
-            3,
-            (c, side) =>
-                side == Side.Candidate ? 0.9
-                : heldOut.IndexOf(c) >= 6 ? 0.2
-                : 0.6,
-            rng,
-            now.AddDays(-4),
-            ct,
-            proposal,
-            0
-        );
-        // The checks come from the gate's own runs, as the proposer's workflow computes them.
-        var patternRuns = gateRuns.Where(r => heldOut.IndexOf(r.CaseId) >= 6).ToList();
-        double Rate(IEnumerable<bool> runs) =>
-            runs.DefaultIfEmpty(false).Average(p => p ? 1.0 : 0.0);
-        var inv = System.Globalization.CultureInfo.InvariantCulture;
-        var checks = new List<GateCheck>
-        {
-            new(
-                "quality",
-                gateVerdict.Verdict is Statistics.Verdict.Better or Statistics.Verdict.Equivalent,
-                "strong",
-                string.Create(
-                    inv,
-                    $"Verdict {gateVerdict.Verdict.ToString().ToLowerInvariant()}: Δ {gateVerdict.Delta * 100:+0.0;-0.0} points, 95% interval {gateVerdict.Lower * 100:+0.0;-0.0} to {gateVerdict.Upper * 100:+0.0;-0.0}, {gateVerdict.Cases} cases."
-                )
-            ),
-            new(
-                "pattern",
-                Rate(patternRuns.SelectMany(r => r.Candidate))
-                    > Rate(patternRuns.SelectMany(r => r.Baseline)),
-                "strong",
-                string.Create(
-                    inv,
-                    $"The pattern's {patternRuns.Count} held-out cases: candidate {Rate(patternRuns.SelectMany(r => r.Candidate)) * 100:0}% passed, baseline {Rate(patternRuns.SelectMany(r => r.Baseline)) * 100:0}%."
-                )
-            ),
-            new(
-                "process",
-                ranTests.Candidate >= ranTests.Baseline - ProposalSteps.ProcessTolerance,
-                "strong",
-                string.Create(
-                    inv,
-                    $"Ran the tests before saying done: candidate {ranTests.Candidate * 100:0}%, baseline {ranTests.Baseline * 100:0}%. Edited a test after a failure: 0% on both."
-                )
-            ),
-        };
-        await store.Append(
-            Proposal.StreamId(proposal),
-            ExpectedVersion.Any,
+        var applied = await ProposalAsync(
+            mocks,
+            ProposalKind.HarnessEdit,
+            "Say that integration tests use the real database",
+            "Every correction in this pattern replaced a mock with the test container's database; AGENTS.md says nothing about it.",
+            [mocksEdit],
             [
-                new ProposalEvents.Drafted(
-                    pattern,
-                    Workspace,
-                    ProposalKind.Edit,
-                    Repo,
-                    Hash("demo-main")[..40],
-                    [candidate],
-                    baseline,
-                    prices,
-                    3,
-                    40,
-                    dev.Take(8).ToList()
-                ),
-                new ProposalEvents.CandidateScored(
-                    0,
-                    $"{proposal}-c0",
-                    0.25,
-                    0.05,
-                    0.45,
-                    dev.Take(2).ToList(),
-                    0.97,
-                    8
-                ),
-                new ProposalEvents.GateRequested(0, gate),
-                new ProposalEvents.GatePassed(gate, checks),
-                new ProposalEvents.PrOpened(
-                    Repo,
-                    142,
-                    $"casebox/proposal-{proposal.ToLowerInvariant()}",
-                    $"https://{Repo}/pull/142"
+                new FilePreview(
+                    "AGENTS.md",
+                    agentsMd,
+                    agentsMd
+                        + "- Integration tests use the real database from the test container; never mock the repository or the DbContext.\n"
                 ),
             ],
+            null,
             ct
         );
-        await store.Execute<Suite>(
-            Suite.StreamId(Workspace),
-            s => SuiteDecider.Query(s, proposal, gate, Suite.DefaultBudget),
+        await store.Execute<Proposal>(
+            Proposal.StreamId(applied),
+            p => ProposalDecider.Approve(p, "system:demo"),
+            ct
+        );
+        await store.Execute<Proposal>(
+            Proposal.StreamId(applied),
+            p => ProposalDecider.Apply(p, ApplyMode.Private, "system:demo", now.AddDays(-2)),
+            ct
+        );
+
+        const string skill =
+            "---\nname: outbox\ndescription: Publish side effects through the outbox. Use when a change calls another service, the ledger or a webhook.\n---\n\n# Outbox\n\n1. Never call another service inside a request.\n2. Append the event and its outbox message in the same transaction.\n3. Add a handler test that reads the outbox table.\n";
+        await ProposalAsync(
+            outbox,
+            ProposalKind.Skill,
+            "Add an outbox skill",
+            "Three people moved a direct ledger call to the outbox; a short skill gives the agent the procedure when it touches another service.",
+            [
+                new Proposals.Edit(
+                    "write_skill",
+                    ".claude/skills/outbox/SKILL.md",
+                    null,
+                    null,
+                    skill
+                ),
+            ],
+            [new FilePreview(".claude/skills/outbox/SKILL.md", null, skill)],
+            null,
+            ct
+        );
+
+        await ProposalAsync(
+            untested,
+            ProposalKind.CodeNote,
+            "Make the test command fail loudly before a change is done",
+            "The agent said done while tests failed; the repository has no single command that runs every suite.",
+            [],
+            [],
+            new CodeNote(
+                "Add a `just test` recipe that runs the unit and integration suites and exits non-zero on any failure.",
+                "Four corrections asked the agent to run the tests; today they need two commands and a running database.",
+                "Add a `just test` recipe to the justfile that starts the test database, runs `dotnet test` for every test project, and exits non-zero when any test fails. Then change the Testing section of AGENTS.md to name `just test` as the one command to run before saying a change is done."
+            ),
             ct
         );
         return true;
     }
 
-    private async Task<string> WorkspaceAsync(CancellationToken ct)
+    private async Task<string> ProposalAsync(
+        string pattern,
+        ProposalKind kind,
+        string title,
+        string rationale,
+        IReadOnlyList<Proposals.Edit> edits,
+        IReadOnlyList<FilePreview> preview,
+        CodeNote? note,
+        CancellationToken ct
+    )
     {
-        const string recipe =
-            """{"image":"mcr.microsoft.com/dotnet/sdk:10.0","install":["dotnet restore"],"lockfiles":[],"test":[{"command":"dotnet test --logger trx --results-directory /results","results":"trx"}],"services":{"postgres":{"image":"postgres:16","env":{"POSTGRES_PASSWORD":"test"}}},"links":[]}""";
-        var hash = Hash(recipe);
+        var id = Ids.New();
+        await store.Execute<Proposal>(
+            Proposal.StreamId(id),
+            p =>
+                ProposalDecider.Draft(
+                    p,
+                    new ProposalEvents.Drafted(
+                        pattern,
+                        Workspace,
+                        Repo,
+                        kind,
+                        title,
+                        rationale,
+                        edits,
+                        preview,
+                        note,
+                        ProposalJobs.ContentHash(kind, edits, note),
+                        Hash("demo-head")[..40],
+                        "demo"
+                    )
+                ),
+            ct
+        );
+        return id;
+    }
+
+    private async Task WorkspaceAsync(CancellationToken ct)
+    {
         await store.Execute<Workspaces.Workspace>(
             Workspaces.Workspace.StreamIdFor(Workspace),
             w => WorkspaceDecider.Create(w, Workspace),
@@ -589,210 +472,6 @@ public sealed class DemoSeed(
             Workspaces.Workspace.StreamIdFor(Workspace),
             w => WorkspaceDecider.AddRepo(w, Repo),
             ct
-        );
-        await store.Execute<Workspaces.Workspace>(
-            Workspaces.Workspace.StreamIdFor(Workspace),
-            w =>
-                WorkspaceDecider.ConfigureHarness(
-                    w,
-                    ["AGENTS.md", "CLAUDE.md", ".claude/skills/**"],
-                    null
-                ),
-            ct
-        );
-        await store.Execute<Workspaces.Workspace>(
-            Workspaces.Workspace.StreamIdFor(Workspace),
-            w => WorkspaceDecider.ProposeRecipe(w, recipe, hash),
-            ct
-        );
-        await store.Execute<Workspaces.Workspace>(
-            Workspaces.Workspace.StreamIdFor(Workspace),
-            w => WorkspaceDecider.RecordValidation(w, hash, true, null),
-            ct
-        );
-        await store.Execute<Workspaces.Workspace>(
-            Workspaces.Workspace.StreamIdFor(Workspace),
-            w => WorkspaceDecider.ConfirmRecipe(w, hash),
-            ct
-        );
-        return hash;
-    }
-
-    // One evaluation, written whole: its runs, its checkpoints and its verdict, with the numbers the
-    // statistics engine gives for those runs.
-    private async Task<(
-        Statistics.Checkpoint Verdict,
-        List<Statistics.CaseRuns> Runs,
-        (double Baseline, double Candidate) RanTests
-    )> EvaluationAsync(
-        System.Data.Common.DbConnection connection,
-        string id,
-        Purpose purpose,
-        string split,
-        IReadOnlyList<string> cases,
-        HarnessSpec baseline,
-        HarnessSpec candidate,
-        Dictionary<string, Price> prices,
-        int repeats,
-        Func<string, Side, double> passRate,
-        Statistics.Rng rng,
-        DateTimeOffset at,
-        CancellationToken ct,
-        string? proposal = null,
-        int? candidateIndex = null
-    )
-    {
-        var events = new List<object>();
-        var perRun = 0.62m;
-        var estimate = new Estimate(
-            cases.Count,
-            cases.Count * 2 * repeats,
-            cases.Count * repeats * 400_000L,
-            cases.Count * repeats * 380_000L,
-            perRun * cases.Count * repeats,
-            perRun * cases.Count * repeats,
-            2 * perRun * cases.Count * repeats,
-            cases.Count * repeats * 2 * 14,
-            14 * repeats,
-            cases.Count * repeats * 2 * 14,
-            2 * perRun * cases.Count,
-            Statistics.DetectableEffect(cases.Count, repeats)
-        );
-        events.Add(
-            new EvaluationEvents.Requested(
-                Workspace,
-                split,
-                [.. cases.Select(c => new EvaluationCase(c, 1))],
-                baseline,
-                candidate,
-                "harness",
-                repeats,
-                0.05,
-                150m,
-                estimate,
-                purpose,
-                false,
-                false,
-                prices,
-                null,
-                null,
-                proposal,
-                candidateIndex
-            )
-        );
-        var runs = new List<Statistics.CaseRuns>();
-        var results = new List<object>();
-        var ranB = new List<bool>();
-        var ranC = new List<bool>();
-        foreach (var c in cases)
-        {
-            var b = new List<bool>();
-            var k = new List<bool>();
-            var bc = new List<double>();
-            var kc = new List<double>();
-            var bs = new List<double>();
-            var ks = new List<double>();
-            for (var r = 1; r <= repeats; r++)
-                foreach (var side in new[] { Side.Baseline, Side.Candidate })
-                {
-                    var passed = rng.NextDouble() < passRate(c, side);
-                    var ran = rng.NextDouble() < (side == Side.Candidate ? 0.85 : 0.8);
-                    (side == Side.Baseline ? ranB : ranC).Add(ran);
-                    var cost = Math.Round(0.45m + (decimal)rng.NextDouble() * 0.35m, 4);
-                    var seconds = 480 + rng.NextInt(600);
-                    var runId = Evaluation.RunId(c, side, r);
-                    events.Add(
-                        new EvaluationEvents.RunCompleted(
-                            runId,
-                            c,
-                            side,
-                            r,
-                            passed,
-                            cost,
-                            seconds,
-                            380_000,
-                            "strong"
-                        )
-                    );
-                    (side == Side.Baseline ? b : k).Add(passed);
-                    (side == Side.Baseline ? bc : kc).Add((double)cost);
-                    (side == Side.Baseline ? bs : ks).Add(seconds);
-                    results.Add(
-                        new
-                        {
-                            Org,
-                            Evaluation = id,
-                            Run = runId,
-                            Case = c,
-                            Side = side == Side.Baseline ? "baseline" : "candidate",
-                            Repeat = r,
-                            Passed = passed,
-                            Cost = cost,
-                            Seconds = (double)seconds,
-                            At = at,
-                            Checks = $"{{\"ranTestsBeforeDone\":{(ran ? "true" : "false")},\"editedTestAfterFailure\":false}}",
-                        }
-                    );
-                }
-            runs.Add(new Statistics.CaseRuns(c, 1, b, k, bc, kc, bs, ks));
-        }
-        var level = Statistics.Level(repeats, repeats);
-        var v = Statistics.Evaluate(runs, level, 0.05, Statistics.Resamples, Statistics.SeedOf(id));
-        for (var round = 1; round <= repeats; round++)
-            events.Add(
-                new EvaluationEvents.CheckpointEvaluated(
-                    round,
-                    Statistics.Level(round, repeats),
-                    v.Cases,
-                    v.Delta,
-                    v.Lower,
-                    v.Upper,
-                    round == repeats ? v.Verdict : Statistics.Verdict.Inconclusive
-                )
-            );
-        events.Add(
-            new EvaluationEvents.VerdictReached(
-                v.Verdict,
-                v.Delta,
-                v.Lower,
-                v.Upper,
-                level,
-                v.Cases,
-                runs.Sum(r => r.Baseline.Count + r.Candidate.Count),
-                v.CostRatio,
-                v.CostLower,
-                v.CostUpper,
-                v.DurationRatio,
-                v.DurationLower,
-                v.DurationUpper,
-                v.EquivalentAndCheaper,
-                v.BaselineRate,
-                v.CandidateRate,
-                Statistics.InconclusiveReason(v.Verdict, v.Lower, v.Upper, 0.05, v.Cases),
-                purpose
-            )
-        );
-        await store.Append(Evaluation.StreamId(id), ExpectedVersion.Any, events, ct);
-        await connection.ExecuteAsync(
-            new CommandDefinition(
-                """
-                INSERT INTO casebox.run_results (org_id, evaluation_id, run_id, case_id, side, repeat, status, passed, applied, cost_usd, seconds, model,
-                    usage, process_checks, created_at, completed_at)
-                VALUES (@Org, @Evaluation, @Run, @Case, @Side, @Repeat, 'completed', @Passed, true, @Cost, @Seconds, 'claude-sonnet-5-20260801',
-                    '{"inputTokens":140000,"outputTokens":20000,"cacheReadTokens":220000}', @Checks::jsonb, @At, @At)
-                ON CONFLICT DO NOTHING
-                """,
-                results,
-                cancellationToken: ct
-            )
-        );
-        return (
-            v,
-            runs,
-            (
-                ranB.DefaultIfEmpty(false).Average(r => r ? 1.0 : 0.0),
-                ranC.DefaultIfEmpty(false).Average(r => r ? 1.0 : 0.0)
-            )
         );
     }
 

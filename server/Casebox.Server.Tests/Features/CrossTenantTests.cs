@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using Casebox.Server.Features.Auth;
-using Casebox.Server.Features.Blobs;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Tokens;
 using Casebox.Server.Tests.Infrastructure;
@@ -87,7 +86,6 @@ public sealed class CrossTenantTests(StackFixture stack)
         string Workspace,
         string TokenId,
         string JobId,
-        string BlobHash,
         string AccountId,
         string SessionId = "claude-code:alpha-session"
     )
@@ -96,16 +94,8 @@ public sealed class CrossTenantTests(StackFixture stack)
         public const string TokenName = "alpha-secret-token";
 
         public IEnumerable<string> Markers =>
-            [Workspace, Repo, TokenName, TokenId, JobId, BlobHash, AccountId];
+            [Workspace, Repo, TokenName, TokenId, JobId, AccountId];
     }
-
-    private static readonly object CiSpec = new
-    {
-        agent = "claude-code",
-        agentVersion = "2.1.0",
-        model = "claude-sonnet-5-20260801",
-        harness = "HEAD",
-    };
 
     private static IEnumerable<Sample> Samples(Resources a) =>
         [
@@ -140,12 +130,6 @@ public sealed class CrossTenantTests(StackFixture stack)
                     promptMode = "full",
                     k = 2,
                     pseudonymPeriod = "month",
-                    budgets = new
-                    {
-                        monthlyUsd = 1,
-                        perEvaluationUsd = 1,
-                        confirmAboveUsd = 1,
-                    },
                 },
                 Caller.Admin
             ),
@@ -161,24 +145,6 @@ public sealed class CrossTenantTests(StackFixture stack)
                 "DELETE",
                 $"/api/v1/workspaces/{a.Workspace}/repos/{Resources.Repo}",
                 null,
-                Caller.Admin
-            ),
-            new(
-                "PUT",
-                $"/api/v1/workspaces/{a.Workspace}/recipe",
-                new { recipe = new { image = "b" } },
-                Caller.Admin
-            ),
-            new(
-                "POST",
-                $"/api/v1/workspaces/{a.Workspace}/recipe/validation",
-                new { hash = "x", passed = true },
-                Caller.Admin
-            ),
-            new(
-                "POST",
-                $"/api/v1/workspaces/{a.Workspace}/recipe/confirmation",
-                new { hash = "x" },
                 Caller.Admin
             ),
             new("POST", "/api/v1/workspaces/", new { name = a.Workspace }, Caller.Admin),
@@ -217,13 +183,6 @@ public sealed class CrossTenantTests(StackFixture stack)
                     error = "x",
                     retryable = false,
                 },
-                Caller.Worker
-            ),
-            new("GET", $"/worker/v1/blobs/{a.BlobHash}", null, Caller.Worker),
-            new(
-                "PUT",
-                $"/worker/v1/blobs/{a.BlobHash}",
-                Encoding.UTF8.GetBytes("not A's bytes"),
                 Caller.Worker
             ),
             new(
@@ -351,69 +310,6 @@ public sealed class CrossTenantTests(StackFixture stack)
                 Caller.Worker
             ),
             new("GET", "/worker/v1/steering/examples", null, Caller.Worker),
-            new("GET", "/api/v1/cases/?workspace=" + a.Workspace, null, Caller.Admin),
-            new("GET", "/api/v1/cases/queue?workspace=" + a.Workspace, null, Caller.Admin),
-            new("GET", "/api/v1/cases/00000000000000000000", null, Caller.Admin),
-            new(
-                "POST",
-                "/api/v1/evaluations/estimate",
-                new { workspace = a.Workspace },
-                Caller.Admin
-            ),
-            new("POST", "/api/v1/evaluations/", new { workspace = a.Workspace }, Caller.Admin),
-            new(
-                "POST",
-                "/api/v1/evaluations/01J0000000000000000000000A/confirmation",
-                null,
-                Caller.Admin
-            ),
-            new(
-                "POST",
-                "/api/v1/evaluations/01J0000000000000000000000A/cancellation",
-                new { reason = "b" },
-                Caller.Admin
-            ),
-            new("GET", "/api/v1/evaluations/?workspace=" + a.Workspace, null, Caller.Admin),
-            new("GET", "/api/v1/evaluations/01J0000000000000000000000A", null, Caller.Admin),
-            new("GET", "/api/v1/evaluations/01J0000000000000000000000A/cases", null, Caller.Admin),
-            new(
-                "GET",
-                "/api/v1/evaluations/01J0000000000000000000000A/runs/r1",
-                null,
-                Caller.Admin
-            ),
-            new("GET", "/api/v1/evaluations/offer?workspace=" + a.Workspace, null, Caller.Admin),
-            new(
-                "PUT",
-                $"/api/v1/workspaces/{a.Workspace}/harness",
-                new { globs = new[] { "AGENTS.md" }, shared = "github.com/b/harness" },
-                Caller.Admin
-            ),
-            new(
-                "POST",
-                "/api/v1/ci/baselines",
-                new
-                {
-                    workspace = a.Workspace,
-                    spec = CiSpec,
-                    repeats = 1,
-                },
-                Caller.Admin
-            ),
-            new(
-                "POST",
-                "/api/v1/ci/pull-requests",
-                new
-                {
-                    workspace = a.Workspace,
-                    repo = Resources.Repo,
-                    number = 1,
-                    headSha = "abc",
-                    spec = CiSpec,
-                },
-                Caller.Admin
-            ),
-            new("GET", "/api/v1/ci/runs/01J0000000000000000000000A", null, Caller.Admin),
             new("GET", "/api/v1/patterns/?workspace=" + a.Workspace, null, Caller.Admin),
             new("GET", "/api/v1/patterns/00000000000000000000", null, Caller.Admin),
             new(
@@ -428,12 +324,6 @@ public sealed class CrossTenantTests(StackFixture stack)
                 new { reason = "b" },
                 Caller.Admin
             ),
-            new(
-                "POST",
-                "/api/v1/proposer/runs",
-                new { workspace = a.Workspace, spec = CiSpec },
-                Caller.Admin
-            ),
             new("GET", "/api/v1/proposals/?workspace=" + a.Workspace, null, Caller.Admin),
             new("GET", "/api/v1/proposals/01J0000000000000000000000A", null, Caller.Admin),
             new(
@@ -443,42 +333,24 @@ public sealed class CrossTenantTests(StackFixture stack)
                 Caller.Admin
             ),
             new("GET", "/worker/v1/patterns/00000000000000000000/evidence", null, Caller.Worker),
-            new("GET", "/api/v1/cases/00000000000000000000/validations", null, Caller.Admin),
-            new("GET", "/api/v1/cases/00000000000000000000/oracle", null, Caller.Admin),
-            new(
-                "PUT",
-                "/api/v1/cases/00000000000000000000/instruction",
-                new { text = "B's words" },
-                Caller.Admin
-            ),
-            new(
-                "POST",
-                "/api/v1/cases/00000000000000000000/assertions",
-                new { assertions = new[] { new { kind = "forbidden_file", path = "x" } } },
-                Caller.Admin
-            ),
-            new("POST", "/api/v1/cases/00000000000000000000/approval", null, Caller.Admin),
-            new(
-                "POST",
-                "/api/v1/cases/approvals",
-                new { ids = new[] { "00000000000000000000" } },
-                Caller.Admin
-            ),
-            new(
-                "POST",
-                "/api/v1/cases/00000000000000000000/rejection",
-                new { reason = "b" },
-                Caller.Admin
-            ),
-            new("POST", "/api/v1/cases/00000000000000000000/retirement", null, Caller.Admin),
-            new("POST", $"/api/v1/workspaces/{a.Workspace}/mining", null, Caller.Admin),
-            new("GET", "/worker/v1/cases/00000000000000000000/source", null, Caller.Worker),
             new("POST", "/v1/logs", new { resourceLogs = Array.Empty<object>() }, Caller.Ingest),
             new(
                 "POST",
                 "/v1/metrics",
                 new { resourceMetrics = Array.Empty<object>() },
                 Caller.Ingest
+            ),
+            new(
+                "POST",
+                "/api/v1/proposals/01J0000000000000000000000A/approval",
+                null,
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/proposals/01J0000000000000000000000A/applied",
+                new { mode = "private" },
+                Caller.Admin
             ),
         ];
 
@@ -590,6 +462,7 @@ public sealed class CrossTenantTests(StackFixture stack)
             "proposals",
             "rejection",
             "evidence",
+            "applied",
         };
         var normalized = new List<string>();
         foreach (var s in segments)
@@ -633,12 +506,6 @@ public sealed class CrossTenantTests(StackFixture stack)
         ).Content.ReadFromJsonAsync<CaseboxServer.IssuedTokenBody>(Ct);
         var me = await admin.GetFromJsonAsync<AuthEndpoints.Me>("/api/v1/me", Json.Options, Ct);
 
-        var data = Encoding.UTF8.GetBytes($"alpha secret blob {Guid.NewGuid()}");
-        var hash = BlobStore.HashOf(data);
-        await stack
-            .ServerA.Services.GetRequiredService<BlobStore>()
-            .PutAsync(StackFixture.OrgA, hash, "text/plain", data, Ct);
-
         var queue = stack.ServerA.Services.GetRequiredService<JobQueue>();
         await using var db = new NpgsqlConnection(stack.ConnectionString);
         await db.OpenAsync(Ct);
@@ -654,7 +521,7 @@ public sealed class CrossTenantTests(StackFixture stack)
         );
         await transaction.CommitAsync(Ct);
 
-        return new Resources(workspace, token!.Info.Id, jobId, hash, me!.AccountId);
+        return new Resources(workspace, token!.Info.Id, jobId, me!.AccountId);
     }
 
     // Everything of organisation A that a cross-tenant call could change.
@@ -664,7 +531,7 @@ public sealed class CrossTenantTests(StackFixture stack)
         var parts = new[]
         {
             await db.QuerySingleAsync<string>(
-                "SELECT repos::text || recipe_status FROM casebox.workspaces WHERE org_id = @Org AND name = @Name",
+                "SELECT repos::text FROM casebox.workspaces WHERE org_id = @Org AND name = @Name",
                 new { Org = StackFixture.OrgA, Name = a.Workspace }
             ),
             await db.QuerySingleAsync<string>(

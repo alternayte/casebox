@@ -9,7 +9,6 @@ public sealed class CaseboxOptions
     public LocalAdminOptions LocalAdmin { get; set; } = new();
     public OidcOptions Oidc { get; set; } = new();
     public KeysOptions Keys { get; set; } = new();
-    public BlobOptions Blobs { get; set; } = new();
     public QueueBoxOptions QueueBox { get; set; } = new();
     public GitHubOptions GitHub { get; set; } = new();
 
@@ -22,7 +21,7 @@ public sealed class CaseboxOptions
     // `casebox up --demo`: load a synthetic team into an organisation with no session yet.
     public bool Demo { get; set; }
 
-    // The port of /internal/effects and /healthz. It is never exposed outside the cluster or compose network.
+    // The port of /metrics and /healthz. It is never exposed outside the cluster or compose network.
     public int ManagementPort { get; set; } = 8081;
 
     public sealed class OrgOptions
@@ -59,17 +58,6 @@ public sealed class CaseboxOptions
         public string? AzureKeyId { get; set; }
     }
 
-    public sealed class BlobOptions
-    {
-        // postgres | s3
-        public string Store { get; set; } = "postgres";
-        public string? S3ServiceUrl { get; set; }
-        public string? S3Bucket { get; set; }
-        public string? S3Region { get; set; }
-        public string? S3AccessKey { get; set; }
-        public string? S3SecretKey { get; set; }
-    }
-
     public sealed class QueueBoxOptions
     {
         // QueueBox's data port, where the poll source answers: {BaseUrl}/inbox/poll.
@@ -80,8 +68,5 @@ public sealed class CaseboxOptions
 
         // The bearer token of the poll source.
         public string? PollToken { get; set; }
-
-        // The header token QueueBox sends to /internal/effects/{kind}.
-        public string? EffectsToken { get; set; }
     }
 }

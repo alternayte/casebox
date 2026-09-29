@@ -9,18 +9,14 @@ using Testcontainers.PostgreSql;
 namespace Casebox.Server.Tests.Infrastructure;
 
 // The whole stack, shared by every test in the assembly: Postgres 16, QueueBox with the real
-// deploy/queuebox.yml, a mock OIDC provider, an S3-compatible store, and two Casebox servers for
+// deploy/queuebox.yml, a mock OIDC provider, and two Casebox servers for
 // two organisations on one database, as in hosted mode.
 public sealed class StackFixture : IAsyncLifetime
 {
     public const string OrgA = "org-a";
     public const string OrgB = "org-b";
-    public const string EffectsToken = "test-effects-token";
     public const string PollToken = "test-poll-token";
     public const string AdminPassword = "test-admin-password";
-    public const string Bucket = "casebox-test";
-    public const string S3AccessKey = "casebox";
-    public const string S3SecretKey = "casebox-secret";
 
     private const string Database = "casebox";
     private const string User = "casebox";
@@ -30,7 +26,6 @@ public sealed class StackFixture : IAsyncLifetime
     private PostgreSqlContainer? _postgres;
     private IContainer? _queueBox;
     private IContainer? _oidc;
-    private IContainer? _s3;
 
     public string ConnectionString => _postgres!.GetConnectionString();
 
@@ -41,8 +36,6 @@ public sealed class StackFixture : IAsyncLifetime
         new($"http://{_queueBox!.Hostname}:{_queueBox.GetMappedPublicPort(9090)}/health");
 
     public string OidcAuthority => $"http://localhost:{_oidc!.GetMappedPublicPort(8080)}/default";
-
-    public string S3Url => $"http://localhost:{_s3!.GetMappedPublicPort(9000)}";
 
     public FakeServices Fakes { get; } = new();
 
@@ -58,8 +51,6 @@ public sealed class StackFixture : IAsyncLifetime
             FreePort(),
             FreePort()
         );
-        // QueueBox delivers effects to server A's management port on the host.
-        await TestcontainersSettings.ExposeHostPortsAsync((ushort)managementA);
         await _network.CreateAsync();
 
         _postgres = new PostgreSqlBuilder(Images.Postgres)
@@ -81,17 +72,7 @@ public sealed class StackFixture : IAsyncLifetime
             )
             .Build();
 
-        _s3 = new ContainerBuilder(Images.S3)
-            .WithEnvironment("RUSTFS_ACCESS_KEY", S3AccessKey)
-            .WithEnvironment("RUSTFS_SECRET_KEY", S3SecretKey)
-            .WithPortBinding(9000, true)
-            .WithWaitStrategy(
-                Wait.ForUnixContainer()
-                    .UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/health"))
-            )
-            .Build();
-
-        await Task.WhenAll(_postgres.StartAsync(), _oidc.StartAsync(), _s3.StartAsync());
+        await Task.WhenAll(_postgres.StartAsync(), _oidc.StartAsync());
 
         _queueBox = new ContainerBuilder(Images.QueueBox)
             .WithNetwork(_network)
@@ -104,14 +85,7 @@ public sealed class StackFixture : IAsyncLifetime
             .WithEnvironment("QUEUEBOX_DATABASE_USERNAME", User)
             .WithEnvironment("QUEUEBOX_DATABASE_PASSWORD", Password)
             .WithEnvironment("CASEBOX_QUEUEBOX_ADMIN_TOKEN", "test-admin-token")
-            .WithEnvironment(
-                "CASEBOX_EFFECTS_URL",
-                $"http://host.testcontainers.internal:{managementA}"
-            )
-            .WithEnvironment("CASEBOX_EFFECTS_TOKEN", EffectsToken)
             .WithEnvironment("CASEBOX_POLL_TOKEN", PollToken)
-            // Fast retries keep the retry tests short; production uses the file's backoff.
-            .WithEnvironment("QUEUEBOX_OUTBOX_RETRYBASEDELAYMS", "100")
             .WithPortBinding(8080, true)
             .WithPortBinding(9090, true)
             .WithWaitStrategy(
@@ -131,7 +105,7 @@ public sealed class StackFixture : IAsyncLifetime
     {
         await ServerA.DisposeAsync();
         await ServerB.DisposeAsync();
-        foreach (var container in new[] { _queueBox, _oidc, _s3, _postgres })
+        foreach (var container in new[] { _queueBox, _oidc, _postgres })
             if (container is not null)
                 await container.DisposeAsync();
         await _network.DisposeAsync();

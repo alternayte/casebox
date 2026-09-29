@@ -16,44 +16,6 @@ public sealed class PullRequestHandler(Linker linker, Jobs.JobQueue jobs) : IInb
 {
     public static readonly TimeSpan FixWindow = TimeSpan.FromDays(30);
 
-    // A proposal's pull request (docs/specs/self-evolution.md, After the merge): merged records the
-    // merge; closed without a merge records a rejection, unless a person gave a reason first.
-    private static async Task ProposalPullAsync(
-        DbConnection connection,
-        DbTransaction transaction,
-        IEventStore store,
-        string org,
-        PullRequestSnapshot pr,
-        CancellationToken ct
-    )
-    {
-        const string prefix = "casebox/proposal-";
-        if (pr.HeadRef?.StartsWith(prefix, StringComparison.Ordinal) != true)
-            return;
-        var id = await connection.ExecuteScalarAsync<string?>(
-            new CommandDefinition(
-                "SELECT id FROM casebox.proposals WHERE org_id = @Org AND lower(id) = @Id AND status = 'pr_opened'",
-                new { Org = org, Id = pr.HeadRef[prefix.Length..] },
-                transaction,
-                cancellationToken: ct
-            )
-        );
-        if (id is null)
-            return;
-        if (pr.MergedAt is { } merged)
-            await store.Execute<Proposals.Proposal>(
-                Proposals.Proposal.StreamId(id),
-                p => Proposals.ProposalDecider.Merge(p, merged, pr.MergeSha),
-                ct
-            );
-        else if (pr.State == "closed")
-            await store.Execute<Proposals.Proposal>(
-                Proposals.Proposal.StreamId(id),
-                p => Proposals.ProposalDecider.Reject(p, "closed without merge", "system:github"),
-                ct
-            );
-    }
-
     public string Source => InboxSources.Poll;
 
     public string EventType => GitHubMessages.PullRequest;
@@ -133,8 +95,6 @@ public sealed class PullRequestHandler(Linker linker, Jobs.JobQueue jobs) : IInb
                 cancellationToken: ct
             )
         );
-
-        await ProposalPullAsync(connection, transaction, store, org, pr, ct);
 
         var keys = await linker.KeysAsync(ct);
         var named = keys.FromPullRequest(pr.Title, pr.Body, repo)
@@ -278,53 +238,6 @@ public sealed class PullRequestHandler(Linker linker, Jobs.JobQueue jobs) : IInb
                     )
             );
 
-        // A fix changes lines an agent pull request wrote, within 30 days of its merge.
-        foreach (var blamed in pr.Blamed)
-        {
-            var target = await connection.QuerySingleOrDefaultAsync<(
-                bool IsAgent,
-                DateTime? MergedAt
-            )?>(
-                new CommandDefinition(
-                    "SELECT is_agent, merged_at FROM casebox.pull_requests WHERE org_id = @Org AND repo = @Repo AND number = @Number",
-                    new
-                    {
-                        Org = org,
-                        Repo = blamed.Repo,
-                        blamed.Number,
-                    },
-                    transaction,
-                    cancellationToken: ct
-                )
-            );
-            if (target is not { IsAgent: true, MergedAt: { } targetMerged })
-                continue;
-            var at = new DateTimeOffset(DateTime.SpecifyKind(targetMerged, DateTimeKind.Utc));
-            if (at > merged || merged - at > FixWindow)
-                continue;
-            await ObserveOnAsync(
-                connection,
-                transaction,
-                store,
-                org,
-                blamed.Repo,
-                blamed.Number,
-                ct,
-                w =>
-                    WorkItemDecider.ObserveFix(
-                        w,
-                        new WorkItemEvents.FixObserved(
-                            blamed.Repo,
-                            blamed.Number,
-                            self,
-                            blamed.Lines,
-                            LinkSource.PullRequest,
-                            merged
-                        )
-                    )
-            );
-        }
-
         // A later pull request of the same work item fixes its earlier agent pull requests too.
         foreach (var id in linked)
         {
@@ -348,7 +261,7 @@ public sealed class PullRequestHandler(Linker linker, Jobs.JobQueue jobs) : IInb
                     cancellationToken: ct
                 )
             );
-            foreach (var number in earlier.Where(n => !pr.Blamed.Any(b => b.Number == n)))
+            foreach (var number in earlier)
                 await store.Execute<WorkItem>(
                     id,
                     w =>

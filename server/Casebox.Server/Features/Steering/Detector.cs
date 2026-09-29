@@ -708,15 +708,8 @@ public sealed class SteeringScan(
                 ct
             );
 
+        // A later pull request of the same work item fixes its earlier agent pull requests.
         var fixedPrs = new List<(string Repo, int Number)>();
-        foreach (var blamed in pr.Blamed)
-            if (
-                await MergedAgentAsync(connection, blamed.Repo, blamed.Number, ct) is { } at
-                && at <= merged
-                && merged - at <= PullRequestHandler.FixWindow
-            )
-                fixedPrs.Add((blamed.Repo, blamed.Number));
-
         if (row.WorkItemId is not null)
             fixedPrs.AddRange(
                 (

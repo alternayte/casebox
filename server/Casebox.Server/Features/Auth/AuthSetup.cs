@@ -185,24 +185,6 @@ public static class AuthSetup
             .AddPolicy(
                 Policies.WorkerOrIngest,
                 p => p.RequireClaim(CaseboxClaims.TokenKind, "worker", "ingest")
-            )
-            .AddPolicy(
-                Policies.WorkerOrCi,
-                p => p.RequireClaim(CaseboxClaims.TokenKind, "worker", "ci")
-            )
-            .AddPolicy(
-                Policies.CiOrMember,
-                p =>
-                    p.RequireAssertion(c =>
-                        c.User.IsCiToken() || c.User.AccountRole() >= Role.Member
-                    )
-            )
-            .AddPolicy(
-                Policies.CiOrViewer,
-                p =>
-                    p.RequireAssertion(c =>
-                        c.User.IsCiToken() || c.User.AccountRole() >= Role.Viewer
-                    )
             );
 
         return services;

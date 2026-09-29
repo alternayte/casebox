@@ -32,4 +32,4 @@ The model sees only the window around the event, with every person shown as `[pe
 
 ## Numbers
 
-Every steering number is observational: it shows what happened, not why. A difference between two groups is not a cause. Every number shows its sample size, and a group shows only with at least k people behind it. For cause and effect, run an [evaluation](/concepts/verdicts/).
+Every steering number is observational: it shows what happened, not why. A difference between two groups is not a cause. Every number shows its sample size, and a group shows only with at least k people behind it. After a proposal is applied, Casebox compares its pattern's corrections before and after; that comparison is observational too ([proposals](/concepts/proposals/)).

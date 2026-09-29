@@ -22,6 +22,15 @@ func main() {
 	}
 }
 
+// exitError ends the command with a given exit code, after its message.
+type exitError struct {
+	code int
+	err  error
+}
+
+func (e exitError) Error() string { return e.err.Error() }
+func (e exitError) Unwrap() error { return e.err }
+
 func newRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "casebox",
@@ -32,7 +41,7 @@ func newRoot() *cobra.Command {
 	}
 	root.SetVersionTemplate(fmt.Sprintf("casebox %s\n", buildinfo.Version))
 	root.AddCommand(newUpCommand(), newDownCommand(), newPauseCommand(), newResumeCommand(), newLinkCommand(),
-		newImportCommand(), newHookCommand(), newCaptureCommand(), newInitCommand(), newJoinCommand(), newDoctorCommand(), newEraseCommand(), newWorkerCommand(), newEnvCommand(), newSteeringCommand(),
-		newMineCommand(), newReviewCommand(), newCasesCommand(), newCompareCommand(), newCICommand(), newTokenCommand(), newProposeCommand(), newDocsCommand(), newAPICommand(), newSkillCommand(), newUninstallCommand())
+		newImportCommand(), newHookCommand(), newCaptureCommand(), newInitCommand(), newJoinCommand(), newDoctorCommand(), newEraseCommand(), newWorkerCommand(), newSteeringCommand(),
+		newProposalsCommand(), newApplyCommand(), newTokenCommand(), newDocsCommand(), newAPICommand(), newSkillCommand(), newUninstallCommand())
 	return root
 }

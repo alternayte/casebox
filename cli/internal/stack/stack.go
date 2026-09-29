@@ -72,7 +72,7 @@ func Up(ctx context.Context, opts Options, out io.Writer) (Env, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, key := range []string{"CASEBOX_DB_PASSWORD", "CASEBOX_ADMIN_PASSWORD", "CASEBOX_EFFECTS_TOKEN", "CASEBOX_POLL_TOKEN", "CASEBOX_QUEUEBOX_ADMIN_TOKEN"} {
+	for _, key := range []string{"CASEBOX_DB_PASSWORD", "CASEBOX_ADMIN_PASSWORD", "CASEBOX_POLL_TOKEN", "CASEBOX_QUEUEBOX_ADMIN_TOKEN"} {
 		if env[key] == "" {
 			env[key] = secret()
 		}

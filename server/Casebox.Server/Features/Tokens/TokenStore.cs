@@ -13,9 +13,6 @@ public enum TokenKind
     Worker,
     Ingest,
     Cli,
-
-    // Harness CI in a pull request's Action: CI requests, and an inline worker scoped to its runs.
-    Ci,
 }
 
 public sealed record TokenInfo(

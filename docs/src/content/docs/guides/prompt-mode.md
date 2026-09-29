@@ -9,7 +9,7 @@ This guide helps an Admin choose the team's prompt mode. `casebox init` asks for
 | --- | --- | --- |
 | `off` | Structure only: counts, timings, tool calls, edits | Counts only: follow-ups, interruptions, denials, human edits, review rounds |
 | `redacted` | Prompt and response text after secrets are removed and identities are tokenized | Full: corrections are classified and clustered by their words |
-| `full` | Also tool output and file contents shown to the agent | Full, and richer steering cases |
+| `full` | Also tool output and file contents shown to the agent | Full, with more context around each correction |
 
 Most teams choose `redacted`. In every mode:
 

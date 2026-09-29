@@ -1,8 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
-using Casebox.Server.Features.Orgs;
 using Dapper;
-using Deedbox;
 using Npgsql;
 
 namespace Casebox.Server.Features.Telemetry;
@@ -26,18 +24,6 @@ public static class CaseboxMetrics
         "casebox.jobs.lease_expiries",
         "{lease}",
         "Job leases that expired and were leased again."
-    );
-
-    public static readonly Counter<long> Runs = Meter.CreateCounter<long>(
-        "casebox.runs",
-        "{run}",
-        "Evaluation runs recorded, by outcome: completed, or failed to run."
-    );
-
-    public static readonly Histogram<double> SandboxStart = Meter.CreateHistogram<double>(
-        "casebox.sandbox.start",
-        "s",
-        "Time to prepare and start an agent's sandbox, as workers report it."
     );
 
     // What each CLI reported as not yet acknowledged, by token, with when it reported it.
@@ -88,26 +74,6 @@ public static class CaseboxMetrics
             "Workers seen in the last 10 minutes."
         );
         Meter.CreateObservableGauge(
-            "casebox.spend.month",
-            () =>
-                Current.Orgs.Select(o => new Measurement<double>(
-                    o.SpentUsd,
-                    new KeyValuePair<string, object?>("org", o.Org)
-                )),
-            "USD",
-            "Evaluation spend this month."
-        );
-        Meter.CreateObservableGauge(
-            "casebox.budget.month",
-            () =>
-                Current.Orgs.Select(o => new Measurement<double>(
-                    o.MonthlyUsd,
-                    new KeyValuePair<string, object?>("org", o.Org)
-                )),
-            "USD",
-            "The organisation's monthly evaluation limit."
-        );
-        Meter.CreateObservableGauge(
             "casebox.steering.unclassified",
             () =>
                 Current.Orgs.Select(o => new Measurement<double>(
@@ -121,12 +87,7 @@ public static class CaseboxMetrics
 
     public sealed record Queue(string Kind, long Count, double OldestSeconds);
 
-    public sealed record OrgFigures(
-        string Org,
-        double SpentUsd,
-        double MonthlyUsd,
-        double Unclassified
-    );
+    public sealed record OrgFigures(string Org, double Unclassified);
 
     public sealed record Snapshot(
         IReadOnlyList<Queue> Queued,
@@ -141,7 +102,6 @@ public static class CaseboxMetrics
 // Takes the gauges' snapshot every 30 seconds.
 public sealed class MetricsSnapshot(
     NpgsqlDataSource db,
-    IServiceScopeFactory scopes,
     TimeProvider clock,
     ILogger<MetricsSnapshot> logger
 ) : BackgroundService
@@ -192,39 +152,24 @@ public sealed class MetricsSnapshot(
                 cancellationToken: ct
             )
         );
-        var month = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
-        var figures = (
-            await connection.QueryAsync<(string Org, decimal Spent, long Unclassified, long Total)>(
-                new CommandDefinition(
-                    """
-                    SELECT o.org_id,
-                           coalesce((SELECT sum(cost_usd) FROM casebox.run_results r WHERE r.org_id = o.org_id AND r.created_at >= @Month), 0),
-                           (SELECT count(*) FROM casebox.steering_facts f WHERE f.org_id = o.org_id AND f.at >= @Since AND f.status = 'unclassified'),
-                           (SELECT count(*) FROM casebox.steering_facts f WHERE f.org_id = o.org_id AND f.at >= @Since AND f.status <> 'pending')
-                    FROM (SELECT DISTINCT org_id FROM casebox.accounts) o
-                    """,
-                    new { Month = month, Since = now - TimeSpan.FromDays(30) },
-                    cancellationToken: ct
-                )
+        var figures = await connection.QueryAsync<(string Org, long Unclassified, long Total)>(
+            new CommandDefinition(
+                """
+                SELECT o.org_id,
+                       (SELECT count(*) FROM casebox.steering_facts f WHERE f.org_id = o.org_id AND f.at >= @Since AND f.status = 'unclassified'),
+                       (SELECT count(*) FROM casebox.steering_facts f WHERE f.org_id = o.org_id AND f.at >= @Since AND f.status <> 'pending')
+                FROM (SELECT DISTINCT org_id FROM casebox.accounts) o
+                """,
+                new { Since = now - TimeSpan.FromDays(30) },
+                cancellationToken: ct
             )
-        ).ToList();
-        var orgs = new List<CaseboxMetrics.OrgFigures>();
-        foreach (var f in figures)
-        {
-            await using var scope = scopes.CreateAsyncScope();
-            scope.ServiceProvider.GetRequiredService<DeedboxContext>().TenantId = f.Org;
-            var (org, _) = await scope
-                .ServiceProvider.GetRequiredService<IEventStore>()
-                .Load<Organisation>(Organisation.StreamId, ct);
-            orgs.Add(
-                new(
-                    f.Org,
-                    (double)f.Spent,
-                    (double)org.Settings.Budgets.MonthlyUsd,
-                    f.Total == 0 ? 0 : (double)f.Unclassified / f.Total
-                )
-            );
-        }
+        );
+        var orgs = figures
+            .Select(f => new CaseboxMetrics.OrgFigures(
+                f.Org,
+                f.Total == 0 ? 0 : (double)f.Unclassified / f.Total
+            ))
+            .ToList();
         return new(queued, workers, orgs);
     }
 }

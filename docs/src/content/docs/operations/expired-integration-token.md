@@ -14,7 +14,6 @@ This runbook helps you replace an expired GitHub or Jira credential.
 
 - The Integrations settings show the last poll's error.
 - The server log shows `CBX071` (GitHub) or `CBX072` (Jira).
-- Outbox messages for `effect.ci_comment` or `effect.proposal_pr` go dead (see [Outbox dead letters](/operations/outbox-dead-letters/)).
 
 ## Steps
 

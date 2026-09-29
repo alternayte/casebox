@@ -81,29 +81,23 @@ public sealed class DemoTests(StackFixture stack)
         Assert.Contains(report.Themes, t => t.Patterns is { Count: > 0 });
 
         await using var db = new Npgsql.NpgsqlConnection(stack.ConnectionString);
-        var verdicts = (
-            await Dapper.SqlMapper.QueryAsync<(string Purpose, string Verdict)>(
+        var proposals = (
+            await Dapper.SqlMapper.QueryAsync<(string Kind, string Status)>(
                 db,
-                "SELECT purpose, verdict->>'verdict' FROM casebox.evaluations WHERE org_id = @Org",
+                "SELECT kind, status FROM casebox.proposals WHERE org_id = @Org ORDER BY kind",
                 new { Org = org }
             )
-        ).ToDictionary(r => r.Purpose, r => r.Verdict);
-        // The candidate is no harness at all: "worse" says the harness earns its tokens.
-        Assert.Equal("worse", verdicts["harness_vs_none"]);
-        Assert.Equal("better", verdicts["gate"]);
+        ).ToList();
+        // One of each kind a person meets: applied privately, and two waiting for a decision.
         Assert.Equal(
-            "pr_opened",
-            await Dapper.SqlMapper.ExecuteScalarAsync<string>(
-                db,
-                "SELECT status FROM casebox.proposals WHERE org_id = @Org",
-                new { Org = org }
-            )
+            [("code_note", "open"), ("harness_edit", "applied"), ("skill", "open")],
+            proposals
         );
         Assert.Equal(
-            24,
+            1,
             await Dapper.SqlMapper.ExecuteScalarAsync<int>(
                 db,
-                "SELECT count(*) FROM casebox.case_catalog WHERE org_id = @Org AND status = 'approved'",
+                "SELECT count(*) FROM casebox.patterns WHERE org_id = @Org AND advisory_note IS NOT NULL",
                 new { Org = org }
             )
         );

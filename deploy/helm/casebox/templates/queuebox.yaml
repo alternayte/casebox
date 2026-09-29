@@ -74,9 +74,7 @@ spec:
               value: {{ .Values.database.user | quote }}
             - name: QUEUEBOX_DATABASE_PASSWORD
               value: $(DB_PASSWORD)
-            - name: CASEBOX_EFFECTS_URL
-              value: {{ printf "http://%s-server:8081" (include "casebox.fullname" .) | quote }}
-            {{- range $env, $key := dict "CASEBOX_EFFECTS_TOKEN" "effects-token" "CASEBOX_POLL_TOKEN" "poll-token" "CASEBOX_QUEUEBOX_ADMIN_TOKEN" "queuebox-admin-token" }}
+            {{- range $env, $key := dict "CASEBOX_POLL_TOKEN" "poll-token" "CASEBOX_QUEUEBOX_ADMIN_TOKEN" "queuebox-admin-token" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef:

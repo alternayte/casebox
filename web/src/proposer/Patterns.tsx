@@ -6,7 +6,7 @@ import { preventionName, wentWrongName } from "@/lib/labels";
 import { isMember, useMe } from "@/lib/session";
 import { useWorkspaces } from "@/lib/workspaces";
 import { Button, ErrorNote, Field, Hidden, Input, Loading, Section, Select, Tag } from "@/ui/kit";
-import { statusName, useAcknowledge, useDismiss, usePattern, usePatterns, type Pattern } from "./api";
+import { kindName, patternStatusName, statusName, useAcknowledge, useDismiss, usePattern, usePatterns, type Pattern } from "./api";
 
 export type PatternsSearch = { workspace?: string };
 
@@ -78,12 +78,12 @@ function PatternRow({ p }: { p: Pattern }) {
           {num(p.corrections)} corrections · {num(p.people)} people
         </div>
         <div className="text-muted-foreground">
-          {statusName(p.status)} · {p.workspace}
+          {patternStatusName(p.status)} · {p.workspace}
         </div>
         {p.latestProposal && (
           <div>
             <Link to="/proposals/$id" params={{ id: p.latestProposal.id }} className="text-link hover:underline">
-              Proposal: {statusName(p.latestProposal.status)}
+              {kindName(p.latestProposal.kind)}: {statusName(p.latestProposal.status)}
             </Link>
           </div>
         )}
@@ -104,7 +104,7 @@ export function PatternPage({ id }: { id: string }) {
     ) : (
       <ErrorNote error={pattern.error} />
     );
-  const { pattern: p, quotes, cases, proposals } = pattern.data;
+  const { pattern: p, quotes, proposals } = pattern.data;
   return (
     <div className="space-y-8">
       <div>
@@ -117,14 +117,14 @@ export function PatternPage({ id }: { id: string }) {
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {wentWrongName(p.wentWrong, p.label)} · {preventionName(p.prevention)} · {p.path === "*" ? "no file named" : p.path} · workspace {p.workspace} · detected{" "}
-          {day(p.detectedAt)} · {statusName(p.status)}
+          {day(p.detectedAt)} · {patternStatusName(p.status)}
           {p.reason && <> ({p.reason})</>}
         </p>
       </div>
       {p.advisory && (
         <p role="note" className="border-l-2 border-signal py-1 pl-3 text-sm">
-          Advisory: this would be prevented by {preventionName(p.prevention).toLowerCase()}. Casebox does not change tickets, models or permissions by pull request, so the
-          proposer does not take it.
+          Advisory: {p.advisoryNote ?? `this would be prevented by ${preventionName(p.prevention).toLowerCase()}.`} No change to the repository prevents it, so Casebox
+          proposes none.
         </p>
       )}
       {isMember(me.data) && (p.status === "open" || p.status === "acknowledged") && <Actions p={p} />}
@@ -148,48 +148,23 @@ export function PatternPage({ id }: { id: string }) {
         )}
       </Section>
 
-      <Section title="Cases" note="Steering cases mined from these corrections">
-        {cases.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None yet. Mining turns corrections whose fix can be checked into steering cases.</p>
-        ) : (
-          <ul className="flex flex-wrap gap-2 text-xs">
-            {cases.map((c) => (
-              <li key={c.id}>
-                <Link to="/cases/$id" params={{ id: c.id }} className="font-mono text-link hover:underline">
-                  {c.id}
-                </Link>{" "}
-                <span className="text-muted-foreground">
-                  {c.status}
-                  {c.split ? `, ${c.split === "held_out" ? "held-out" : c.split}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
       <Section title="Proposals">
         {proposals.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            None yet. The weekly proposer run (casebox propose --scheduled) or casebox propose --pattern {p.id} drafts and tests edits.
+            {p.advisory
+              ? "None: no change to the repository prevents an advisory pattern."
+              : "None yet. A worker with an analysis model drafts one when this workspace has room: at most three wait for you at once."}
           </p>
         ) : (
           <ul className="space-y-1 text-sm">
             {proposals.map((x) => (
               <li key={x.id}>
-                <Link to="/proposals/$id" params={{ id: x.id }} className="font-mono text-xs text-link hover:underline">
-                  {x.id}
+                <Link to="/proposals/$id" params={{ id: x.id }} className="text-link hover:underline">
+                  {x.title}
                 </Link>{" "}
-                {statusName(x.status)}
-                {x.prUrl && (
-                  <>
-                    {" "}
-                    ·{" "}
-                    <a href={x.prUrl} className="text-link hover:underline">
-                      pull request
-                    </a>
-                  </>
-                )}
+                <span className="text-muted-foreground">
+                  {kindName(x.kind)} · {statusName(x.status)}
+                </span>
               </li>
             ))}
           </ul>

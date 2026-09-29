@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Casebox.Server.Features.Auth;
-using Casebox.Server.Features.Effects;
 using Casebox.Server.Features.Inbox;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Tokens;
@@ -32,8 +31,6 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
 
     public int ManagementPort { get; }
 
-    public RecordingEffects Effects { get; } = new();
-
     public void Start() => StartServer();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -54,11 +51,9 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
         builder.UseSetting("Casebox:QueueBox:BaseUrl", _stack.QueueBoxUrl.ToString());
         builder.UseSetting("Casebox:QueueBox:HealthUrl", _stack.QueueBoxHealthUrl.ToString());
         builder.UseSetting("Casebox:QueueBox:PollToken", StackFixture.PollToken);
-        builder.UseSetting("Casebox:QueueBox:EffectsToken", StackFixture.EffectsToken);
         builder.UseSetting("Casebox:GitHub:ApiUrl", _stack.Fakes.GitHubApi.ToString());
         builder.ConfigureTestServices(services =>
         {
-            services.AddSingleton<IEffectHandler>(Effects);
             services.AddScoped<IInboxHandler, TestInboxHandler>();
             services.AddSingleton<IJobResultHandler, TestJobHandler>();
             services.AddSingleton<IJobResultHandler, IdleJobHandler>();

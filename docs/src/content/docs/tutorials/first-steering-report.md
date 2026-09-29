@@ -63,5 +63,5 @@ A theme shows only when at least 3 people are behind it. Ask your teammates to r
 
 ## Next
 
-- [Your first comparison](/tutorials/first-comparison/): test whether your harness earns its tokens.
+- [Your first proposal](/tutorials/first-proposal/): approve a change that prevents a correction, and apply it.
 - [How steering is measured](/concepts/steering/).

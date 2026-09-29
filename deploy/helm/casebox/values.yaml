@@ -40,8 +40,8 @@ keys:
     key: master-key
   azureKeyId: ""
 
-# The effects, poll and QueueBox admin tokens. With existingSecret empty the chart generates them
-# once and keeps them across upgrades. An existing Secret holds effects-token, poll-token and
+# The poll and QueueBox admin tokens. With existingSecret empty the chart generates them
+# once and keeps them across upgrades. An existing Secret holds poll-token and
 # queuebox-admin-token.
 existingSecret: ""
 
@@ -67,14 +67,12 @@ queuebox:
   replicas: 1
   resources: {}
 
-# Workers on Kubernetes use Kiln or Daytona sandboxes; Docker in a pod needs privileges and is not offered.
+# Workers classify interventions and draft proposals with the analysis model.
 worker:
   enabled: false
   replicas: 1
-  sandbox: kiln        # kiln | daytona
-  concurrency: 2
-  # A Secret with CASEBOX_WORKER_TOKEN, the provider's credentials, GITHUB_TOKEN, the model keys and
-  # the analysis model settings, as environment variables.
+  # A Secret with CASEBOX_WORKER_TOKEN, GITHUB_TOKEN and the analysis model settings
+  # (CASEBOX_ANALYSIS_PROVIDER, CASEBOX_ANALYSIS_MODEL, the API key), as environment variables.
   envSecret: ""
   resources: {}
 

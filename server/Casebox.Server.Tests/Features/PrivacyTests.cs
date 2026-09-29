@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.RegularExpressions;
-using Casebox.Server.Features.Blobs;
 using Casebox.Server.Features.Capture;
 using Casebox.Server.Features.Orgs;
 using Casebox.Server.Features.Privacy;
@@ -246,9 +245,9 @@ public sealed partial class PrivacyTests(StackFixture stack)
         Assert.Equal("DBX036", destroyed.Code);
     }
 
-    // SDD section 14: ingest fixtures with known identities, then a scan of every table and blob.
+    // SDD section 14: ingest fixtures with known identities, then a scan of every table.
     [Fact]
-    public async Task No_identity_reaches_any_table_or_blob()
+    public async Task No_identity_reaches_any_table()
     {
         await SetPromptModeAsync();
         var ingest = await stack.ServerA.TokenClientAsync(TokenKind.Ingest);

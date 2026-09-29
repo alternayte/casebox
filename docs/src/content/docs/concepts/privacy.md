@@ -20,6 +20,10 @@ The roster maps a person's email, GitHub login and Jira account to one identity,
 - Quotes without authors, dated by the day.
 - No route answers with a list, count or series per person.
 
+## One person alone
+
+While an organisation has one account and one person in its data, that person sees their own data in full: k does not apply, and every page says "Only your own sessions". This lets one person try Casebox on their own history. The first second account, or a second person in the data (a session, a correction or a pull request author), ends this for good, even if that person is erased later. From then on, k applies to everyone.
+
 ## Erasure and retention
 
 `casebox erase --identity` deletes a person's sessions and traces and their keys: their words become unreadable everywhere at once. When a period leaves the retention window (12 months by default), its secret is destroyed, and nobody can link that period's data to a person again. Trace events keep 180 days by default.

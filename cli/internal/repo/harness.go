@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultHarnessGlobs are the harness files of SDD section 13, for a casebox.yml that names none.
-var DefaultHarnessGlobs = []string{"AGENTS.md", "CLAUDE.md", ".cursor/rules/**", ".claude/skills/**", ".agents/skills/**", ".mcp.json"}
+var DefaultHarnessGlobs = []string{"AGENTS.md", "CLAUDE.md", ".cursor/rules/**", ".claude/skills/**", ".agents/skills/**", ".mcp.json", ".cursor/mcp.json"}
 
 // HarnessGlobs returns the globs of casebox.yml, or the default list.
 func (c Config) HarnessGlobs() []string {

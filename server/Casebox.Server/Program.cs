@@ -1,15 +1,8 @@
 using System.Threading.RateLimiting;
-using Amazon.Runtime;
-using Amazon.S3;
 using Azure.Identity;
 using Casebox.Server;
 using Casebox.Server.Features.Auth;
-using Casebox.Server.Features.Blobs;
 using Casebox.Server.Features.Capture;
-using Casebox.Server.Features.Cases;
-using Casebox.Server.Features.Ci;
-using Casebox.Server.Features.Effects;
-using Casebox.Server.Features.Evaluations;
 using Casebox.Server.Features.GitHub;
 using Casebox.Server.Features.Health;
 using Casebox.Server.Features.Inbox;
@@ -47,7 +40,7 @@ builder.Services.Configure<CaseboxOptions>(
     builder.Configuration.GetSection(CaseboxOptions.Section)
 );
 
-// The management port serves /internal/effects and /healthz; it is added to the public URLs.
+// The management port serves /metrics and /healthz; it is added to the public URLs.
 var urls = builder.Configuration["urls"] ?? "http://+:8080";
 builder.WebHost.UseUrls($"{urls};http://+:{options.ManagementPort}");
 
@@ -153,30 +146,12 @@ builder.Services.AddSingleton<IJobResultHandler, EntireFetchResult>();
 builder.Services.AddSingleton<IJobResultHandler, GitAiFetchResult>();
 builder.Services.AddSingleton<IJobResultHandler, ClassifyResultHandler>();
 builder.Services.AddSingleton<IJobResultHandler, PullRequestResultHandler>();
-builder.Services.AddSingleton<IJobResultHandler, EnvBuild>();
-builder.Services.AddSingleton<IJobResultHandler, MineResultHandler>();
-builder.Services.AddSingleton<IJobResultHandler, ValidateResultHandler>();
-builder.Services.AddSingleton<IJobResultHandler, InstructionResultHandler>();
-builder.Services.AddScoped<CaseMining>();
-builder.Services.AddSingleton<IJobResultHandler, RunResultHandler>();
-builder.Services.AddSingleton<IJobResultHandler, VerifyResultHandler>();
-builder.Services.AddScoped<Planner>();
-builder.Services.AddScoped<CiPullRequests>();
 builder.Services.AddScoped<PatternScan>();
 builder.Services.AddScoped<Casebox.Server.Features.Demo.DemoSeed>();
-builder.Services.AddScoped<ProposalSteps>();
-builder.Services.AddScoped<ProposerRuns>();
-builder.Services.AddSingleton<IJobResultHandler, DraftResultHandler>();
-builder.Services.AddSingleton<IJobResultHandler, DietResultHandler>();
 builder.Services.AddSingleton<PatternScheduler>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PatternScheduler>());
 builder.Services.AddSingleton<IJobResultHandler, ClusterResultHandler>();
-builder.Services.AddSingleton<IJobResultHandler, ResolveResultHandler>();
-builder.Services.AddScoped<IEffectHandler, CiCommentEffect>();
-builder.Services.AddScoped<IEffectHandler, ProposalPrEffect>();
-builder.Services.AddScoped<EvaluationSteps>();
-builder.Services.AddSingleton<RunFailureSweeper>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<RunFailureSweeper>());
+builder.Services.AddSingleton<IJobResultHandler, DraftResultHandler>();
 builder.Services.AddScoped<SteeringScan>();
 builder.Services.AddScoped<SteeringReports>();
 builder.Services.AddScoped<Solo>();
@@ -220,28 +195,6 @@ builder.Services.AddSingleton<Retention>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Retention>());
 builder.Services.AddScoped<Identities>();
 builder.Services.AddScoped<CaptureStore>();
-builder.Services.AddSingleton<BlobStore>(sp =>
-    options.Blobs.Store switch
-    {
-        "postgres" => new PostgresBlobStore(
-            sp.GetRequiredService<NpgsqlDataSource>(),
-            sp.GetRequiredService<TimeProvider>()
-        ),
-        "s3" => new S3BlobStore(
-            sp.GetRequiredService<NpgsqlDataSource>(),
-            sp.GetRequiredService<TimeProvider>(),
-            S3Client(options.Blobs),
-            options.Blobs.S3Bucket
-                ?? throw new InvalidOperationException(
-                    "Set Casebox__Blobs__S3Bucket for the s3 blob store."
-                )
-        ),
-        var other => throw new InvalidOperationException(
-            $"Casebox__Blobs__Store is '{other}'; use postgres or s3."
-        ),
-    }
-);
-
 builder.Services.AddHttpClient<PollPublisher>();
 
 // One consumer per QueueBox source. AddHostedService would keep only the first registration of a
@@ -303,7 +256,6 @@ app.UseAuthorization();
 
 var management = $"*:{options.ManagementPort}";
 var internalRoutes = app.MapGroup("").RequireHost(management);
-internalRoutes.MapEffects();
 internalRoutes.MapPrometheusScrapingEndpoint("/metrics");
 internalRoutes.MapHealthChecks("/healthz/live", new HealthCheckOptions { Predicate = _ => false });
 internalRoutes.MapHealthChecks(
@@ -325,9 +277,6 @@ api.MapPrivacy();
 api.MapIntegrations();
 api.MapWorkItems();
 api.MapSteering();
-api.MapCases();
-api.MapEvaluations();
-api.MapCi();
 api.MapPatterns();
 api.MapProposals();
 
@@ -337,11 +286,9 @@ app.MapGitHubWebhooks();
 
 var worker = app.MapGroup("/worker/v1");
 worker.MapWorkerJobs();
-worker.MapWorkerBlobs();
 worker.MapRepoJobs();
 worker.MapSteeringWorker();
-worker.MapCaseWorker();
-worker.MapProposerWorker();
+worker.MapProposalWorker();
 
 app.MapOpenApi();
 app.MapFallbackToFile("index.html");
@@ -379,18 +326,6 @@ static void ConfigureKeys(KeysBuilder keys, CaseboxOptions.KeysOptions options)
                 "Set Casebox__Keys__Mode to database, environment or azure. `casebox up` uses database."
             );
     }
-}
-
-static AmazonS3Client S3Client(CaseboxOptions.BlobOptions blobs)
-{
-    var config = new AmazonS3Config { ForcePathStyle = true };
-    if (blobs.S3ServiceUrl is { } url)
-        config.ServiceURL = url;
-    if (blobs.S3Region is { } region)
-        config.AuthenticationRegion = region;
-    return blobs.S3AccessKey is { } key
-        ? new AmazonS3Client(new BasicAWSCredentials(key, blobs.S3SecretKey), config)
-        : new AmazonS3Client(config);
 }
 
 public partial class Program

@@ -33,17 +33,11 @@ type Config struct {
 		GitHubIssues bool `yaml:"github_issues"`
 	} `yaml:"work_items"`
 	Harness struct {
-		Globs  []string `yaml:"globs"`
-		Shared string   `yaml:"shared,omitempty"`
+		Globs []string `yaml:"globs"`
 	} `yaml:"harness"`
 	Capture struct {
 		Redact []string `yaml:"redact"`
 	} `yaml:"capture"`
-	Environment *Recipe          `yaml:"environment"`
-	Cases       Cases            `yaml:"cases"`
-	Evaluation  Evaluation       `yaml:"evaluation"`
-	Suites      Suites           `yaml:"suites"`
-	Prices      map[string]Price `yaml:"prices"`
 }
 
 // ErrNotEnrolled means the directory is not inside a repository with .casebox/casebox.yml.

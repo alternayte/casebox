@@ -1,10 +1,4 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
-import { CaseList, type CasesSearch } from "@/cases/CaseList";
-import { CasePage } from "@/cases/CasePage";
-import { caseKinds, caseSplits, caseStatuses } from "@/lib/labels";
-import { EvaluationList, type EvaluationsSearch } from "@/evaluations/EvaluationList";
-import { EvaluationPage } from "@/evaluations/EvaluationPage";
-import { RunPage } from "@/evaluations/RunPage";
 import { Device } from "@/pages/Device";
 import { PatternList, PatternPage, type PatternsSearch } from "@/proposer/Patterns";
 import { ProposalList, ProposalPage, type ProposalsSearch } from "@/proposer/Proposals";
@@ -80,69 +74,6 @@ const workItemRoute = createRoute({
   },
 });
 
-// Reads the Cases view and filters from the URL; unknown values are dropped.
-function validateCases(search: Record<string, unknown>): CasesSearch {
-  const page = Number(search.page);
-  const pick = (value: unknown, allowed: readonly string[]) => (typeof value === "string" && allowed.includes(value) ? value : undefined);
-  return {
-    view: search.view === "catalog" ? "catalog" : undefined,
-    status: pick(search.status, caseStatuses),
-    kind: pick(search.kind, caseKinds),
-    split: pick(search.split, caseSplits),
-    workspace: typeof search.workspace === "string" && search.workspace !== "" ? search.workspace : undefined,
-    page: search.view === "catalog" && Number.isInteger(page) && page > 1 ? page : undefined,
-  };
-}
-
-const casesRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/cases",
-  validateSearch: validateCases,
-  component: function CasesRoute() {
-    const navigate = casesRoute.useNavigate();
-    return <CaseList search={casesRoute.useSearch()} onSearch={(search) => navigate({ search })} />;
-  },
-});
-
-const caseRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/cases/$id",
-  component: function CaseRoute() {
-    const { id } = caseRoute.useParams();
-    return <CasePage key={id} id={id} />;
-  },
-});
-
-const evaluationsRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/evaluations",
-  validateSearch: (search: Record<string, unknown>): EvaluationsSearch => ({
-    workspace: typeof search.workspace === "string" && search.workspace !== "" ? search.workspace : undefined,
-  }),
-  component: function EvaluationsRoute() {
-    const navigate = evaluationsRoute.useNavigate();
-    return <EvaluationList search={evaluationsRoute.useSearch()} onSearch={(search) => navigate({ search })} />;
-  },
-});
-
-const evaluationRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/evaluations/$id",
-  component: function EvaluationRoute() {
-    const { id } = evaluationRoute.useParams();
-    return <EvaluationPage key={id} id={id} />;
-  },
-});
-
-const runRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: "/evaluations/$id/runs/$runId",
-  component: function RunRoute() {
-    const { id, runId } = runRoute.useParams();
-    return <RunPage key={runId} id={id} runId={runId} />;
-  },
-});
-
 const workspaceSearch = (search: Record<string, unknown>): PatternsSearch & ProposalsSearch => ({
   workspace: typeof search.workspace === "string" && search.workspace !== "" ? search.workspace : undefined,
 });
@@ -208,7 +139,7 @@ const deviceRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([appRoute.addChildren([overviewRoute, themeRoute, workRoute, workItemRoute, patternsRoute, patternRoute, proposalsRoute, proposalRoute, casesRoute, caseRoute, evaluationsRoute, evaluationRoute, runRoute]), loginRoute, deviceRoute]),
+  routeTree: rootRoute.addChildren([appRoute.addChildren([overviewRoute, themeRoute, workRoute, workItemRoute, patternsRoute, patternRoute, proposalsRoute, proposalRoute]), loginRoute, deviceRoute]),
 });
 
 declare module "@tanstack/react-router" {

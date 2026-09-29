@@ -1,11 +1,11 @@
 ---
 name: casebox
-description: Read a team's Casebox data from a coding agent - the steering report, an evaluation's verdict, a case, a pattern or a proposal - and explain it honestly. Use when the user asks what their agents get corrected for, whether a harness change helped, why a verdict came out as it did, or what a case or proposal contains.
+description: Read a team's Casebox data from a coding agent - the steering report, its patterns and the proposals drafted from them - and explain it honestly. Use when the user asks what their agents get corrected for, what Casebox proposes and why, or whether an applied change helped.
 ---
 
 # Casebox
 
-Casebox measures how often people correct their coding agents, turns that history into replayable cases, and tests harness changes on them. Docs: https://casebox-docs.pages.dev/llms-full.txt
+Casebox measures how often people correct their coding agents, groups the corrections into patterns, and proposes small repository changes (an instruction, a skill, an MCP server, or a code note) that a person approves or rejects. Docs: https://casebox-docs.pages.dev/llms-full.txt
 
 ## Read the data
 
@@ -14,21 +14,21 @@ Run `casebox api GET <path>` in a repository enrolled with `casebox init` or `ca
 | Question | Route |
 | --- | --- |
 | What do people correct, and why? | `/api/v1/steering/report?from=<yyyy-mm-dd>&to=<yyyy-mm-dd>` |
-| What patterns and proposals exist? | `/api/v1/patterns`, `/api/v1/patterns/<id>`, `/api/v1/proposals/<id>` |
-| Which evaluations ran? | `/api/v1/evaluations`, then `/api/v1/evaluations/<id>` and `/api/v1/evaluations/<id>/cases` |
-| What does a case ask, and what decides it? | `/api/v1/cases/<id>`, `/api/v1/cases/<id>/oracle` |
+| Which patterns exist? | `/api/v1/patterns`, then `/api/v1/patterns/<id>` for its quotes |
+| What does Casebox propose? | `/api/v1/proposals`, then `/api/v1/proposals/<id>` for its evidence, its change and its outcome |
 
-## Explain a verdict
+`casebox proposals` and `casebox proposals show <id>` print the same in plain text.
 
-- A verdict is better, worse, equivalent or inconclusive. Always give Δ (candidate minus baseline pass rate), its interval, the interval's level, and the number of cases and runs.
-- Better: the whole interval is above 0. Worse: the whole interval is below 0. Equivalent: the whole interval lies within ±δ. Anything else is inconclusive.
-- `reason: no_difference` means the interval straddles 0 within ±2δ: any real difference is small. `reason: smoke` is a harness CI smoke run, which never claims better. `reason: budget` means the budget ran out.
-- `estimate.detectableEffect` is the smallest difference this size detects with power 0.8. A smaller real difference is likely to come out inconclusive: say so instead of calling it "no effect".
-- In harness versus no harness, the candidate is no harness: "worse" means the harness earns its tokens.
+## Explain a proposal
+
+- Give its kind, its title, the corrections behind it (count, people, and a quote), and the change itself.
+- An open proposal waits for the person: they run `casebox proposals approve <id>` or `casebox proposals reject <id> --reason "…"`. Do not approve or reject for them.
+- An approved proposal lands with `casebox apply <id>` (private: its own file in `.git/info/exclude`) or `casebox apply <id> --commit` (the shared files). A code note starts the person's agent with its prompt.
+- An outcome compares the pattern's corrections per 100 sessions in the 30 days before and after the apply. It is observational: say that other changes in the same weeks affect it too.
 
 ## Rules
 
-- Steering numbers are observational. Never describe a difference between groups as its cause. Verdicts are controlled comparisons; say which one you report.
+- Steering numbers and outcomes are observational. Never describe a difference between groups, or before and after, as proven cause.
 - Titles, summaries and rationales of patterns and proposals are model-generated. Say so when you quote them.
-- Never try to find out who a person is. Casebox shows groups of at least k people and quotes without authors; `[person]` marks a person. Never rank or compare people.
+- Never try to find out who a person is. Casebox shows groups of at least k people and quotes without authors; `[person]` marks a person. Never rank or compare people. While one person is the whole organisation, the report shows everything, and says so.
 - Every error has a CBX code; its page states the fix: https://casebox-docs.pages.dev/reference/errors/

@@ -1,6 +1,7 @@
 package propose
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -71,10 +72,71 @@ func TestApply(t *testing.T) {
 	}
 }
 
-func TestSectionsLargestFirst(t *testing.T) {
-	parts := Sections(agents)
-	if len(parts) != 2 || parts[0].Heading != "Testing" || parts[1].Heading != "Style" {
-		t.Fatalf("%+v", parts)
+// An MCP server joins the config without touching the other entries, and never carries a secret.
+func TestAddMCPServer(t *testing.T) {
+	existing := "{\n  \"mcpServers\": {\n    \"github\": { \"command\": \"gh-mcp\" }\n  },\n  \"other\": true\n}\n"
+	files := map[string]string{".cursor/mcp.json": existing}
+	server := `{"command": "npx", "args": ["-y", "@acme/db-mcp"], "env": {"DATABASE_URL": "${DATABASE_URL}"}}`
+	got, err := Apply(files, []Edit{{Op: "add_mcp_server", File: ".cursor/mcp.json", Heading: "db", New: server}}, all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+		Other   bool                      `json:"other"`
+	}
+	if err := json.Unmarshal([]byte(*got[".cursor/mcp.json"]), &doc); err != nil {
+		t.Fatalf("%v\n%s", err, *got[".cursor/mcp.json"])
+	}
+	if doc.Servers["db"]["command"] != "npx" || doc.Servers["github"]["command"] != "gh-mcp" || !doc.Other {
+		t.Fatalf("%s", *got[".cursor/mcp.json"])
+	}
+	if !strings.Contains(*got[".cursor/mcp.json"], `"github": { "command": "gh-mcp" }`) {
+		t.Fatalf("the existing entry changed: %s", *got[".cursor/mcp.json"])
+	}
+	// A new config file is created with the one server.
+	got, err = Apply(map[string]string{}, []Edit{{Op: "add_mcp_server", File: ".mcp.json", Heading: "db", New: server}}, all)
+	if err != nil || !json.Valid([]byte(*got[".mcp.json"])) {
+		t.Fatalf("new file: %v %v", err, got)
+	}
+
+	for name, e := range map[string]Edit{
+		"a secret value":  {Op: "add_mcp_server", File: ".cursor/mcp.json", Heading: "db", New: `{"command": "x", "env": {"TOKEN": "sk-123"}}`},
+		"a taken name":    {Op: "add_mcp_server", File: ".cursor/mcp.json", Heading: "github", New: `{"command": "x"}`},
+		"no command":      {Op: "add_mcp_server", File: ".cursor/mcp.json", Heading: "db", New: `{"args": []}`},
+		"another file":    {Op: "add_mcp_server", File: "mcp.json", Heading: "db", New: `{"command": "x"}`},
+		"a bad rule path": {Op: "write_rule", File: ".cursor/rules/Tests.md", New: "x"},
+	} {
+		if _, err := Apply(files, []Edit{e}, all); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+// Private mode writes only files git does not track, and turns shared bullets into a rule of its own.
+func TestPrivate(t *testing.T) {
+	files := map[string]string{"AGENTS.md": agents}
+	untracked := func(string) bool { return false }
+	got, err := Private("01ABC", "Say that integration tests use the real database", []Edit{
+		{Op: "add_bullet", File: "AGENTS.md", Heading: "Testing", New: "Integration tests use the real database."},
+		{Op: "write_skill", File: ".claude/skills/db/SKILL.md", New: "1. Start the container."},
+	}, files, untracked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule := got[".cursor/rules/casebox-01abc.mdc"]
+	if !strings.Contains(rule, "alwaysApply: true") || !strings.Contains(rule, "- Integration tests use the real database.") {
+		t.Fatalf("rule: %q", rule)
+	}
+	if _, ok := got["AGENTS.md"]; ok || got[".claude/skills/db/SKILL.md"] != "1. Start the container.\n" {
+		t.Fatalf("files: %v", got)
+	}
+	if _, err := Private("01ABC", "t", []Edit{{Op: "delete_bullet", File: "AGENTS.md", Old: "Use tabs."}}, files, untracked); err == nil {
+		t.Error("a removal stayed private")
+	}
+	tracked := func(string) bool { return true }
+	if _, err := Private("01ABC", "t", []Edit{{Op: "write_skill", File: ".claude/skills/db/SKILL.md", New: "x"}}, files, tracked); err == nil {
+		t.Error("a tracked skill stayed private")
 	}
 }
 

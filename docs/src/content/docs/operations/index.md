@@ -8,8 +8,6 @@ This page lists the runbooks for a Casebox server, its workers and QueueBox. Eac
 - [A stalled projection](/operations/stalled-projection/)
 - [A stuck job](/operations/stuck-job/)
 - [A worker offline](/operations/worker-offline/)
-- [A sandbox provider down](/operations/sandbox-provider-down/)
 - [An expired integration token](/operations/expired-integration-token/)
-- [Outbox dead letters](/operations/outbox-dead-letters/)
 - [An erasure request](/operations/erasure-request/)
 - [Key rotation](/operations/key-rotation/)

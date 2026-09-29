@@ -2,10 +2,12 @@
 // internet (docs/specs/sandboxes.md, "Egress"). It tunnels CONNECT, and forwards absolute-form
 // requests (GET http://… and GET https://…, the second as busybox wget sends it, with TLS from the
 // proxy to the host), only to the hosts on its list, on ports 80 and 443. It refuses everything
-// else.
+// else. With a registry mirror (mirror.go) it also serves the package registries over plain HTTP
+// and refuses the workspace's own packages.
 //
-// This file is also compiled on its own, inside a container, into the proxy image the Docker
-// provider runs (image.go), so it imports only the standard library and holds the program's Main.
+// This file and mirror.go are also compiled on their own, inside a container, into the proxy image
+// the Docker provider runs (image.go), so they import only the standard library, and this file
+// holds the program's Main.
 package egressproxy
 
 import (
@@ -103,7 +105,10 @@ type Proxy struct {
 	// Dial connects to a permitted destination. The default refuses loopback, link-local
 	// (cloud metadata), multicast and unspecified addresses after resolving the name.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
-	Log  *log.Logger
+	// Mirror, when set, serves the registry mirror, and the proxy refuses the registry hosts
+	// themselves.
+	Mirror *Mirror
+	Log    *log.Logger
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +116,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// server cancels a request's context when its client's side closes: the upstream request must
 	// outlive that. A client that is really gone ends the copy with a write error instead.
 	r = r.WithContext(context.WithoutCancel(r.Context()))
+	if p.Mirror != nil && p.Mirror.Serves(r) {
+		p.serveMirror(w, r)
+		return
+	}
 	if r.Method == http.MethodConnect {
 		p.connect(w, r)
 		return
@@ -225,6 +234,9 @@ func (p *Proxy) check(host, port string) string {
 	if !Ports[port] {
 		return fmt.Sprintf("port %s is not 80 or 443", port)
 	}
+	if p.Mirror != nil && RegistryHosts[strings.TrimSuffix(strings.ToLower(host), ".")] {
+		return fmt.Sprintf("host %s is a package registry; this sandbox reaches it through the registry mirror only", host)
+	}
 	if !p.Allow.Permits(host) {
 		return fmt.Sprintf("host %s is not on the egress allow-list", host)
 	}
@@ -266,22 +278,47 @@ func (p *Proxy) logf(format string, args ...any) {
 	}
 }
 
-// Main runs the proxy: -listen address, -allow comma-separated hosts. It prints Ready to stdout once
+// Main runs the proxy: -listen address, -allow comma-separated hosts, and for the registry mirror
+// -mirror (the URL the sandbox reaches the proxy at) with -deny-go, -deny-npm, -deny-python,
+// -deny-nuget and -deny-maven (comma-separated package identities). It prints Ready to stdout once
 // it listens, and logs every decision to stderr.
 func Main(args []string) int {
 	fs := flag.NewFlagSet("egress-proxy", flag.ContinueOnError)
 	listen := fs.String("listen", ":3128", "the address to listen on")
 	allow := fs.String("allow", "", "the hosts to allow, comma-separated; *.domain allows every host below domain")
+	mirrorBase := fs.String("mirror", "", "serve the registry mirror, which the sandbox reaches at this http:// URL")
+	var deny [5]*string
+	for i, eco := range []string{"go", "npm", "python", "nuget", "maven"} {
+		deny[i] = fs.String("deny-"+eco, "", "the "+eco+" packages the registry mirror refuses, comma-separated")
+	}
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	list := func(s *string) []string {
+		var out []string
+		for _, v := range strings.Split(*s, ",") {
+			if v = strings.TrimSpace(v); v != "" {
+				out = append(out, v)
+			}
+		}
+		return out
+	}
+	var mirror *Mirror
+	if *mirrorBase != "" {
+		m, err := NewMirror(*mirrorBase, Deny{Go: list(deny[0]), NPM: list(deny[1]), Python: list(deny[2]), NuGet: list(deny[3]), Maven: list(deny[4])})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		mirror = m
 	}
 	a, err := ParseAllow(strings.Split(*allow, ","))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	if a.Empty() {
-		fmt.Fprintln(os.Stderr, "the allow-list is empty")
+	if a.Empty() && mirror == nil {
+		fmt.Fprintln(os.Stderr, "the allow-list is empty and there is no registry mirror")
 		return 2
 	}
 	ln, err := net.Listen("tcp", *listen)
@@ -291,7 +328,7 @@ func Main(args []string) int {
 	}
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	srv := &http.Server{
-		Handler:           &Proxy{Allow: a, Log: logger},
+		Handler:           &Proxy{Allow: a, Mirror: mirror, Log: logger},
 		ReadHeaderTimeout: 30 * time.Second,
 		ErrorLog:          logger,
 	}

@@ -346,6 +346,35 @@ public sealed class CrossTenantTests(StackFixture stack)
             new("GET", "/api/v1/cases/?workspace=" + a.Workspace, null, Caller.Admin),
             new("GET", "/api/v1/cases/queue?workspace=" + a.Workspace, null, Caller.Admin),
             new("GET", "/api/v1/cases/00000000000000000000", null, Caller.Admin),
+            new(
+                "POST",
+                "/api/v1/evaluations/estimate",
+                new { workspace = a.Workspace },
+                Caller.Admin
+            ),
+            new("POST", "/api/v1/evaluations/", new { workspace = a.Workspace }, Caller.Admin),
+            new(
+                "POST",
+                "/api/v1/evaluations/01J0000000000000000000000A/confirmation",
+                null,
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/evaluations/01J0000000000000000000000A/cancellation",
+                new { reason = "b" },
+                Caller.Admin
+            ),
+            new("GET", "/api/v1/evaluations/?workspace=" + a.Workspace, null, Caller.Admin),
+            new("GET", "/api/v1/evaluations/01J0000000000000000000000A", null, Caller.Admin),
+            new("GET", "/api/v1/evaluations/01J0000000000000000000000A/cases", null, Caller.Admin),
+            new(
+                "GET",
+                "/api/v1/evaluations/01J0000000000000000000000A/runs/r1",
+                null,
+                Caller.Admin
+            ),
+            new("GET", "/api/v1/evaluations/offer?workspace=" + a.Workspace, null, Caller.Admin),
             new("GET", "/api/v1/cases/00000000000000000000/validations", null, Caller.Admin),
             new("GET", "/api/v1/cases/00000000000000000000/oracle", null, Caller.Admin),
             new(
@@ -476,6 +505,12 @@ public sealed class CrossTenantTests(StackFixture stack)
             "source",
             "validations",
             "oracle",
+            "evaluations",
+            "estimate",
+            "confirmation",
+            "cancellation",
+            "runs",
+            "offer",
         };
         var normalized = new List<string>();
         foreach (var s in segments)

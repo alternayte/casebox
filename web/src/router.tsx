@@ -2,6 +2,9 @@ import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/re
 import { CaseList, type CasesSearch } from "@/cases/CaseList";
 import { CasePage } from "@/cases/CasePage";
 import { caseKinds, caseSplits, caseStatuses } from "@/lib/labels";
+import { EvaluationList, type EvaluationsSearch } from "@/evaluations/EvaluationList";
+import { EvaluationPage } from "@/evaluations/EvaluationPage";
+import { RunPage } from "@/evaluations/RunPage";
 import { Device } from "@/pages/Device";
 import { Login } from "@/pages/Login";
 import { AppShell } from "@/shell/AppShell";
@@ -108,6 +111,36 @@ const caseRoute = createRoute({
   },
 });
 
+const evaluationsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/evaluations",
+  validateSearch: (search: Record<string, unknown>): EvaluationsSearch => ({
+    workspace: typeof search.workspace === "string" && search.workspace !== "" ? search.workspace : undefined,
+  }),
+  component: function EvaluationsRoute() {
+    const navigate = evaluationsRoute.useNavigate();
+    return <EvaluationList search={evaluationsRoute.useSearch()} onSearch={(search) => navigate({ search })} />;
+  },
+});
+
+const evaluationRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/evaluations/$id",
+  component: function EvaluationRoute() {
+    const { id } = evaluationRoute.useParams();
+    return <EvaluationPage key={id} id={id} />;
+  },
+});
+
+const runRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/evaluations/$id/runs/$runId",
+  component: function RunRoute() {
+    const { id, runId } = runRoute.useParams();
+    return <RunPage key={runId} id={id} runId={runId} />;
+  },
+});
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
@@ -131,7 +164,7 @@ const deviceRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([appRoute.addChildren([overviewRoute, themeRoute, workRoute, workItemRoute, casesRoute, caseRoute]), loginRoute, deviceRoute]),
+  routeTree: rootRoute.addChildren([appRoute.addChildren([overviewRoute, themeRoute, workRoute, workItemRoute, casesRoute, caseRoute, evaluationsRoute, evaluationRoute, runRoute]), loginRoute, deviceRoute]),
 });
 
 declare module "@tanstack/react-router" {

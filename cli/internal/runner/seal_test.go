@@ -54,7 +54,7 @@ func TestSealing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
-	sb, err := runner.Seal(ctx, p, spec, bytes.NewReader(tree(t, baseFiles)), heldOut, []string{"proxy.golang.org"}, map[string]string{"MODEL_API_KEY": "sk-secret"})
+	sb, err := runner.Seal(ctx, p, spec, bytes.NewReader(tree(t, baseFiles)), heldOut, []string{"proxy.golang.org"}, nil, map[string]string{"MODEL_API_KEY": "sk-secret"})
 	if err != nil {
 		t.Fatalf("Seal: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestSealing(t *testing.T) {
 		if got := sh("nc -w 3 140.82.112.3 443 </dev/null && echo reached"); got != "" {
 			t.Fatal("a raw connection to a GitHub address went around the proxy")
 		}
-		if _, err := runner.Seal(ctx, p, spec, bytes.NewReader(tree(t, baseFiles)), nil, []string{"*.github.com"}, nil); err == nil {
+		if _, err := runner.Seal(ctx, p, spec, bytes.NewReader(tree(t, baseFiles)), nil, []string{"*.github.com"}, nil, nil); err == nil {
 			t.Fatal("Seal accepted an allow-list that reaches the git host")
 		}
 	})
@@ -193,7 +193,7 @@ func TestOverlay(t *testing.T) {
 	p := provider(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	sb, err := runner.Seal(ctx, p, spec, bytes.NewReader(tree(t, baseFiles)), heldOut, nil, nil)
+	sb, err := runner.Seal(ctx, p, spec, bytes.NewReader(tree(t, baseFiles)), heldOut, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Seal: %v", err)
 	}

@@ -9,6 +9,7 @@ const nav = [
   { to: "/", label: "Overview", exact: true },
   { to: "/work", label: "Work", exact: false },
   { to: "/cases", label: "Cases", exact: false },
+  { to: "/evaluations", label: "Evaluations", exact: false },
 ] as const;
 
 // Every page but login and device approval lives in this shell and needs a signed-in account.

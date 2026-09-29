@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Casebox.Server.Features.Cases;
+using Casebox.Server.Features.Evaluations;
 using Casebox.Server.Features.Orgs;
 using Casebox.Server.Features.Steering;
 using Casebox.Server.Features.WorkItems;
@@ -23,8 +24,11 @@ public static class CaseboxStreams
             .Stream<WorkItem>("work_item", s => s.EventsNestedIn(typeof(WorkItemEvents)))
             .Stream<SteeringState>("steering", s => s.EventsNestedIn(typeof(SteeringEvents)))
             .Stream<Case>("case", s => s.EventsNestedIn(typeof(CaseEvents)))
+            .Stream<Evaluation>("evaluation", s => s.EventsNestedIn(typeof(EvaluationEvents)))
             .Projection<WorkspaceProjection>(WorkspaceProjection.Name, Run.Inline)
             .Projection<WorkItemProjection>(WorkItemProjection.Name, Run.Inline)
             .Projection<SteeringFacts>(SteeringFacts.Name, Run.Inline)
-            .Projection<CaseCatalog>(CaseCatalog.Name, Run.Inline);
+            .Projection<CaseCatalog>(CaseCatalog.Name, Run.Inline)
+            .Projection<EvaluationResults>(EvaluationResults.Name, Run.Inline)
+            .Subscription<EvaluationWorkflow>(EvaluationWorkflow.Name);
 }

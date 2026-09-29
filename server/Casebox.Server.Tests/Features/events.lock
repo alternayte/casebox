@@ -12,6 +12,16 @@ stream case (Case)
   case.validated v1 { drift: bool, failToPass: int32, oracle: string, passToPass: int32, seconds: float64, weight: float64 }
   case.validation_failed v1 { detail: string?, reason: enum{Build=0, NoFailToPass=1, FailToPassPassedAtBase=2, Flaky=3, TooSlow=4, FixDoesNotFail=5, ApplyFailed=6} }
 
+stream evaluation (Evaluation)
+  evaluation.budget_exhausted v1 { spentUsd: decimal }
+  evaluation.cancelled v1 { by: string, reason: string }
+  evaluation.checkpoint_evaluated v1 { cases: int32, delta: float64, level: float64, lower: float64, round: int32, upper: float64, verdict: enum{Better=0, Worse=1, Equivalent=2, Inconclusive=3} }
+  evaluation.confirmed v1 { by: string }
+  evaluation.requested v1 { baseline: { agent: string, agentVersion: string, command: { logFormat: string?, logGlob: string?, template: string }?, effort: string?, harness: string, model: string, settings: { maxTurns: int32?, timeoutMinutes: int32?, tokenCap: int64? } }, candidate: { agent: string, agentVersion: string, command: { logFormat: string?, logGlob: string?, template: string }?, effort: string?, harness: string, model: string, settings: { maxTurns: int32?, timeoutMinutes: int32?, tokenCap: int64? } }, capUsd: decimal, cases: [{ caseId: string, weight: float64 }], change: string, delta: float64, estimate: { baselineTokens: int64, baselineUsd: decimal, candidateTokens: int64, candidateUsd: decimal, cases: int32, maxMinutes: float64, minMinutes: float64, perRoundUsd: decimal, runs: int32, sandboxMinutes: float64, totalUsd: decimal }, mutableModel: bool, needsConfirmation: bool, prices: map<{ cacheRead: decimal?, cacheWrite: decimal?, input: decimal, output: decimal }>, purpose: enum{Compare=0, HarnessVsNone=1, HarnessCi=2, Gate=3}, repeats: int32, split: string, workspace: string }
+  evaluation.run_completed v1 { caseId: string, costUsd: decimal, evidence: string, passed: bool, repeat: int32, runId: string, seconds: float64, side: enum{Baseline=0, Candidate=1}, tokens: int64 }
+  evaluation.run_failed v1 { caseId: string, reason: string, repeat: int32, runId: string, side: enum{Baseline=0, Candidate=1} }
+  evaluation.verdict_reached v1 { baselineRate: float64, candidateRate: float64, cases: int32, costLower: float64?, costRatio: float64?, costUpper: float64?, delta: float64, durationLower: float64?, durationRatio: float64?, durationUpper: float64?, equivalentAndCheaper: bool, level: float64, lower: float64, reason: string?, runs: int32, upper: float64, verdict: enum{Better=0, Worse=1, Equivalent=2, Inconclusive=3} }
+
 stream org (Organisation)
   org.created v1 { name: string, settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }
   org.erasure_performed v1 { sessions: int32, subjects: int32 }

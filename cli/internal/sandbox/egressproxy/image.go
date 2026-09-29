@@ -7,11 +7,14 @@ import (
 	"sort"
 )
 
-// source is proxy.go itself: the proxy image compiles it, so the proxy that runs is the one
-// this binary was built with.
+// source and mirrorSource are proxy.go and mirror.go themselves: the proxy image compiles them,
+// so the proxy that runs is the one this binary was built with.
 //
 //go:embed proxy.go
 var source []byte
+
+//go:embed mirror.go
+var mirrorSource []byte
 
 // Builder is the image that compiles the proxy, pinned by version and digest. Only the build
 // stage uses it; the proxy image is the static binary on scratch.
@@ -48,10 +51,11 @@ ENTRYPOINT ["/egress-proxy"]
 // the proxy uses the standard library only.
 func BuildContext() map[string][]byte {
 	return map[string][]byte{
-		"Dockerfile":     []byte(dockerfile),
-		"go.mod":         []byte("module casebox.local/egress\n\ngo 1.26\n"),
-		"main.go":        []byte(mainSource),
-		"proxy/proxy.go": source,
+		"Dockerfile":      []byte(dockerfile),
+		"go.mod":          []byte("module casebox.local/egress\n\ngo 1.26\n"),
+		"main.go":         []byte(mainSource),
+		"proxy/proxy.go":  source,
+		"proxy/mirror.go": mirrorSource,
 	}
 }
 

@@ -19,8 +19,10 @@ const ProxyHost = "casebox-egress"
 
 // startProxy runs the egress proxy of sandbox id: a container on its own open network, joined to
 // the sandbox's internal network as ProxyHost. The sandbox has no route to the open network; the
-// proxy is its only way out. It returns the environment that points commands at the proxy.
-func (p *Provider) startProxy(ctx context.Context, id string, labels []string, hosts []string, services []sandbox.Service) (map[string]string, error) {
+// proxy is its only way out. With a mirror, the proxy also serves the registry mirror and refuses
+// the registry hosts themselves. It returns the environment that points commands at the proxy and
+// the mirror.
+func (p *Provider) startProxy(ctx context.Context, id string, labels []string, hosts []string, mirror *sandbox.Mirror, services []sandbox.Service) (map[string]string, error) {
 	image, err := p.ensureProxyImage(ctx)
 	if err != nil {
 		return nil, err
@@ -40,6 +42,9 @@ func (p *Provider) startProxy(ctx context.Context, id string, labels []string, h
 		"--memory", "256m",
 	}, labels...)
 	args = append(args, image, "-listen", ":"+egressproxy.Port, "-allow", strings.Join(hosts, ","))
+	if mirror != nil {
+		args = append(args, mirrorArgs(*mirror)...)
+	}
 	if _, err := p.docker(ctx, nil, args...); err != nil {
 		return nil, fmt.Errorf("egress proxy: %w", err)
 	}
@@ -54,14 +59,23 @@ func (p *Provider) startProxy(ctx context.Context, id string, labels []string, h
 	}
 	url := "http://" + ProxyHost + ":" + egressproxy.Port
 	noProxy := []string{"localhost", "127.0.0.1", "::1"}
+	if mirror != nil {
+		noProxy = append(noProxy, ProxyHost)
+	}
 	for _, svc := range services {
 		noProxy = append(noProxy, svc.Name)
 	}
-	return map[string]string{
+	env := map[string]string{
 		"HTTPS_PROXY": url, "https_proxy": url,
 		"HTTP_PROXY": url, "http_proxy": url,
 		"NO_PROXY": strings.Join(noProxy, ","), "no_proxy": strings.Join(noProxy, ","),
-	}, nil
+	}
+	if mirror != nil {
+		for k, v := range MirrorEnv() {
+			env[k] = v
+		}
+	}
+	return env, nil
 }
 
 // waitReady waits until the proxy prints egressproxy.Ready, or fails with its output when it
@@ -122,20 +136,27 @@ func (p *Provider) ensureProxyImage(ctx context.Context) (string, error) {
 	return tag, nil
 }
 
-// checkEgress refuses an allow-list the proxy cannot honour, before anything starts.
+// checkEgress refuses an allow-list or a mirror the proxy cannot honour, before anything starts.
 func checkEgress(opts sandbox.StartOptions, services []sandbox.Service) error {
-	if len(opts.Egress) == 0 {
+	if len(opts.Egress) == 0 && opts.Mirror == nil {
 		return nil
 	}
 	if opts.Network != sandbox.NetworkNone {
-		return fmt.Errorf("an egress allow-list needs network none, not %q", opts.Network)
+		return fmt.Errorf("an egress allow-list or a registry mirror needs network none, not %q", opts.Network)
 	}
-	allow, err := egressproxy.ParseAllow(opts.Egress)
-	if err != nil {
-		return err
+	if len(opts.Egress) > 0 {
+		allow, err := egressproxy.ParseAllow(opts.Egress)
+		if err != nil {
+			return err
+		}
+		if allow.Empty() {
+			return fmt.Errorf("the egress allow-list %s names no host", strconv.Quote(strings.Join(opts.Egress, ",")))
+		}
 	}
-	if allow.Empty() {
-		return fmt.Errorf("the egress allow-list %s names no host", strconv.Quote(strings.Join(opts.Egress, ",")))
+	if opts.Mirror != nil {
+		if _, err := egressproxy.NewMirror(MirrorURL, egressDeny(*opts.Mirror)); err != nil {
+			return err
+		}
 	}
 	for _, svc := range services {
 		if svc.Name == ProxyHost {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/alternayte/casebox/cli/internal/sandbox"
+	"github.com/alternayte/casebox/cli/internal/sandbox/egressproxy"
 )
 
 // Image is the base image the suite builds on: small, with sh, tar, id and nc.
@@ -26,6 +27,19 @@ const ServiceImage = "redis:7-alpine"
 const (
 	EgressAllowed    = "proxy.golang.org"
 	EgressAllowedURL = "https://proxy.golang.org/golang.org/x/text/@v/list"
+)
+
+// MirrorImage is the environment of the registry mirror subtest: Go, pinned by digest, with npm
+// added by an install step.
+var MirrorImage = sandbox.EnvSpec{Image: egressproxy.Builder, Install: []string{"apk add --no-cache npm"}}
+
+// MirrorModule is a Go module, and MirrorNPM an npm package, that the mirror subtest fetches and
+// then denies.
+const (
+	MirrorModule        = "golang.org/x/text"
+	MirrorModuleVersion = "v0.14.0"
+	MirrorNPM           = "left-pad"
+	MirrorNPMVersion    = "1.3.0"
 )
 
 // Run checks one provider. Every sandbox it starts is destroyed before it returns.
@@ -236,6 +250,65 @@ func Run(t *testing.T, p sandbox.Provider) {
 		}
 		if !reached {
 			t.Fatal("a sandbox with an egress allow-list cannot reach its service by name")
+		}
+	})
+
+	// A provider that returns sandbox.ErrUnsupported for Mirror skips this subtest.
+	t.Run("registry mirror", func(t *testing.T) {
+		probe, err := p.Start(ctx, image, sandbox.StartOptions{Egress: []string{EgressAllowed}, Mirror: &sandbox.Mirror{}})
+		if errors.Is(err, sandbox.ErrUnsupported) {
+			t.Skipf("the provider does not support a registry mirror: %v", err)
+		}
+		if err != nil {
+			t.Fatalf("Start with a registry mirror: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := p.Destroy(context.Background(), probe); err != nil {
+				t.Errorf("Destroy: %v", err)
+			}
+		})
+		// The registry itself is out of reach, even though the allow-list names it.
+		script := `p=${HTTPS_PROXY#http://}; p=${p%/}; printf 'CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n' "$0" "$0" | nc -w 5 "${p%:*}" "${p##*:}" | head -n 1`
+		if line := string(exec(ctx, t, p, probe, sandbox.Command{Args: []string{"sh", "-c", script, EgressAllowed + ":443"}, Timeout: 30 * time.Second}).Stdout); strings.Contains(line, " 200 ") {
+			t.Fatalf("CONNECT to the registry %s answered %q with a mirror in place", EgressAllowed, line)
+		}
+		for _, file := range []string{".nuget/NuGet/NuGet.Config", ".m2/settings.xml", ".gradle/init.d/casebox-mirror.gradle"} {
+			if out := run(ctx, t, p, probe, "sh", "-c", `cat "$HOME/$0"`, file); !strings.Contains(out, "/nuget/v3/index.json") && !strings.Contains(out, "/maven/") {
+				t.Fatalf("~/%s does not point at the mirror: %s", file, out)
+			}
+		}
+
+		ref, err := p.Prepare(ctx, MirrorImage)
+		if err != nil {
+			t.Fatalf("Prepare the Go and npm image: %v", err)
+		}
+		goGet := []string{"sh", "-c", `cd "$(mktemp -d)" && GOMODCACHE="$(mktemp -d)" GOFLAGS=-modcacherw go mod download -json "$0"`, MirrorModule + "@" + MirrorModuleVersion}
+		npmView := []string{"npm", "view", MirrorNPM + "@" + MirrorNPMVersion, "version"}
+		attempt := func(sb sandbox.Sandbox, args []string) sandbox.ExecResult {
+			var res sandbox.ExecResult
+			for i := 0; i < 3; i++ {
+				if res = exec(ctx, t, p, sb, sandbox.Command{Args: args, Timeout: 3 * time.Minute}); res.ExitCode == 0 {
+					break
+				}
+				time.Sleep(2 * time.Second)
+			}
+			return res
+		}
+
+		open := start1(ctx, t, p, ref, sandbox.StartOptions{Mirror: &sandbox.Mirror{Denied: sandbox.Denied{Go: []string{"example.com/workspace"}}}})
+		if res := attempt(open, goGet); res.ExitCode != 0 {
+			t.Fatalf("go mod download through the mirror failed: exit %d: %s%s", res.ExitCode, res.Stdout, res.Stderr)
+		}
+		if res := attempt(open, npmView); res.ExitCode != 0 || strings.TrimSpace(string(res.Stdout)) != MirrorNPMVersion {
+			t.Fatalf("npm view through the mirror: exit %d: %s%s", res.ExitCode, res.Stdout, res.Stderr)
+		}
+
+		denied := start1(ctx, t, p, ref, sandbox.StartOptions{Mirror: &sandbox.Mirror{Denied: sandbox.Denied{Go: []string{MirrorModule}, NPM: []string{MirrorNPM}}}})
+		if res := exec(ctx, t, p, denied, sandbox.Command{Args: goGet, Timeout: 3 * time.Minute}); res.ExitCode == 0 || !strings.Contains(string(res.Stdout)+string(res.Stderr), "404") {
+			t.Fatalf("go mod download of a denied module: exit %d: %s%s", res.ExitCode, res.Stdout, res.Stderr)
+		}
+		if res := exec(ctx, t, p, denied, sandbox.Command{Args: npmView, Timeout: 3 * time.Minute}); res.ExitCode == 0 || !strings.Contains(string(res.Stdout)+string(res.Stderr), "404") {
+			t.Fatalf("npm view of a denied package: exit %d: %s%s", res.ExitCode, res.Stdout, res.Stderr)
 		}
 	})
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 	"github.com/alternayte/casebox/cli/internal/buildinfo"
 	"github.com/alternayte/casebox/cli/internal/cases"
 	"github.com/alternayte/casebox/cli/internal/config"
+	"github.com/alternayte/casebox/cli/internal/evaluate"
 	"github.com/alternayte/casebox/cli/internal/sandbox/providers"
 	"github.com/alternayte/casebox/cli/internal/worker"
 )
@@ -27,7 +29,8 @@ func newWorkerCommand() *cobra.Command {
 			"It reads its worker token from CASEBOX_WORKER_TOKEN, and a GitHub token for cloning from GITHUB_TOKEN.\n" +
 			"Model API keys stay in this host's environment; the server never sees them.\n" +
 			"Sandboxes come from CASEBOX_SANDBOX (docker, kiln or daytona; default docker), at most CASEBOX_SANDBOX_CONCURRENCY\n" +
-			"at once (default 2); environments and case validation need one.\n" +
+			"at once (default 2); environments, case validation and evaluation runs need one.\n" +
+			"Evaluation runs also need a model key for the agents they run (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY).\n" +
 			"Steering classification and case instructions need an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic or openai, any\n" +
 			"OpenAI-compatible API), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and CASEBOX_ANALYSIS_API_KEY\n" +
 			"(default ANTHROPIC_API_KEY or OPENAI_API_KEY).",
@@ -60,6 +63,7 @@ func newWorkerCommand() *cobra.Command {
 			jobs := worker.RepoJobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
 			steer := worker.Steering{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Concurrency: 4}
 			caseJobs := cases.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
+			evalJobs := evaluate.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Env: environ()}
 			handlers := map[string]worker.Handler{
 				"entire.fetch": jobs.Entire,
 				"gitai.fetch":  jobs.GitAI,
@@ -73,6 +77,7 @@ func newWorkerCommand() *cobra.Command {
 			case err == nil:
 				steer.Model = analysis.New(model)
 				caseJobs.Model = steer.Model
+				evalJobs.Model = steer.Model
 				handlers["steering.classify"] = steer.Classify
 				handlers["case.instruction"] = caseJobs.Instruction
 				fmt.Fprintf(out, "Analysis model: %s at %s; this worker classifies steering and drafts case instructions.\n", model, model.BaseURL)
@@ -87,9 +92,19 @@ func newWorkerCommand() *cobra.Command {
 				handlers["env.build"] = env.Build
 				caseJobs.Provider = provider
 				handlers["case.validate"] = caseJobs.Validate
-				fmt.Fprintf(out, "Sandboxes: %s; this worker prepares environments and validates cases.\n", name)
+				fmt.Fprintf(out, "Sandboxes: %s; this worker prepares environments, validates cases and verifies evaluation runs.\n", name)
+				evalJobs.Provider = provider
+				handlers["verify"] = evalJobs.Verify
+				// Only a worker with a model key runs agents.
+				runnable := evaluate.Available(evalJobs.Env)
+				if len(runnable) > 1 {
+					handlers["run"] = evalJobs.Run
+					fmt.Fprintf(out, "Agents: this worker runs %s.\n", strings.Join(runnable, ", "))
+				} else {
+					fmt.Fprintln(out, "Agents: no model key (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY), so this worker runs no evaluation runs.")
+				}
 			} else {
-				fmt.Fprintf(out, "Sandboxes: %v. This worker does not prepare environments or validate cases.\n", err)
+				fmt.Fprintf(out, "Sandboxes: %v. This worker does not prepare environments, validate cases or run evaluations.\n", err)
 			}
 			w := &worker.Worker{
 				Client:   client,
@@ -110,4 +125,15 @@ func newWorkerCommand() *cobra.Command {
 	cmd.Flags().StringVar(&server, "server", "", "the Casebox server (default: CASEBOX_SERVER, then this machine's credentials)")
 	cmd.Flags().StringVar(&id, "id", "", "the worker ID (default: host name and process ID)")
 	return cmd
+}
+
+// environ is the worker's environment as a map, for the model keys the agents read.
+func environ() map[string]string {
+	env := map[string]string{}
+	for _, kv := range os.Environ() {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			env[k] = v
+		}
+	}
+	return env
 }

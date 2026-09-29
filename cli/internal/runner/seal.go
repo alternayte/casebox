@@ -50,12 +50,13 @@ var gitEnv = map[string]string{
 // diff settings in the repository's config cannot change what it does.
 const gitSafe = "git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.quotePath=true"
 
-// Seal starts the agent's sandbox from spec with network none, the egress allow-list and env
-// (the model key goes here and nowhere else), and puts the base tree (a tar stream) in its working
+// Seal starts the agent's sandbox from spec with network none, the egress allow-list, the
+// registry mirror when mirror is set (DeniedPackages gives its denied list) and env (the model key
+// goes here and nowhere else), and puts the base tree (a tar stream) in its working
 // directory as a fresh repository with one commit, without the held-out test files, .casebox/ and
 // any .git. The returned Sandbox carries the base commit in Meta[MetaBase]. The image must have
 // git; the recipe provides it.
-func Seal(ctx context.Context, p sandbox.Provider, spec sandbox.EnvSpec, tree io.Reader, heldOut []string, egress []string, env map[string]string) (sandbox.Sandbox, error) {
+func Seal(ctx context.Context, p sandbox.Provider, spec sandbox.EnvSpec, tree io.Reader, heldOut []string, egress []string, mirror *sandbox.Mirror, env map[string]string) (sandbox.Sandbox, error) {
 	if err := CheckEgress(egress); err != nil {
 		return sandbox.Sandbox{}, err
 	}
@@ -63,7 +64,7 @@ func Seal(ctx context.Context, p sandbox.Provider, spec sandbox.EnvSpec, tree io
 	if err != nil {
 		return sandbox.Sandbox{}, fmt.Errorf("prepare the environment: %w", err)
 	}
-	sb, err := p.Start(ctx, image, sandbox.StartOptions{Network: sandbox.NetworkNone, Egress: egress, Env: env})
+	sb, err := p.Start(ctx, image, sandbox.StartOptions{Network: sandbox.NetworkNone, Egress: egress, Mirror: mirror, Env: env})
 	if err != nil {
 		return sandbox.Sandbox{}, fmt.Errorf("start the agent's sandbox: %w", err)
 	}

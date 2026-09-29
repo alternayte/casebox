@@ -8,9 +8,10 @@
 // itself when its lifetime ends; the services and the network it leaves behind are removed by the
 // next Start.
 //
-// A sandbox with an egress allow-list (egress.go) keeps its internal network and gains a proxy
-// container that sits on that network and on a second, open one. The proxy image is compiled from
-// the egressproxy source this binary embeds, in a pinned Go image, once per machine.
+// A sandbox with an egress allow-list or a registry mirror (egress.go, mirror.go) keeps its
+// internal network and gains a proxy container that sits on that network and on a second, open
+// one. The proxy image is compiled from the egressproxy source this binary embeds, in a pinned Go
+// image, once per machine.
 package docker
 
 import (
@@ -175,8 +176,9 @@ func Dockerfile(spec sandbox.EnvSpec) (string, error) {
 }
 
 // Start runs a sandbox from an image or a snapshot: its services first, on the sandbox's own
-// network, then its egress proxy when opts.Egress lists hosts, then the sandbox container, capped
-// and as the sandbox user.
+// network, then its egress proxy when opts.Egress lists hosts or opts.Mirror is set, then the
+// sandbox container, capped and as the sandbox user, and last the mirror's tool configuration in
+// the sandbox user's home.
 func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.StartOptions) (sandbox.Sandbox, error) {
 	if from == nil || from.RefID() == "" {
 		return sandbox.Sandbox{}, errors.New("nothing to start the sandbox from")
@@ -236,8 +238,8 @@ func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.Sta
 			return fail(fmt.Errorf("service %s: %w", svc.Name, err))
 		}
 	}
-	if len(opts.Egress) > 0 {
-		env, err := p.startProxy(ctx, id, labels, opts.Egress, from.RefServices())
+	if len(opts.Egress) > 0 || opts.Mirror != nil {
+		env, err := p.startProxy(ctx, id, labels, opts.Egress, opts.Mirror, from.RefServices())
 		if err != nil {
 			return fail(err)
 		}
@@ -262,6 +264,11 @@ func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.Sta
 	args = append(args, from.RefID(), strconv.FormatInt(seconds, 10))
 	if _, err := p.docker(ctx, nil, args...); err != nil {
 		return fail(err)
+	}
+	if opts.Mirror != nil {
+		if err := p.writeMirrorFiles(ctx, sb); err != nil {
+			return fail(err)
+		}
 	}
 	return sb, nil
 }

@@ -149,11 +149,31 @@ type StartOptions struct {
 	// it; HTTPS_PROXY, HTTP_PROXY and NO_PROXY point every command at it. Nothing else is reachable:
 	// no other host, no DNS outside, no raw connection. A provider that cannot honour it returns
 	// ErrUnsupported.
-	Egress   []string
+	Egress []string
+	// Mirror, when set, points the sandbox's package tools at a registry mirror the provider runs
+	// beside it (docs/specs/evaluations.md, "The registry mirror"), which refuses the packages in
+	// Mirror.Denied, and the sandbox cannot reach the public registries any other way. It needs
+	// network none. A provider that cannot honour it returns ErrUnsupported.
+	Mirror   *Mirror
 	CPUs     float64       // default 2
 	MemoryMB int           // default 4096
 	Lifetime time.Duration // default 2 hours; the provider destroys it after this
 	Env      map[string]string
+}
+
+// Mirror is a registry mirror for a sandbox's package tools.
+type Mirror struct {
+	Denied Denied
+}
+
+// Denied are the package identities of the workspace under test, which a registry could serve at
+// any commit, the merged fix included.
+type Denied struct {
+	Go     []string // module paths; every module below one is denied too
+	NPM    []string // package names, scoped or not
+	Python []string // project names, compared after PEP 503 normalization
+	NuGet  []string // package IDs, compared without case
+	Maven  []string // groupId:artifactId
 }
 
 // Sandbox is a running sandbox. Meta holds what its provider needs to find it again.

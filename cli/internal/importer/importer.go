@@ -15,6 +15,7 @@ import (
 	"github.com/alternayte/casebox/cli/internal/pipeline"
 	"github.com/alternayte/casebox/cli/internal/sources/claudecode"
 	"github.com/alternayte/casebox/cli/internal/sources/codex"
+	"github.com/alternayte/casebox/cli/internal/sources/cursor"
 	"github.com/alternayte/casebox/cli/internal/spool"
 )
 
@@ -83,7 +84,36 @@ func Import(ctx context.Context, r *pipeline.Repo, s *spool.Spool, opts Options)
 			return sum, err
 		}
 	}
+	// Cursor transcripts name no directory; Cursor keeps them under a folder named after the
+	// workspace path, with each separator turned into a dash.
+	cursorFiles, _ := filepath.Glob(filepath.Join(opts.Home, ".cursor", "projects", "*", "agent-transcripts", "*", "*.jsonl"))
+	for _, path := range recent(cursorFiles, opts.Since) {
+		project := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(path))))
+		if project != CursorSlug(r.Root) && project != CursorSlug(resolved(r.Root)) {
+			continue
+		}
+		res, err := ParseFile(path, cursor.Agent)
+		if err != nil {
+			sum.Failed++
+			continue
+		}
+		if err := add(res.Session, r.Root, res.Events); err != nil {
+			return sum, err
+		}
+	}
 	return sum, ctx.Err()
+}
+
+// CursorSlug is the folder name Cursor gives a workspace under ~/.cursor/projects.
+func CursorSlug(dir string) string {
+	return strings.Trim(strings.NewReplacer("/", "-", "\\", "-", ".", "-", ":", "-").Replace(dir), "-")
+}
+
+func resolved(dir string) string {
+	if d, err := filepath.EvalSymlinks(dir); err == nil {
+		return d
+	}
+	return dir
 }
 
 // Parsed is a parsed log of either agent.
@@ -108,6 +138,13 @@ func ParseFile(path, agent string) (Parsed, error) {
 	case codex.Agent:
 		res, err := codex.Parse(f)
 		return Parsed{Session: res.Session, Cwd: res.Cwd, Subagent: res.Subagent, Events: res.Events}, err
+	case cursor.Agent:
+		info, err := f.Stat()
+		if err != nil {
+			return Parsed{}, err
+		}
+		session, events, err := cursor.Parse(f, path, info.ModTime())
+		return Parsed{Session: session, Events: events}, err
 	default:
 		return Parsed{}, errors.New("no transcript parser for " + agent)
 	}

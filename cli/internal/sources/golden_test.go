@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alternayte/casebox/cli/internal/sources/claudecode"
 	"github.com/alternayte/casebox/cli/internal/sources/codex"
+	"github.com/alternayte/casebox/cli/internal/sources/cursor"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
@@ -21,6 +23,13 @@ func TestGoldenFiles(t *testing.T) {
 	parsers := map[string]func(*os.File) (any, error){
 		"claudecode": func(f *os.File) (any, error) { return claudecode.Parse(f) },
 		"codex":      func(f *os.File) (any, error) { return codex.Parse(f) },
+		"cursor": func(f *os.File) (any, error) {
+			session, events, err := cursor.Parse(f, f.Name(), time.Date(2026, 9, 29, 6, 0, 0, 0, time.UTC))
+			return struct {
+				Session any
+				Events  any
+			}{session, events}, err
+		},
 	}
 	for agent, parse := range parsers {
 		fixtures, _ := filepath.Glob(filepath.Join("testdata", agent, "*.jsonl"))

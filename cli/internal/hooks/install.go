@@ -24,7 +24,9 @@ func Targets(home string) []Target {
 	return []Target{
 		{Agent: ClaudeCode, Path: filepath.Join(home, ".claude", "settings.json"), Events: []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "SessionEnd"}},
 		{Agent: Codex, Path: filepath.Join(home, ".codex", "hooks.json"), Events: []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Stop", "SessionEnd"}, NeedsTrust: true},
-		{Agent: Cursor, Path: filepath.Join(home, ".cursor", "hooks.json"), Events: []string{"sessionStart", "beforeSubmitPrompt", "afterAgentResponse", "postToolUse", "afterFileEdit", "stop", "sessionEnd"}},
+		// The Cursor CLI fires only some of Cursor's hook events; these are the ones it fires and
+		// that need no answer (a permission hook that fails would block the agent).
+		{Agent: Cursor, Path: filepath.Join(home, ".cursor", "hooks.json"), Events: []string{"sessionStart", "postToolUse", "afterFileEdit", "sessionEnd"}},
 	}
 }
 

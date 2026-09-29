@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -41,6 +42,11 @@ var markers = []string{
 	"patch rejected by user",
 	"<turn_aborted>",
 }
+
+var (
+	userQuery    = regexp.MustCompile(`(?s)<user_query>\s*(.*?)\s*</user_query>`)
+	timestampTag = regexp.MustCompile(`<timestamp>[^<]+</timestamp>`)
+)
 
 var fixed = map[string]string{"cwd": "/work/app", "gitBranch": "main", "branch": "main", "repository_url": "git@github.com:acme/app.git", "commit_hash": "0123456789abcdef0123456789abcdef01234567"}
 
@@ -92,6 +98,16 @@ func scrub(key string, v any, parentType string) any {
 			return fixed[key]
 		case keep[key], key == "name" && toolNameParents[parentType]:
 			return x
+		}
+		// Cursor wraps a prompt in <user_query> after a <timestamp>; the tags and the date are
+		// structure, the query is content.
+		if q := userQuery.FindStringSubmatchIndex(x); q != nil {
+			stamp := ""
+			if t := timestampTag.FindString(x); t != "" {
+				stamp = t + "\n"
+			}
+			sum := sha256.Sum256([]byte(x[q[2]:q[3]]))
+			return stamp + "<user_query>\ntext-" + hex.EncodeToString(sum[:4]) + "\n</user_query>"
 		}
 		for _, m := range markers {
 			if strings.HasPrefix(strings.TrimSpace(x), m) {

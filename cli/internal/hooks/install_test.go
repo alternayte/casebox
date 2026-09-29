@@ -97,7 +97,7 @@ func TestCursorHooksAreAFlatListWithAVersion(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc.Version != 1 || len(doc.Hooks["stop"]) != 1 || !isOwn(doc.Hooks["stop"][0]) {
+	if doc.Version != 1 || len(doc.Hooks["sessionEnd"]) != 1 || !isOwn(doc.Hooks["sessionEnd"][0]) {
 		t.Fatalf("unexpected Cursor hooks file:\n%s", data)
 	}
 }

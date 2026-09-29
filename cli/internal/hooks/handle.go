@@ -33,7 +33,6 @@ type action int
 const (
 	actStart action = iota
 	actPrompt
-	actResponse
 	actTool
 	actFileEdit
 	actStop
@@ -44,8 +43,7 @@ const (
 var actions = map[string]map[string]action{
 	ClaudeCode: {"SessionStart": actStart, "UserPromptSubmit": actPrompt, "PostToolUse": actTool, "Stop": actStop, "SessionEnd": actEnd},
 	Codex:      {"SessionStart": actStart, "UserPromptSubmit": actPrompt, "PostToolUse": actTool, "Stop": actStop, "SessionEnd": actEnd},
-	Cursor: {"sessionStart": actStart, "beforeSubmitPrompt": actPrompt, "afterAgentResponse": actResponse, "postToolUse": actTool,
-		"afterFileEdit": actFileEdit, "stop": actStop, "sessionEnd": actEnd},
+	Cursor:     {"sessionStart": actStart, "postToolUse": actTool, "afterFileEdit": actFileEdit, "sessionEnd": actEnd},
 }
 
 type payload struct {
@@ -56,12 +54,9 @@ type payload struct {
 	WorkspaceRoots []string        `json:"workspace_roots"`
 	CursorVersion  string          `json:"cursor_version"`
 	Model          string          `json:"model"`
-	Prompt         string          `json:"prompt"`
-	Text           string          `json:"text"`
 	ToolName       string          `json:"tool_name"`
 	ToolInput      json.RawMessage `json:"tool_input"`
 	FilePath       string          `json:"file_path"`
-	Status         string          `json:"status"`
 	Reason         string          `json:"reason"`
 }
 
@@ -142,34 +137,21 @@ func handle(ctx context.Context, agent, event string, at time.Time, data []byte)
 			}
 		}
 		st.Hashes = nil
-		if agent == Cursor {
-			err = add(capture.Event{Kind: capture.KindPrompt, Text: p.Prompt})
-		}
-	case actResponse:
-		err = add(capture.Event{Kind: capture.KindResponse, Text: p.Text})
 	case actTool:
-		files := toolFiles(p.ToolInput)
-		st.Touched = appendNew(st.Touched, files...)
-		if agent == Cursor {
-			err = add(capture.Event{Kind: capture.KindToolCall, Tool: &capture.Tool{Name: p.ToolName, Status: "ok", Files: files}})
-		}
+		st.Touched = appendNew(st.Touched, toolFiles(p.ToolInput)...)
 	case actFileEdit:
 		st.Touched = appendNew(st.Touched, p.FilePath)
 	case actStop, actEnd:
 		st.Hashes = hashFiles(r.Root, st.Touched)
-		if agent == Cursor && p.Status == "aborted" {
-			if err := add(capture.Event{Kind: capture.KindInterruption, Attrs: map[string]string{"during": "turn"}}); err != nil {
-				return err
-			}
-		}
 		if act == actEnd {
 			end := now
 			session.EndedAt, session.HeadEnd = &end, repo.Current(ctx, r.Root).Head
 			err = add(capture.Event{Kind: capture.KindSessionEnd, Attrs: map[string]string{"reason": p.Reason}})
 		}
 		// The transcript holds the conversation; importing it is slow, so it runs in the background.
-		if p.TranscriptPath != "" && agent != Cursor {
-			_ = Background("capture", "transcript", "--agent", agent, "--path", p.TranscriptPath)
+		// A Cursor transcript names no directory, so the hook passes the workspace.
+		if p.TranscriptPath != "" {
+			_ = Background("capture", "transcript", "--agent", agent, "--path", p.TranscriptPath, "--cwd", cwd)
 		}
 		_ = Background("capture", "upload")
 	}

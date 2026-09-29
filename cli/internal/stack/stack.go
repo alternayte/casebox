@@ -11,11 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/alternayte/casebox/cli/internal/config"
 )
@@ -63,7 +65,37 @@ func Up(ctx context.Context, opts Options, out io.Writer) (Env, error) {
 	if err := saveEnv(filepath.Join(dir, ".env"), env); err != nil {
 		return nil, err
 	}
-	return env, compose(ctx, dir, out, "up", "--detach", "--wait", "--no-build", "--pull", "missing")
+	if err := compose(ctx, dir, out, "up", "--detach", "--wait", "--no-build", "--pull", "missing"); err != nil {
+		return nil, err
+	}
+	return env, waitForServer(ctx, fmt.Sprintf("http://localhost:%d/api/v1/auth/methods", opts.Port))
+}
+
+// waitForServer polls the API: compose reports the server as up once its process runs, before it
+// applies migrations and listens.
+func waitForServer(ctx context.Context, url string) error {
+	client := &http.Client{Timeout: 3 * time.Second}
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return err
+		}
+		if resp, err := client.Do(req); err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return errors.New("the server did not answer within 3 minutes; docker compose -p casebox logs server shows why")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
 }
 
 // Down stops the stack. With volumes, it also deletes the database.

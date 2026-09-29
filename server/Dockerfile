@@ -14,6 +14,8 @@ COPY --from=web /src/server/Casebox.Server/wwwroot server/Casebox.Server/wwwroot
 RUN dotnet publish server/Casebox.Server/Casebox.Server.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# Npgsql probes for Kerberos at start-up and logs an error when the library is missing.
+RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app ./
 USER app

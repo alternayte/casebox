@@ -34,27 +34,21 @@ func newHookCommand() *cobra.Command {
 			if err := hooks.Enqueue(args[0], args[1], os.Stdin); err != nil {
 				logError("hook "+args[0]+" "+args[1], err)
 			}
-			if args[0] == hooks.Cursor && isPermissionEvent(args[1]) {
-				fmt.Fprintln(cmd.OutOrStdout(), `{"continue":true}`)
-			}
 			return nil
 		},
 	}
 }
 
-// Cursor treats an empty answer from some hooks as a refusal.
-func isPermissionEvent(event string) bool { return event == "beforeSubmitPrompt" }
-
 // newCaptureCommand holds the background work the hooks start.
 func newCaptureCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "capture", Hidden: true}
 
-	var agent, path string
+	var agent, path, cwd string
 	transcript := &cobra.Command{
 		Use:  "transcript",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := importTranscript(cmd.Context(), agent, path); err != nil {
+			if err := importTranscript(cmd.Context(), agent, path, cwd); err != nil {
 				logError("capture transcript", err)
 			}
 			return nil
@@ -62,6 +56,7 @@ func newCaptureCommand() *cobra.Command {
 	}
 	transcript.Flags().StringVar(&agent, "agent", "", "")
 	transcript.Flags().StringVar(&path, "path", "", "")
+	transcript.Flags().StringVar(&cwd, "cwd", "", "")
 
 	uploadCmd := &cobra.Command{
 		Use:  "upload",
@@ -89,10 +84,13 @@ func newCaptureCommand() *cobra.Command {
 	return cmd
 }
 
-func importTranscript(ctx context.Context, agent, path string) error {
+func importTranscript(ctx context.Context, agent, path, cwd string) error {
 	parsed, err := importer.ParseFile(path, agent)
 	if err != nil || parsed.Subagent {
 		return err
+	}
+	if parsed.Cwd == "" {
+		parsed.Cwd = cwd
 	}
 	r, err := pipeline.Open(ctx, parsed.Cwd)
 	if err != nil {

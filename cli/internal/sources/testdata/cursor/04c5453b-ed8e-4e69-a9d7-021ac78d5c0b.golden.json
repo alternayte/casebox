@@ -1,0 +1,49 @@
+{
+  "Session": {
+    "id": "cursor-cli:04c5453b-ed8e-4e69-a9d7-021ac78d5c0b",
+    "agent": "cursor-cli",
+    "startedAt": "2026-09-29T06:03:00Z",
+    "endedAt": "2026-09-29T06:03:00Z",
+    "source": "import",
+    "person": ""
+  },
+  "Events": [
+    {
+      "seq": 0,
+      "at": "2026-09-29T06:03:00Z",
+      "kind": "prompt",
+      "text": "text-e19c8d6e"
+    },
+    {
+      "seq": 1,
+      "at": "2026-09-29T06:03:00Z",
+      "kind": "response",
+      "text": "text-0e93a15f"
+    },
+    {
+      "seq": 2,
+      "at": "2026-09-29T06:03:00Z",
+      "kind": "tool_call",
+      "tool": {
+        "name": "Write",
+        "files": [
+          "text-eacb41c5"
+        ]
+      }
+    },
+    {
+      "seq": 3,
+      "at": "2026-09-29T06:03:00Z",
+      "kind": "tool_call",
+      "tool": {
+        "name": "Shell"
+      }
+    },
+    {
+      "seq": 4,
+      "at": "2026-09-29T06:03:00Z",
+      "kind": "response",
+      "text": "text-a5b5aa95"
+    }
+  ]
+}

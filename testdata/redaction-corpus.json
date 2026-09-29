@@ -1,0 +1,166 @@
+{
+  "about": "Shared by the CLI (Go) and the server (C#) redaction tests. Each input must lose every 'absent' string and keep every 'present' string. The secrets are fake.",
+  "cases": [
+    {
+      "name": "private key",
+      "input": "key:\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ\n-----END OPENSSH PRIVATE KEY-----\ndone",
+      "absent": [
+        "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ"
+      ],
+      "present": [
+        "[redacted:private_key]",
+        "done"
+      ]
+    },
+    {
+      "name": "aws access key",
+      "input": "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
+      "absent": [
+        "AKIAIOSFODNN7EXAMPLE"
+      ],
+      "present": [
+        "export"
+      ]
+    },
+    {
+      "name": "github classic token",
+      "input": "use ghp_1234567890abcdefghijklmnopqrstuvwxyzAB for the api",
+      "absent": [
+        "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"
+      ],
+      "present": [
+        "[redacted:github_token]",
+        "for the api"
+      ]
+    },
+    {
+      "name": "github fine-grained token",
+      "input": "token github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz here",
+      "absent": [
+        "github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz"
+      ],
+      "present": [
+        "here"
+      ]
+    },
+    {
+      "name": "slack token",
+      "input": "SLACK=xoxb-123456789012-abcdefghijkl",
+      "absent": [
+        "xoxb-123456789012-abcdefghijkl"
+      ],
+      "present": []
+    },
+    {
+      "name": "anthropic key",
+      "input": "ANTHROPIC_API_KEY is sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123",
+      "absent": [
+        "sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123"
+      ],
+      "present": [
+        "ANTHROPIC_API_KEY is"
+      ]
+    },
+    {
+      "name": "openai key",
+      "input": "the key sk-proj-abcdefghijklmnopqrstuvwxyz0123 works",
+      "absent": [
+        "sk-proj-abcdefghijklmnopqrstuvwxyz0123"
+      ],
+      "present": [
+        "works"
+      ]
+    },
+    {
+      "name": "jwt",
+      "input": "cookie eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U end",
+      "absent": [
+        "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+      ],
+      "present": [
+        "end"
+      ]
+    },
+    {
+      "name": "bearer header",
+      "input": "Authorization: Bearer abcdefghijklmnop1234567890",
+      "absent": [
+        "abcdefghijklmnop1234567890"
+      ],
+      "present": [
+        "Authorization: Bearer [redacted:bearer]"
+      ]
+    },
+    {
+      "name": "url credentials",
+      "input": "postgres://app:hunter2secret@db.internal:5432/prod",
+      "absent": [
+        "hunter2secret",
+        "app:"
+      ],
+      "present": [
+        "db.internal:5432/prod"
+      ]
+    },
+    {
+      "name": "password assignment",
+      "input": "DB_PASSWORD=correct-horse-battery",
+      "absent": [
+        "correct-horse-battery"
+      ],
+      "present": [
+        "DB_PASSWORD="
+      ]
+    },
+    {
+      "name": "quoted secret in json",
+      "input": "{\"client_secret\": \"s3cr3t-value-123\"}",
+      "absent": [
+        "s3cr3t-value-123"
+      ],
+      "present": [
+        "client_secret"
+      ]
+    },
+    {
+      "name": "yaml token",
+      "input": "api_key: abcd1234efgh",
+      "absent": [
+        "abcd1234efgh"
+      ],
+      "present": [
+        "api_key:"
+      ]
+    },
+    {
+      "name": "home path",
+      "input": "open /Users/jdoe/src/app/main.go and /home/jdoe/.bashrc",
+      "absent": [
+        "jdoe"
+      ],
+      "present": [
+        "~/src/app/main.go",
+        "~/.bashrc"
+      ]
+    },
+    {
+      "name": "bare key assignment",
+      "input": "key=supersecretvalue and private_key: abcd1234",
+      "absent": [
+        "supersecretvalue",
+        "abcd1234"
+      ],
+      "present": [
+        "key="
+      ]
+    },
+    {
+      "name": "plain text stays",
+      "input": "The tokenizer splits the input into tokens and keys are sorted.",
+      "absent": [],
+      "present": [
+        "The tokenizer splits the input into tokens and keys are sorted."
+      ]
+    }
+  ]
+}

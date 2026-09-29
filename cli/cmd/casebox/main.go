@@ -25,5 +25,7 @@ func newRoot() *cobra.Command {
 		SilenceErrors: false,
 	}
 	root.SetVersionTemplate(fmt.Sprintf("casebox %s\n", buildinfo.Version))
+	root.AddCommand(newUpCommand(), newDownCommand(), newPauseCommand(), newResumeCommand(), newLinkCommand(),
+		newImportCommand(), newHookCommand(), newCaptureCommand(), newInitCommand(), newJoinCommand(), newDoctorCommand())
 	return root
 }

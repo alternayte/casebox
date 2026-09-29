@@ -1,0 +1,160 @@
+// Package stack runs the local trial stack: the server, QueueBox and Postgres in Docker, from
+// the compose files embedded in the binary.
+package stack
+
+import (
+	"bufio"
+	"context"
+	"crypto/rand"
+	"embed"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/alternayte/casebox/cli/internal/config"
+)
+
+//go:embed assets/compose.yaml assets/queuebox.yml
+var assets embed.FS
+
+// Project is the compose project name.
+const Project = "casebox"
+
+// Options configure casebox up.
+type Options struct {
+	Port    int
+	Image   string // overrides the server image; empty uses the CLI's version
+	Version string
+}
+
+// Env holds the stack's settings and generated secrets, kept in ~/.casebox/stack/.env so a
+// restart keeps the same passwords.
+type Env map[string]string
+
+// Up writes the compose files, fills in missing secrets and starts the stack, waiting until
+// every service is healthy.
+func Up(ctx context.Context, opts Options, out io.Writer) (Env, error) {
+	dir, err := prepare()
+	if err != nil {
+		return nil, err
+	}
+	env, err := loadEnv(filepath.Join(dir, ".env"))
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range []string{"CASEBOX_DB_PASSWORD", "CASEBOX_ADMIN_PASSWORD", "CASEBOX_EFFECTS_TOKEN", "CASEBOX_POLL_TOKEN", "CASEBOX_QUEUEBOX_ADMIN_TOKEN"} {
+		if env[key] == "" {
+			env[key] = secret()
+		}
+	}
+	env["CASEBOX_PORT"] = fmt.Sprint(opts.Port)
+	env["CASEBOX_VERSION"] = opts.Version
+	if opts.Image != "" {
+		env["CASEBOX_SERVER_IMAGE"] = opts.Image
+	} else {
+		delete(env, "CASEBOX_SERVER_IMAGE")
+	}
+	if err := saveEnv(filepath.Join(dir, ".env"), env); err != nil {
+		return nil, err
+	}
+	return env, compose(ctx, dir, out, "up", "--detach", "--wait", "--no-build", "--pull", "missing")
+}
+
+// Down stops the stack. With volumes, it also deletes the database.
+func Down(ctx context.Context, volumes bool, out io.Writer) error {
+	dir, err := prepare()
+	if err != nil {
+		return err
+	}
+	args := []string{"down"}
+	if volumes {
+		args = append(args, "--volumes")
+	}
+	return compose(ctx, dir, out, args...)
+}
+
+func prepare() (string, error) {
+	dir, err := config.Path("stack")
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	for _, name := range []string{"compose.yaml", "queuebox.yml"} {
+		data, err := assets.ReadFile("assets/" + name)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+			return "", fmt.Errorf("write %s: %w", name, err)
+		}
+	}
+	return dir, nil
+}
+
+func compose(ctx context.Context, dir string, out io.Writer, args ...string) error {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return errors.New("docker is not installed or not on PATH; casebox up needs Docker with the compose plugin")
+	}
+	base := []string{"compose", "--project-name", Project, "--env-file", filepath.Join(dir, ".env"), "--file", filepath.Join(dir, "compose.yaml")}
+	cmd := exec.CommandContext(ctx, "docker", append(base, args...)...)
+	cmd.Dir = dir
+	cmd.Stdout = out
+	cmd.Stderr = out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("docker compose %s: %w", args[0], err)
+	}
+	return nil
+}
+
+func secret() string {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b)
+}
+
+func loadEnv(path string) (Env, error) {
+	env := Env{}
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return env, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if key, value, ok := strings.Cut(line, "="); ok {
+			env[key] = value
+		}
+	}
+	return env, scanner.Err()
+}
+
+func saveEnv(path string, env Env) error {
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString("# Written by casebox up. The secrets stay the same across restarts.\n")
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s=%s\n", k, env[k])
+	}
+	return os.WriteFile(path, []byte(b.String()), 0o600)
+}

@@ -1,0 +1,218 @@
+{
+  "Session": {
+    "id": "codex:01a07326-0a14-7970-995d-8179b6b3cce5",
+    "agent": "codex",
+    "agentVersion": "0.153.4",
+    "model": "codex-auto-review",
+    "branch": "main",
+    "headStart": "0123456789abcdef0123456789abcdef01234567",
+    "startedAt": "2026-09-05T19:58:39.739Z",
+    "endedAt": "2026-09-05T20:16:30.416Z",
+    "source": "import",
+    "person": ""
+  },
+  "Cwd": "/work/app",
+  "Remote": "git@github.com:acme/app.git",
+  "Subagent": true,
+  "Events": [
+    {
+      "seq": 0,
+      "at": "2026-09-05T19:58:39.747Z",
+      "kind": "prompt",
+      "text": "text-25b438df"
+    },
+    {
+      "seq": 1,
+      "at": "2026-09-05T19:58:43.739Z",
+      "kind": "response",
+      "text": "text-2a0f124c"
+    },
+    {
+      "seq": 2,
+      "at": "2026-09-05T20:00:09.998Z",
+      "kind": "prompt",
+      "text": "text-eb046a5c"
+    },
+    {
+      "seq": 3,
+      "at": "2026-09-05T20:00:12.89Z",
+      "kind": "response",
+      "text": "text-40d4bbb6",
+      "usage": {
+        "inputTokens": 13285,
+        "outputTokens": 168,
+        "cacheReadTokens": 4864
+      }
+    },
+    {
+      "seq": 4,
+      "at": "2026-09-05T20:01:36.178Z",
+      "kind": "prompt",
+      "text": "text-7625cf1c"
+    },
+    {
+      "seq": 5,
+      "at": "2026-09-05T20:01:39.951Z",
+      "kind": "response",
+      "text": "text-d027b4ee",
+      "usage": {
+        "inputTokens": 19275,
+        "outputTokens": 111,
+        "cacheReadTokens": 4864
+      }
+    },
+    {
+      "seq": 6,
+      "at": "2026-09-05T20:04:46.029Z",
+      "kind": "prompt",
+      "text": "text-73c67e01"
+    },
+    {
+      "seq": 7,
+      "at": "2026-09-05T20:04:50.351Z",
+      "kind": "response",
+      "text": "text-10028257",
+      "usage": {
+        "inputTokens": 23529,
+        "outputTokens": 153,
+        "cacheReadTokens": 18176
+      }
+    },
+    {
+      "seq": 8,
+      "at": "2026-09-05T20:06:08.085Z",
+      "kind": "prompt",
+      "text": "text-ca6aebc5"
+    },
+    {
+      "seq": 9,
+      "at": "2026-09-05T20:06:10.903Z",
+      "kind": "response",
+      "text": "text-8de78f13",
+      "usage": {
+        "inputTokens": 32678,
+        "outputTokens": 137,
+        "cacheReadTokens": 23296
+      }
+    },
+    {
+      "seq": 10,
+      "at": "2026-09-05T20:07:05.509Z",
+      "kind": "prompt",
+      "text": "text-1816ebfc"
+    },
+    {
+      "seq": 11,
+      "at": "2026-09-05T20:07:08.606Z",
+      "kind": "response",
+      "text": "text-f892eaa0",
+      "usage": {
+        "inputTokens": 38538,
+        "outputTokens": 105,
+        "cacheReadTokens": 32512
+      }
+    },
+    {
+      "seq": 12,
+      "at": "2026-09-05T20:09:02.226Z",
+      "kind": "prompt",
+      "text": "text-d5b07e2f"
+    },
+    {
+      "seq": 13,
+      "at": "2026-09-05T20:09:05.614Z",
+      "kind": "response",
+      "text": "text-82c40e18",
+      "usage": {
+        "inputTokens": 41064,
+        "outputTokens": 105,
+        "cacheReadTokens": 37632
+      }
+    },
+    {
+      "seq": 14,
+      "at": "2026-09-05T20:09:56.707Z",
+      "kind": "prompt",
+      "text": "text-26c5e9de"
+    },
+    {
+      "seq": 15,
+      "at": "2026-09-05T20:09:59.117Z",
+      "kind": "response",
+      "text": "text-54e59998",
+      "usage": {
+        "inputTokens": 45969,
+        "outputTokens": 83,
+        "cacheReadTokens": 40704
+      }
+    },
+    {
+      "seq": 16,
+      "at": "2026-09-05T20:11:23.071Z",
+      "kind": "prompt",
+      "text": "text-435854b2"
+    },
+    {
+      "seq": 17,
+      "at": "2026-09-05T20:11:26.23Z",
+      "kind": "response",
+      "text": "text-1909f69d",
+      "usage": {
+        "inputTokens": 49677,
+        "outputTokens": 85,
+        "cacheReadTokens": 45824
+      }
+    },
+    {
+      "seq": 18,
+      "at": "2026-09-05T20:12:36.428Z",
+      "kind": "prompt",
+      "text": "text-1c0f9097"
+    },
+    {
+      "seq": 19,
+      "at": "2026-09-05T20:12:39.012Z",
+      "kind": "response",
+      "text": "text-6bb1fb20",
+      "usage": {
+        "inputTokens": 54247,
+        "outputTokens": 99,
+        "cacheReadTokens": 48896
+      }
+    },
+    {
+      "seq": 20,
+      "at": "2026-09-05T20:14:42.939Z",
+      "kind": "prompt",
+      "text": "text-5a8ebfd0"
+    },
+    {
+      "seq": 21,
+      "at": "2026-09-05T20:14:45.54Z",
+      "kind": "response",
+      "text": "text-01459fcf",
+      "usage": {
+        "inputTokens": 58100,
+        "outputTokens": 84,
+        "cacheReadTokens": 54016
+      }
+    },
+    {
+      "seq": 22,
+      "at": "2026-09-05T20:16:27.259Z",
+      "kind": "prompt",
+      "text": "text-7eb5b994"
+    },
+    {
+      "seq": 23,
+      "at": "2026-09-05T20:16:30.361Z",
+      "kind": "response",
+      "text": "text-e4469a6f",
+      "usage": {
+        "inputTokens": 63610,
+        "outputTokens": 88,
+        "cacheReadTokens": 57088
+      }
+    }
+  ]
+}

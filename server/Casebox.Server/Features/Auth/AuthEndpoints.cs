@@ -20,9 +20,15 @@ public static class AuthEndpoints
 
     public sealed record RoleChange(Role Role);
 
+    public sealed record Methods(bool Local, bool Oidc);
+
     public static void MapAuth(this RouteGroupBuilder api)
     {
         var auth = api.MapGroup("/auth").WithTags("Auth");
+
+        // Which sign-in methods the login page offers.
+        auth.MapGet("/methods", (IOptions<CaseboxOptions> options) =>
+            Results.Ok(new Methods(!string.IsNullOrEmpty(options.Value.LocalAdmin.Password), options.Value.Oidc.Enabled))).AllowAnonymous();
 
         auth.MapPost("/local", async (LocalLogin body, IOptions<CaseboxOptions> options, AccountStore accounts, HttpContext http) =>
         {

@@ -5,6 +5,7 @@ using Azure.Identity;
 using Casebox.Server;
 using Casebox.Server.Features.Auth;
 using Casebox.Server.Features.Blobs;
+using Casebox.Server.Features.Capture;
 using Casebox.Server.Features.Effects;
 using Casebox.Server.Features.Health;
 using Casebox.Server.Features.Inbox;
@@ -47,12 +48,18 @@ builder.Services.AddCaseboxAuth(options);
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // A stolen ingest token can write only its organisation's sessions, and only this fast.
+    o.AddPolicy(IngestRateLimit, http => RateLimitPartition.GetTokenBucketLimiter(
+        http.User.FindFirst(CaseboxClaims.Token)?.Value ?? "anonymous",
+        _ => new TokenBucketRateLimiterOptions { TokenLimit = 600, TokensPerPeriod = 300, ReplenishmentPeriod = TimeSpan.FromMinutes(1) }));
     o.AddPolicy(AuthEndpoints.LoginRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
         http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
 });
 
 builder.Services.AddSingleton<JobQueue>();
+builder.Services.AddScoped<Identities>();
+builder.Services.AddScoped<CaptureStore>();
 builder.Services.AddSingleton<BlobStore>(sp => options.Blobs.Store switch
 {
     "postgres" => new PostgresBlobStore(sp.GetRequiredService<NpgsqlDataSource>(), sp.GetRequiredService<TimeProvider>()),
@@ -98,9 +105,13 @@ internalRoutes.MapHealthChecks("/healthz/ready", new HealthCheckOptions { Predic
 
 var api = app.MapGroup("/api/v1").RequireCsrf();
 api.MapAuth();
+api.MapDeviceLogin();
 api.MapOrg();
 api.MapWorkspaces();
 api.MapTokens();
+
+app.MapGroup("").RequireRateLimiting(IngestRateLimit).MapIngest();
+app.MapGroup("").RequireRateLimiting(IngestRateLimit).MapOtlp();
 
 var worker = app.MapGroup("/worker/v1");
 worker.MapWorkerJobs();
@@ -144,4 +155,7 @@ static AmazonS3Client S3Client(CaseboxOptions.BlobOptions blobs)
         : new AmazonS3Client(config);
 }
 
-public partial class Program;
+public partial class Program
+{
+    private const string IngestRateLimit = "ingest";
+}

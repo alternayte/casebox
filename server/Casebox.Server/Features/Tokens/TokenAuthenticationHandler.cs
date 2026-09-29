@@ -11,7 +11,8 @@ public sealed class TokenAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    TokenStore tokens) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    TokenStore tokens,
+    AccountStore accounts) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "casebox-token";
 
@@ -23,13 +24,24 @@ public sealed class TokenAuthenticationHandler(
         var token = await tokens.AuthenticateAsync(header["Bearer ".Length..].Trim(), Context.RequestAborted);
         if (token is null) return AuthenticateResult.Fail("The token is unknown or revoked.");
 
-        var identity = new ClaimsIdentity(
-            [
-                new Claim(CaseboxClaims.Org, token.OrgId),
-                new Claim(CaseboxClaims.Token, token.Id),
-                new Claim(CaseboxClaims.TokenKind, TokenStore.KindName(token.Kind)),
-            ],
-            SchemeName);
+        var claims = new List<Claim>
+        {
+            new(CaseboxClaims.Org, token.OrgId),
+            new(CaseboxClaims.Token, token.Id),
+            new(CaseboxClaims.TokenKind, TokenStore.KindName(token.Kind)),
+        };
+
+        // A CLI token acts as its account, with the role the account has now.
+        if (token.AccountId is { } accountId)
+        {
+            var role = await accounts.RoleOfAsync(token.OrgId, accountId, Context.RequestAborted);
+            if (role is null) return AuthenticateResult.Fail("The token's account no longer exists.");
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, accountId));
+            claims.Add(new Claim(CaseboxClaims.Account, accountId));
+            claims.Add(new Claim(CaseboxClaims.Role, AccountStore.RoleName(role.Value)));
+        }
+
+        var identity = new ClaimsIdentity(claims, SchemeName);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));
     }
 }

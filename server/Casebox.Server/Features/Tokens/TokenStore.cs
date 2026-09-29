@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
 using Casebox.Server.Features.Orgs;
@@ -7,37 +8,44 @@ using Npgsql;
 
 namespace Casebox.Server.Features.Tokens;
 
-public enum TokenKind { Worker, Ingest }
+public enum TokenKind { Worker, Ingest, Cli }
 
 public sealed record TokenInfo(string Id, TokenKind Kind, string Name, string CreatedBy, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt, DateTimeOffset? RevokedAt);
 
 public sealed record IssuedToken(TokenInfo Info, string Secret);
 
-public sealed record AuthenticatedToken(string Id, string OrgId, TokenKind Kind);
+public sealed record AuthenticatedToken(string Id, string OrgId, TokenKind Kind, string? AccountId);
 
-// Worker and ingest tokens. A token is shown once, when it is issued; only its SHA-256 is stored.
-// Issuing and revoking are audited as org events in the same transaction.
+// Worker, ingest and CLI tokens. A token is shown once, when it is issued; only its SHA-256 is
+// stored. Issuing and revoking are audited as org events in the same transaction. A CLI token
+// belongs to one account and acts with that account's current role.
 public sealed class TokenStore(NpgsqlDataSource dataSource, TimeProvider clock)
 {
-    public async Task<IssuedToken> IssueAsync(string orgId, TokenKind kind, string name, string createdBy, IEventStore store, CancellationToken ct)
+    public async Task<IssuedToken> IssueAsync(string orgId, TokenKind kind, string name, string createdBy, IEventStore store, CancellationToken ct, string? accountId = null)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        var issued = await IssueAsync(transaction, orgId, kind, name, createdBy, accountId, store, ct);
+        await transaction.CommitAsync(ct);
+        return issued;
+    }
+
+    public async Task<IssuedToken> IssueAsync(DbTransaction transaction, string orgId, TokenKind kind, string name, string createdBy, string? accountId, IEventStore store, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length > 100) throw new DomainException("A token name is 1 to 100 characters.");
+        if ((kind == TokenKind.Cli) != (accountId is not null)) throw new InvalidOperationException("A CLI token needs an account, and only a CLI token has one.");
         var id = Ids.New();
         var secret = $"cbx_{KindName(kind)}_{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32))}";
         var now = clock.GetUtcNow();
 
-        await using var connection = await dataSource.OpenConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(ct);
-        await connection.ExecuteAsync(new CommandDefinition(
+        await transaction.Connection!.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO casebox.api_tokens (id, org_id, kind, name, token_hash, created_by, created_at)
-            VALUES (@Id, @Org, @Kind, @Name, @Hash, @CreatedBy, @Now)
+            INSERT INTO casebox.api_tokens (id, org_id, kind, name, token_hash, created_by, created_at, account_id)
+            VALUES (@Id, @Org, @Kind, @Name, @Hash, @CreatedBy, @Now, @Account)
             """,
-            new { Id = id, Org = orgId, Kind = KindName(kind), Name = name.Trim(), Hash = Hash(secret), CreatedBy = createdBy, Now = now },
+            new { Id = id, Org = orgId, Kind = KindName(kind), Name = name.Trim(), Hash = Hash(secret), CreatedBy = createdBy, Now = now, Account = accountId },
             transaction, cancellationToken: ct));
         await store.UseTransaction(transaction).Append(Organisation.StreamId, ExpectedVersion.Any, [new OrgEvents.TokenIssued(id, KindName(kind), name.Trim())]);
-        await transaction.CommitAsync(ct);
-
         return new IssuedToken(new TokenInfo(id, kind, name.Trim(), createdBy, now, null, null), secret);
     }
 
@@ -74,15 +82,15 @@ public sealed class TokenStore(NpgsqlDataSource dataSource, TimeProvider clock)
     {
         if (!secret.StartsWith("cbx_", StringComparison.Ordinal)) return null;
         await using var connection = await dataSource.OpenConnectionAsync(ct);
-        var row = await connection.QuerySingleOrDefaultAsync<(string Id, string OrgId, string Kind)?>(new CommandDefinition(
+        var row = await connection.QuerySingleOrDefaultAsync<(string Id, string OrgId, string Kind, string? AccountId)?>(new CommandDefinition(
             """
             UPDATE casebox.api_tokens
             SET last_used_at = CASE WHEN last_used_at IS NULL OR last_used_at < @Now - interval '1 minute' THEN @Now ELSE last_used_at END
             WHERE token_hash = @Hash AND revoked_at IS NULL
-            RETURNING id, org_id, kind
+            RETURNING id, org_id, kind, account_id
             """,
             new { Hash = Hash(secret), Now = clock.GetUtcNow() }, cancellationToken: ct));
-        return row is { } r ? new AuthenticatedToken(r.Id, r.OrgId, ParseKind(r.Kind)) : null;
+        return row is { } r ? new AuthenticatedToken(r.Id, r.OrgId, ParseKind(r.Kind), r.AccountId) : null;
     }
 
     public static string KindName(TokenKind kind) => kind.ToString().ToLowerInvariant();

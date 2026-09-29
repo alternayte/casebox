@@ -21,7 +21,7 @@ public sealed class CrossTenantTests(StackFixture stack)
 
     private sealed record Sample(string Method, string Path, object? Body, Caller Caller);
 
-    private enum Caller { Admin, Worker }
+    private enum Caller { Admin, Worker, Ingest }
 
     [Fact]
     public void Every_API_route_has_a_cross_tenant_sample()
@@ -39,10 +39,11 @@ public sealed class CrossTenantTests(StackFixture stack)
         var before = await SnapshotAsync(a);
         var admin = await stack.ServerB.AdminAsync();
         var worker = await stack.ServerB.TokenClientAsync(TokenKind.Worker);
+        var ingest = await stack.ServerB.TokenClientAsync(TokenKind.Ingest);
 
         foreach (var sample in Samples(a))
         {
-            var client = sample.Caller == Caller.Admin ? admin : worker;
+            var client = sample.Caller switch { Caller.Admin => admin, Caller.Worker => worker, _ => ingest };
             using var request = new HttpRequestMessage(new HttpMethod(sample.Method), sample.Path);
             if (sample.Body is byte[] bytes) request.Content = new ByteArrayContent(bytes);
             else if (sample.Body is not null) request.Content = JsonContent.Create(sample.Body);
@@ -60,7 +61,7 @@ public sealed class CrossTenantTests(StackFixture stack)
         Assert.Equal(before, await SnapshotAsync(a));
     }
 
-    private sealed record Resources(string Workspace, string TokenId, string JobId, string BlobHash, string AccountId)
+    private sealed record Resources(string Workspace, string TokenId, string JobId, string BlobHash, string AccountId, string SessionId = "claude-code:alpha-session")
     {
         public const string Repo = "github.com/alpha-secret/repo";
         public const string TokenName = "alpha-secret-token";
@@ -71,6 +72,11 @@ public sealed class CrossTenantTests(StackFixture stack)
     private static IEnumerable<Sample> Samples(Resources a) =>
     [
         new("POST", "/api/v1/auth/local", new { password = "wrong" }, Caller.Admin),
+        new("GET", "/api/v1/auth/methods", null, Caller.Admin),
+        new("POST", "/api/v1/auth/device/code", new { }, Caller.Admin),
+        new("POST", "/api/v1/auth/device/approve", new { userCode = "BCDF-GHJK" }, Caller.Admin),
+        new("POST", "/api/v1/auth/device/token", new { deviceCode = "unknown" }, Caller.Admin),
+        new("POST", "/api/v1/devices", null, Caller.Admin),
         new("GET", "/api/v1/auth/oidc/login", null, Caller.Admin),
         new("POST", "/api/v1/auth/logout", null, Caller.Worker),
         new("GET", "/api/v1/auth/csrf", null, Caller.Admin),
@@ -96,12 +102,20 @@ public sealed class CrossTenantTests(StackFixture stack)
         new("POST", $"/worker/v1/jobs/{a.JobId}/fail", new { workerId = "a-worker", error = "x", retryable = false }, Caller.Worker),
         new("GET", $"/worker/v1/blobs/{a.BlobHash}", null, Caller.Worker),
         new("PUT", $"/worker/v1/blobs/{a.BlobHash}", Encoding.UTF8.GetBytes("not A's bytes"), Caller.Worker),
+        new("GET", "/ingest/v1/config", null, Caller.Ingest),
+        new("POST", "/ingest/v1/sessions", new
+        {
+            session = new { id = a.SessionId, agent = "claude-code", source = "import", person = "⟦cbx:email:b@example.com⟧", startedAt = DateTimeOffset.UtcNow },
+            events = new[] { new { seq = 0, at = DateTimeOffset.UtcNow, kind = "prompt", text = "B writes into its own session" } },
+        }, Caller.Ingest),
+        new("POST", "/v1/logs", new { resourceLogs = Array.Empty<object>() }, Caller.Ingest),
+        new("POST", "/v1/metrics", new { resourceMetrics = Array.Empty<object>() }, Caller.Ingest),
     ];
 
     private IEnumerable<string> Routes() =>
         stack.ServerA.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
-            .Where(e => e.RoutePattern.RawText is { } p && (p.StartsWith("/api/v1", StringComparison.Ordinal) || p.StartsWith("/worker/v1", StringComparison.Ordinal)))
+            .Where(e => e.RoutePattern.RawText is { } p && new[] { "/api/v1", "/worker/v1", "/ingest/v1", "/v1/" }.Any(prefix => p.StartsWith(prefix, StringComparison.Ordinal)))
             .SelectMany(e => (e.Metadata.GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()?.HttpMethods ?? ["ANY"]).Select(m => Route(m, e.RoutePattern.RawText!)))
             .Distinct();
 
@@ -109,8 +123,9 @@ public sealed class CrossTenantTests(StackFixture stack)
     private static string Route(string method, string path)
     {
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var known = new[] { "api", "v1", "worker", "auth", "local", "oidc", "login", "logout", "csrf", "me", "accounts", "role", "org", "settings",
-            "workspaces", "repos", "recipe", "validation", "confirmation", "tokens", "jobs", "lease", "heartbeat", "complete", "fail", "blobs" };
+        var known = new[] { "api", "v1", "worker", "auth", "local", "oidc", "login", "logout", "csrf", "me", "methods", "device", "code", "approve", "token", "devices", "accounts", "role", "org", "settings",
+            "workspaces", "repos", "recipe", "validation", "confirmation", "tokens", "jobs", "lease", "heartbeat", "complete", "fail", "blobs",
+            "ingest", "config", "sessions", "logs", "metrics" };
         var normalized = new List<string>();
         foreach (var s in segments)
         {
@@ -160,6 +175,7 @@ public sealed class CrossTenantTests(StackFixture stack)
             await db.QuerySingleAsync<string>("SELECT status || attempts FROM casebox.jobs WHERE id = @Id", new { Id = a.JobId }),
             await db.QuerySingleAsync<string>("SELECT role FROM casebox.accounts WHERE id = @Id", new { Id = a.AccountId }),
             await db.QuerySingleAsync<string>("SELECT count(*)::text FROM deedbox.events WHERE tenant_id = @Org AND stream_id = @Stream", new { Org = StackFixture.OrgA, Stream = $"workspace:{a.Workspace}" }),
+            await db.QuerySingleAsync<string>("SELECT count(*)::text FROM casebox.session_events WHERE org_id = @Org AND session_id = @Id", new { Org = StackFixture.OrgA, Id = a.SessionId }),
         };
         return string.Join('|', parts);
     }

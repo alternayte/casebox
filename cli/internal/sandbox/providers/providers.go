@@ -6,9 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/alternayte/casebox/cli/internal/sandbox"
 	"github.com/alternayte/casebox/cli/internal/sandbox/daytona"
@@ -51,8 +49,8 @@ func Available(ctx context.Context) (sandbox.Provider, string, error) {
 	}
 	switch name {
 	case docker.Name:
-		if out, err := exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}}").CombinedOutput(); err != nil {
-			return nil, "", fmt.Errorf("docker does not answer (%s)", firstLine(out, err))
+		if err := p.(*docker.Provider).Check(ctx); err != nil {
+			return nil, "", err
 		}
 	}
 	n, _ := strconv.Atoi(os.Getenv("CASEBOX_SANDBOX_CONCURRENCY"))
@@ -60,13 +58,4 @@ func Available(ctx context.Context) (sandbox.Provider, string, error) {
 		n = 2
 	}
 	return sandbox.Limit(p, n), name, nil
-}
-
-func firstLine(out []byte, err error) string {
-	for _, line := range strings.Split(string(out), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			return line
-		}
-	}
-	return err.Error()
 }

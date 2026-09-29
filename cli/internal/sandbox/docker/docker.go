@@ -670,3 +670,16 @@ func lastLines(s string, n int) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// Check says whether this machine's Docker daemon can run sandboxes: it must answer, and run
+// Linux containers (a Windows daemon in Windows-container mode cannot).
+func (p *Provider) Check(ctx context.Context) error {
+	out, err := exec.CommandContext(ctx, p.bin(), "info", "--format", "{{.OSType}}").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker does not answer: %s", strings.TrimSpace(string(out)))
+	}
+	if os := strings.TrimSpace(string(out)); os != "linux" {
+		return fmt.Errorf("the Docker daemon runs %s containers; Casebox sandboxes need Linux containers", os)
+	}
+	return nil
+}

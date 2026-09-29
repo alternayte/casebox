@@ -2,7 +2,6 @@ package docker_test
 
 import (
 	"context"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -13,8 +12,9 @@ import (
 func TestConformance(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if out, err := exec.CommandContext(ctx, "docker", "info", "--format", "{{.ServerVersion}}").CombinedOutput(); err != nil {
-		t.Skipf("no Docker daemon, so the Docker provider is not tested: docker info: %v: %s", err, out)
+	p := docker.New()
+	if err := p.Check(ctx); err != nil {
+		t.Skipf("the Docker provider is not tested here: %v", err)
 	}
-	conformance.Run(t, docker.New())
+	conformance.Run(t, p)
 }

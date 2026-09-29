@@ -1,0 +1,65 @@
+# QueueBox for Casebox: every side effect leaves through the outbox, and every webhook and poll
+# result enters through the inbox. Secrets come from the environment.
+
+server:
+  httpPort: 8080
+  managementPort: 9090
+
+# The URL, user and password come from QUEUEBOX_DATABASE_URL, _USERNAME and _PASSWORD.
+database:
+  type: postgresql
+  migrate: true
+
+outbox:
+  # Retries back off exponentially; the eighth failure dead-letters the row.
+  maxAttempts: 8
+
+inbox:
+  basePath: /inbox
+  relay:
+    enabled: false
+
+admin:
+  enabled: true
+  auth:
+    type: bearer
+    token: ${CASEBOX_QUEUEBOX_ADMIN_TOKEN}
+
+# One destination per effect kind: the server's internal effects endpoint on its management port.
+destinations:
+  effect-proposal-pr:
+    type: http
+    baseUrl: ${CASEBOX_EFFECTS_URL}
+    path: /internal/effects/proposal-pr
+    auth: { type: header, headerName: X-Casebox-Effects-Token, headerValue: "${CASEBOX_EFFECTS_TOKEN}" }
+  effect-ci-comment:
+    type: http
+    baseUrl: ${CASEBOX_EFFECTS_URL}
+    path: /internal/effects/ci-comment
+    auth: { type: header, headerName: X-Casebox-Effects-Token, headerValue: "${CASEBOX_EFFECTS_TOKEN}" }
+  effect-notify:
+    type: http
+    baseUrl: ${CASEBOX_EFFECTS_URL}
+    path: /internal/effects/notify
+    auth: { type: header, headerName: X-Casebox-Effects-Token, headerValue: "${CASEBOX_EFFECTS_TOKEN}" }
+
+routes:
+  - topicPattern: "effect.proposal_pr"
+    destination: effect-proposal-pr
+  - topicPattern: "effect.ci_comment"
+    destination: effect-ci-comment
+  - topicPattern: "effect.notify"
+    destination: effect-notify
+
+sources:
+  # The server's GitHub and Jira pollers. A repeated poll of the same state has the same key and
+  # is stored once.
+  poll:
+    type: http
+    path: /poll
+    idempotencyKeyPath: $.key
+    eventTypePath: $.type
+    consumption: pull
+    auth:
+      type: bearer
+      token: ${CASEBOX_POLL_TOKEN}

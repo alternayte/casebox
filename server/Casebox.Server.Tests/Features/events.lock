@@ -1,0 +1,16 @@
+# Deedbox event contracts. EventContracts.Verify writes this file; commit it.
+
+stream org (Organisation)
+  org.created v1 { name: string, settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2} } }
+  org.member_role_changed v1 { accountId: string, role: enum{Viewer=0, Member=1, Admin=2, Owner=3} }
+  org.settings_changed v1 { settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2} } }
+  org.token_issued v1 { kind: string, name: string, tokenId: string }
+  org.token_revoked v1 { tokenId: string }
+
+stream workspace (Workspace)
+  workspace.created v1 { name: string }
+  workspace.recipe_confirmed v1 { hash: string }
+  workspace.recipe_proposed v1 { hash: string, recipe: string }
+  workspace.recipe_validated v1 { hash: string, passed: bool, reportBlob: string? }
+  workspace.repo_added v1 { repo: string }
+  workspace.repo_removed v1 { repo: string }

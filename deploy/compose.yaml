@@ -20,14 +20,21 @@ services:
   queuebox:
     image: ghcr.io/alternayte/queuebox:0.5.0
     environment:
+      QUEUEBOX_CONFIG_FILE: /etc/queuebox/queuebox.yml
       QUEUEBOX_DATABASE_URL: jdbc:postgresql://postgres:5432/casebox
       QUEUEBOX_DATABASE_USERNAME: casebox
       QUEUEBOX_DATABASE_PASSWORD: ${CASEBOX_DB_PASSWORD:-casebox}
+      CASEBOX_QUEUEBOX_ADMIN_TOKEN: ${CASEBOX_QUEUEBOX_ADMIN_TOKEN:?set CASEBOX_QUEUEBOX_ADMIN_TOKEN}
+      CASEBOX_EFFECTS_URL: http://server:8081
+      CASEBOX_EFFECTS_TOKEN: ${CASEBOX_EFFECTS_TOKEN:?set CASEBOX_EFFECTS_TOKEN}
+      CASEBOX_POLL_TOKEN: ${CASEBOX_POLL_TOKEN:?set CASEBOX_POLL_TOKEN}
+    volumes:
+      - ./queuebox.yml:/etc/queuebox/queuebox.yml:ro
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -40,6 +47,12 @@ services:
     environment:
       ConnectionStrings__Casebox: Host=postgres;Database=casebox;Username=casebox;Password=${CASEBOX_DB_PASSWORD:-casebox}
       ASPNETCORE_URLS: http://+:8080
+      Casebox__Keys__Mode: database
+      Casebox__LocalAdmin__Password: ${CASEBOX_ADMIN_PASSWORD:?set CASEBOX_ADMIN_PASSWORD}
+      Casebox__QueueBox__BaseUrl: http://queuebox:8080
+      Casebox__QueueBox__HealthUrl: http://queuebox:9090/health
+      Casebox__QueueBox__PollToken: ${CASEBOX_POLL_TOKEN}
+      Casebox__QueueBox__EffectsToken: ${CASEBOX_EFFECTS_TOKEN}
     ports:
       - "${CASEBOX_PORT:-8080}:8080"
     depends_on:

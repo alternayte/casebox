@@ -3,12 +3,12 @@ using Npgsql;
 namespace Casebox.Server.Tests.Infrastructure;
 
 // Pins the QueueBox image: QueueBox.Inbox needs the V10 schema, which adds inbox.headers.
-public sealed class QueueBoxSchemaTests(DatabaseFixture db)
+public sealed class QueueBoxSchemaTests(StackFixture stack)
 {
     [Fact]
     public async Task Pinned_image_migrates_the_outbox_and_the_inbox_that_QueueBox_Inbox_needs()
     {
-        await using var connection = new NpgsqlConnection(db.ConnectionString);
+        await using var connection = new NpgsqlConnection(stack.ConnectionString);
         await connection.OpenAsync(TestContext.Current.CancellationToken);
         await using var command = new NpgsqlCommand(
             """

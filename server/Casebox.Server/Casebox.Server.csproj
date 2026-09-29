@@ -10,7 +10,19 @@
     <PackageReference Include="Deedbox.Postgres" />
     <PackageReference Include="Deedbox.QueueBox" />
     <PackageReference Include="QueueBox.Inbox" />
+    <PackageReference Include="Deedbox.Keys.AzureKeyVault" />
     <PackageReference Include="Npgsql" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="ZstdSharp.Port" />
+    <PackageReference Include="Ulid" />
+    <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Infrastructure/Database/Migrations/*.sql" />
   </ItemGroup>
 
   <ItemGroup>

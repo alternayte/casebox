@@ -14,6 +14,6 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    proxy: { "/api": "http://localhost:5080" },
+    proxy: { "/api": "http://localhost:8080" },
   },
 });

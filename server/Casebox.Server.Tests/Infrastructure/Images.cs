@@ -6,4 +6,6 @@ internal static class Images
 {
     public const string Postgres = "postgres:16-alpine";
     public const string QueueBox = "ghcr.io/alternayte/queuebox:0.5.0";
+    public const string Oidc = "ghcr.io/navikt/mock-oauth2-server:6.0.3";
+    public const string S3 = "rustfs/rustfs:1.0.0";
 }

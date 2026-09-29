@@ -13,7 +13,17 @@ The file has a [JSON Schema](/schema/casebox.schema.json). `casebox init` writes
 
 Every example on this page is checked against the schema in CI.
 
-## A single repository
+## What casebox init writes
+
+```yaml title="casebox.yml"
+version: 1
+server: http://localhost:8080
+workspace: payments
+repos:
+  - github.com/acme/payments-api
+```
+
+## A single repository with Jira
 
 ```yaml title="casebox.yml"
 version: 1

@@ -19,6 +19,9 @@ namespace Casebox.Server.Tests.Features;
 // Step 7 end to end: sessions of a team become interventions, a worker classifies them through
 // the job queue, and the report shows only what k people stand behind. Pull request signals come
 // from the GitHub fake and a worker's steering.pr answer.
+// The GitHub poller polls every repository of organisation A, and its cursors are shared, so
+// the test classes that poll run one after the other.
+[Collection(GitHubPolling.Name)]
 public sealed partial class SteeringTests(StackFixture stack)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

@@ -2,7 +2,7 @@
 # check: agents-md
 # born: 2026-09-13
 # failure: AGENTS.md grew past its budget and kept commands and paths that no longer exist, and the agent trusted them
-# rule: every AGENTS.md is within 100 lines, every quoted path exists, every quoted command resolves, and a sibling CLAUDE.md imports it
+# rule: every AGENTS.md is within 100 lines, every quoted path exists or is ignored by git, every quoted command resolves, and a sibling CLAUDE.md imports it
 # Usage: agents-md.sh         fast: budget, paths, binaries, just recipes, package scripts, CLAUDE.md import
 #        agents-md.sh --run   slow: also runs each command whose every step is read-only; lists what it skipped
 # It does not judge content, tone or completeness.
@@ -109,7 +109,8 @@ while IFS= read -r f; do
       is_path "$text" || continue
       p="${text/#\~/$HOME}"
       [[ "$p" == /* ]] || p="$dir/$p"
-      [[ -e "$p" ]] || err "$f:$n: path does not exist: $text"
+      # A local-only file (PROGRESS.md, the SDD) is ignored by git and absent from a clone.
+      [[ -e "$p" ]] || git check-ignore -q "$p" || err "$f:$n: path does not exist: $text"
     else
       check_cmd "$f" "$n" "$dir" "$text"
     fi

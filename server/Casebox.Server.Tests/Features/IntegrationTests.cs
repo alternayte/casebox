@@ -20,6 +20,9 @@ namespace Casebox.Server.Tests.Features;
 // Step 6 end to end against the GitHub and Jira contract fakes: a Jira issue, a session on its
 // branch, an agent pull request with review, CI and merge, its revert, and a later fix that
 // blames back to it. Nothing identifying may reach any table, the QueueBox inbox included.
+// The GitHub poller polls every repository of organisation A, and its cursors are shared, so
+// the test classes that poll run one after the other.
+[Collection(GitHubPolling.Name)]
 public sealed class IntegrationTests(StackFixture stack)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

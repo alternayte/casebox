@@ -124,3 +124,11 @@ public sealed class StackFixture : IAsyncLifetime
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }
+
+// Test classes that run the GitHub poller for organisation A. They share its per-repository
+// cursors, so they run one after the other.
+[CollectionDefinition(Name)]
+public sealed class GitHubPolling
+{
+    public const string Name = "GitHub polling";
+}

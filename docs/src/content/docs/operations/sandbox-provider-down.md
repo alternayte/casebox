@@ -3,6 +3,8 @@ title: A sandbox provider down
 description: Workers cannot start sandboxes, so validation and evaluation runs fail.
 ---
 
+This runbook helps you restore the sandbox provider when runs fail to start.
+
 ## Symptom
 
 - Evaluation runs end as "failed to run", and case validation fails with infrastructure errors.

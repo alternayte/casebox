@@ -1,0 +1,13 @@
+/* The harness CI comment, framed as it appears on a pull request. */
+.gh-comment {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.375rem;
+  padding: 0 1rem 1rem;
+  font-size: var(--sl-text-sm);
+}
+
+/* Screenshots from the demo data. */
+.sl-markdown-content img[src^="/screenshots/"] {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.25rem;
+}

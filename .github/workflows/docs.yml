@@ -1,0 +1,66 @@
+# The docs site (docs/): Vale, the build (which fails on a broken link), the screenshots from the
+# demo data, then a Cloudflare Pages deploy. Each branch deploys to its own alias: main is the
+# live site, a pull request gets a preview.
+name: docs
+
+on:
+  push:
+    branches: [main, "release/**"]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PUBLIC_CF_BEACON_TOKEN: ${{ secrets.CLOUDFLARE_BEACON_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Vale and the build
+        run: just docs
+
+      # The screenshots show the product as it is: the server built from this commit, with the demo data.
+      - name: Screenshots
+        run: |
+          npm install -g agent-browser@0.37.1
+          agent-browser install --with-deps
+          just screenshots
+
+      - name: Deploy to Cloudflare Pages
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        id: deploy
+        run: |
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          url=$(npx --yes wrangler@4 pages deploy docs/dist --project-name=casebox-docs --branch="$branch" | grep -oE 'https://[^ ]+\.pages\.dev' | tail -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment the preview URL
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.number }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          gh pr comment "$PR" --body "Docs preview - $URL" --edit-last || gh pr comment "$PR" --body "Docs preview - $URL"
+
+      - name: Deploy skipped
+        if: env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "::notice::CLOUDFLARE_API_TOKEN is not set, so the site was built but not deployed."

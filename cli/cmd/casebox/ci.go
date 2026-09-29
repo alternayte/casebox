@@ -105,9 +105,9 @@ func newCICommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ci",
 		Short: "Harness CI: a pull request's smoke run, or the nightly baseline (ci token)",
-		Long: "Run harness CI in a GitHub Action (docs/specs/harness-ci.md).\n" +
-			"On a pull request that changes harness files, the server runs the smoke suite with the pull request's harness and\n" +
-			"compares it with the cached baseline of the default branch; the result is posted as a comment on the pull request.\n" +
+		Long: "Run harness CI in a GitHub Action.\n" +
+			"On a pull request that changes harness files, the server runs the smoke suite with the pull request's harness.\n" +
+			"It compares the result with the cached baseline of the default branch and posts it as a comment on the pull request.\n" +
 			"With --baseline (a scheduled run), the server scores the default branch's harness on the approved dev cases whose\n" +
 			"score is missing or older than 7 days.\n" +
 			"It reads casebox.yml, CASEBOX_SERVER and CASEBOX_TOKEN (a ci token), and GITHUB_EVENT_PATH, GITHUB_REPOSITORY and\n" +

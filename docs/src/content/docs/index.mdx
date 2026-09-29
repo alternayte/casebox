@@ -1,0 +1,33 @@
+---
+title: Casebox
+description: Stop steering your coding agents. Casebox turns corrections into evidence, reverts into test cases, and harness changes into measured experiments.
+template: splash
+hero:
+  tagline: Stop steering your coding agents. Casebox turns every correction your team makes into evidence, every revert into a test case, and every harness change into a measured experiment on your own history.
+  actions:
+    - text: Your first steering report
+      link: /tutorials/first-steering-report/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/alternayte/casebox
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+This site documents Casebox 0.1.0: how to install it, use it on your team's repositories, and operate it.
+
+<CardGrid>
+  <Card title="The steering report" icon="magnifier">
+    How often people correct their agents, where, and why, from the session logs already on your machines.
+  </Card>
+  <Card title="Cases from your history" icon="document">
+    Merged pull requests, reverts and corrected sessions become replayable tasks with tests that decide them.
+  </Card>
+  <Card title="Measured comparisons" icon="approve-check">
+    A model, agent or harness change runs on your cases and returns better, worse, equivalent or inconclusive, with an interval.
+  </Card>
+  <Card title="Proposals as pull requests" icon="pencil">
+    Recurring corrections become small harness edits, tested on held-out cases before a person merges them.
+  </Card>
+</CardGrid>

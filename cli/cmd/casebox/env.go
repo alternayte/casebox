@@ -54,8 +54,8 @@ func newEnvCommand() *cobra.Command {
 	check := &cobra.Command{
 		Use:   "check",
 		Short: "Build the recipe and run the tests at HEAD",
-		Long: "Propose the recipe to the server, build it with this machine's sandbox provider (CASEBOX_SANDBOX, default docker),\n" +
-			"copy the repository at HEAD into a sandbox, run every test command, and record the result on the server.",
+		Long: "Propose the recipe to the server and build it with this machine's sandbox provider (CASEBOX_SANDBOX, default\n" +
+			"docker). Then copy the repository at HEAD into a sandbox, run every test command, and record the result on the server.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return envCheck(cmd.Context(), cmd.OutOrStdout())

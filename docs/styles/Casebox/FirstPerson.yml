@@ -1,0 +1,9 @@
+extends: existence
+message: "Write to the reader in the second person; avoid '%s'."
+level: error
+ignorecase: true
+tokens:
+  - \bwe\b
+  - \bour\b
+  - \bus\b
+  - \blet's\b

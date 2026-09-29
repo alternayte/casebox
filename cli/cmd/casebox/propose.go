@@ -49,9 +49,9 @@ func newProposeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "propose (--pattern <id> | --scheduled)",
 		Short: "Run the proposer: harness edits for a pattern, tested on held-out cases before a pull request",
-		Long: "Run the proposer (docs/specs/self-evolution.md). For each open pattern (or the one --pattern names) it drafts 3 to 5\n" +
-			"small harness edits with the analysis model, scores them on a dev batch against the cached baseline, and sends the\n" +
-			"best to the held-out gate. A passing gate opens a pull request; a person merges it.\n" +
+		Long: "Run the proposer. For each open pattern (or the one --pattern names) it drafts 3 to 5 small harness edits with\n" +
+			"the analysis model. It scores them on a dev batch against the cached baseline and sends the best to the held-out gate.\n" +
+			"A passing gate opens a pull request; a person merges it.\n" +
 			"--scheduled is the Action's weekly run: every open pattern of the workspace, and the harness diet once a quarter.\n" +
 			"The baseline, prices and repeats come from casebox.yml. It uses CASEBOX_SERVER and CASEBOX_TOKEN (a ci token) when\n" +
 			"set, else this machine's login (a Member). The search budget is --budget-runs agent runs per pattern, and the\n" +

@@ -394,7 +394,8 @@ func writeConfig(root, server, workspace, repoName string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	content := fmt.Sprintf(`version: 1
+	content := fmt.Sprintf(`# yaml-language-server: $schema=https://casebox-docs.pages.dev/schema/casebox.schema.json
+version: 1
 server: %s
 workspace: %s
 repos:

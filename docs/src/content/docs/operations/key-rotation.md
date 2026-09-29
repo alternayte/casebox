@@ -3,6 +3,8 @@ title: Key rotation
 description: Rotate Deedbox's master key, which wraps every organisation's keys and pseudonym secrets.
 ---
 
+This runbook helps you rotate Deedbox's master key.
+
 ## When
 
 - On your schedule, or at once when the master key may have leaked.

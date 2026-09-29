@@ -15,3 +15,8 @@ node_modules/
 server/Casebox.Server/wwwroot/
 cli/dist/
 *.tsbuildinfo
+
+# The docs site's build output and the screenshots CI makes from the demo data
+docs/dist/
+docs/.astro/
+docs/public/screenshots/

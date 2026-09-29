@@ -8,7 +8,12 @@ This guide runs Casebox on one of your team's repositories and answers two quest
 1. Is the steering report right? Are the themes the ones your team recognises, and does the classifier agree with a person?
 2. Does a real comparison hold up? Is the verdict readable, and is the cost estimate close to the actual cost?
 
-You need Docker, git, Go 1.26, a GitHub token that reads the repository, a model key for the agent you use (Anthropic, OpenAI or Cursor), and an analysis model key (any Anthropic or OpenAI-compatible API).
+You need these:
+
+- Docker, git and Go 1.26.
+- A GitHub token that reads the repository.
+- A model key for the agent you use: Anthropic, OpenAI or Cursor.
+- A key for an analysis model: any Anthropic or OpenAI-compatible API.
 
 ## 1. Install
 

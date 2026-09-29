@@ -3,6 +3,8 @@ title: An expired integration token
 description: GitHub or Jira stop answering, so work items, pull requests, comments and proposals stop.
 ---
 
+This runbook helps you replace an expired GitHub or Jira credential.
+
 ## Symptom
 
 - New pull requests and Jira issues do not appear on the Work page.
@@ -12,7 +14,7 @@ description: GitHub or Jira stop answering, so work items, pull requests, commen
 
 - The Integrations settings show the last poll's error.
 - The server log shows `CBX071` (GitHub) or `CBX072` (Jira).
-- Outbox messages for `effect.ci_comment` or `effect.proposal_pr` go dead (see [Outbox dead letters](../outbox-dead-letters/)).
+- Outbox messages for `effect.ci_comment` or `effect.proposal_pr` go dead (see [Outbox dead letters](/operations/outbox-dead-letters/)).
 
 ## Steps
 

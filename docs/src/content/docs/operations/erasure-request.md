@@ -3,6 +3,8 @@ title: An erasure request
 description: A person asks for their data to be erased.
 ---
 
+This runbook helps you erase a person from Casebox when they ask.
+
 ## Symptom
 
 - A person, or your data protection officer, asks Casebox to forget someone.

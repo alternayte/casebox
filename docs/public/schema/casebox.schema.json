@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://casebox-docs.pages.dev/schema/casebox.schema.json",
+  "title": "casebox.yml",
+  "description": "A repository's Casebox settings in .casebox/casebox.yml. Reviewed like code. Privacy settings live on the server.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": { "const": 1, "description": "The file format version." },
+    "server": { "type": "string", "format": "uri", "description": "The Casebox server, such as https://casebox.example.com." },
+    "workspace": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "The workspace this repository belongs to. A shared harness repository has none."
+    },
+    "repos": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-zA-Z0-9.-]+/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$" },
+      "description": "The workspace's repositories, such as github.com/acme/payments-api."
+    },
+    "work_items": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jira": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["url", "projects"],
+          "properties": {
+            "url": { "type": "string", "format": "uri", "description": "The Jira Data Center URL." },
+            "projects": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" }, "minItems": 1 }
+          }
+        },
+        "github_issues": { "type": "boolean", "description": "Track GitHub Issues as work items." }
+      }
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "globs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The harness files, matched against whole repo-relative paths. Default: AGENTS.md, CLAUDE.md, .cursor/rules/**, .claude/skills/**, .agents/skills/**, .mcp.json."
+        },
+        "shared": { "type": "string", "description": "A shared harness repository, such as github.com/acme/eng-harness." }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "redact": { "type": "array", "items": { "type": "string" }, "description": "Extra regular expressions whose matches are redacted before anything leaves the machine." }
+      }
+    },
+    "environment": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["image", "test"],
+      "description": "The environment recipe: one per workspace, confirmed by a person.",
+      "properties": {
+        "image": { "type": "string", "description": "The base image, pinned by digest or tag." },
+        "install": { "type": "array", "items": { "type": "string" }, "description": "Install steps, run as root on top of the image." },
+        "lockfiles": { "type": "array", "items": { "type": "string" }, "description": "Files whose content keys the image cache." },
+        "test": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["command"],
+            "properties": {
+              "command": { "type": "string" },
+              "results": { "enum": ["go-test-json", "trx", "junit"], "description": "The results format. Without one, the command counts by its exit code only." },
+              "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)([0-9]+(ms|s|m|h))*$", "description": "A Go duration, such as 10m." }
+            }
+          }
+        },
+        "services": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["image"],
+            "properties": {
+              "image": { "type": "string" },
+              "env": { "type": "object", "additionalProperties": { "type": "string" } }
+            }
+          },
+          "description": "Sidecar services by name, such as postgres."
+        },
+        "links": { "type": "array", "items": { "type": "string" }, "description": "Files that link the repositories from source: go.work, project references, npm workspaces." }
+      }
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "window": { "type": "integer", "minimum": 1, "description": "Days back from today that mining looks. Default 183." },
+        "max_source_files": { "type": "integer", "minimum": 1, "description": "The most non-test files a mined change may touch. Default 12." },
+        "test_globs": { "type": "array", "items": { "type": "string" }, "description": "What counts as a test file; replaces the default list." }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baseline": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["agent", "model"],
+          "description": "The agent and model every comparison, harness CI and the proposer start from.",
+          "properties": {
+            "agent": { "enum": ["claude-code", "codex", "cursor-cli", "command"] },
+            "agent_version": { "type": "string", "description": "The pinned agent version. Required except for the command agent." },
+            "model": { "type": "string" },
+            "effort": { "type": "string" },
+            "max_turns": { "type": "integer", "minimum": 1 },
+            "timeout_minutes": { "type": "integer", "minimum": 1, "maximum": 240 },
+            "token_cap": { "type": "integer", "minimum": 1 },
+            "command": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["template"],
+              "properties": {
+                "template": { "type": "string", "description": "The command line; {instruction_file} and {model} are replaced." },
+                "log_glob": { "type": "string" },
+                "log_format": { "enum": ["claude-code", "codex", "cursor-cli", "none"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "suites": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "smoke": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "size": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Cases in a pull request's smoke run. Default 10." },
+            "repeats": { "type": "integer", "minimum": 1, "maximum": 10, "description": "Default 1." }
+          }
+        },
+        "full": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repeats": { "type": "integer", "minimum": 1, "maximum": 10, "description": "Repeats of the nightly baseline and the gate. Default 3." }
+          }
+        }
+      }
+    },
+    "prices": {
+      "type": "object",
+      "description": "USD per million tokens by model ID, from your contract. There is no live price lookup.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["input", "output"],
+        "properties": {
+          "input": { "type": "number", "minimum": 0 },
+          "output": { "type": "number", "minimum": 0 },
+          "cache_read": { "type": "number", "minimum": 0 },
+          "cache_write": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

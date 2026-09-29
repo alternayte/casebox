@@ -1,0 +1,20 @@
+extends: existence
+message: "State facts; remove '%s'."
+level: error
+ignorecase: true
+tokens:
+  - simply
+  - easily
+  - effortless(ly)?
+  - seamless(ly)?
+  - blazing(ly)?
+  - powerful
+  - robust
+  - revolutionary
+  - cutting-edge
+  - world-class
+  - best-in-class
+  - magic(al)?
+  - awesome
+  - obviously
+  - of course

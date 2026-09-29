@@ -152,7 +152,7 @@ public sealed class CiCommentEffect(
         {
             Statistics.Verdict.Worse => $"The {level} interval lies entirely below 0.",
             _ when v.Reason == EvaluationSteps.SmokeReason =>
-                "The interval does not include a regression; a smoke run never claims better or equivalent.",
+                "The interval lies above 0 or within ±δ, but a smoke run compares a few cases with a cached baseline, so it never claims better or equivalent.",
             _ when v.Reason == "budget" => "The budget ran out before the run finished.",
             _ when v.Cases < EvaluationDecider.MinimumCases => Inv(
                 $"Only {v.Cases} cases completed; a verdict needs at least {EvaluationDecider.MinimumCases}."

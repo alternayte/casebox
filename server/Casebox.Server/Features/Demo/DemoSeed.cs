@@ -470,7 +470,7 @@ public sealed class DemoSeed(
             "Names the team's rule where the agent looks for test conventions."
         );
         var gate = ProposalSteps.GateId(proposal);
-        await EvaluationAsync(
+        var (gateVerdict, gateRuns, ranTests) = await EvaluationAsync(
             connection,
             gate,
             Purpose.Gate,
@@ -483,27 +483,50 @@ public sealed class DemoSeed(
             },
             prices,
             3,
-            (c, side) => heldOut.IndexOf(c) >= 6 ? (side == Side.Candidate ? 0.9 : 0.25) : 0.75,
+            (c, side) =>
+                side == Side.Candidate ? 0.9
+                : heldOut.IndexOf(c) >= 6 ? 0.2
+                : 0.6,
             rng,
             now.AddDays(-4),
             ct,
             proposal,
             0
         );
+        // The checks come from the gate's own runs, as the proposer's workflow computes them.
+        var patternRuns = gateRuns.Where(r => heldOut.IndexOf(r.CaseId) >= 6).ToList();
+        double Rate(IEnumerable<bool> runs) =>
+            runs.DefaultIfEmpty(false).Average(p => p ? 1.0 : 0.0);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
         var checks = new List<GateCheck>
         {
-            new("quality", true, "strong", "Verdict better on 10 held-out cases."),
+            new(
+                "quality",
+                gateVerdict.Verdict is Statistics.Verdict.Better or Statistics.Verdict.Equivalent,
+                "strong",
+                string.Create(
+                    inv,
+                    $"Verdict {gateVerdict.Verdict.ToString().ToLowerInvariant()}: Δ {gateVerdict.Delta * 100:+0.0;-0.0} points, 95% interval {gateVerdict.Lower * 100:+0.0;-0.0} to {gateVerdict.Upper * 100:+0.0;-0.0}, {gateVerdict.Cases} cases."
+                )
+            ),
             new(
                 "pattern",
-                true,
+                Rate(patternRuns.SelectMany(r => r.Candidate))
+                    > Rate(patternRuns.SelectMany(r => r.Baseline)),
                 "strong",
-                "The pattern's 4 held-out cases: candidate 90% passed, baseline 25%."
+                string.Create(
+                    inv,
+                    $"The pattern's {patternRuns.Count} held-out cases: candidate {Rate(patternRuns.SelectMany(r => r.Candidate)) * 100:0}% passed, baseline {Rate(patternRuns.SelectMany(r => r.Baseline)) * 100:0}%."
+                )
             ),
             new(
                 "process",
-                true,
+                ranTests.Candidate >= ranTests.Baseline - ProposalSteps.ProcessTolerance,
                 "strong",
-                "Ran the tests before saying done: candidate 83%, baseline 80%. Edited a test after a failure: 0% on both."
+                string.Create(
+                    inv,
+                    $"Ran the tests before saying done: candidate {ranTests.Candidate * 100:0}%, baseline {ranTests.Baseline * 100:0}%. Edited a test after a failure: 0% on both."
+                )
             ),
         };
         await store.Append(
@@ -597,7 +620,11 @@ public sealed class DemoSeed(
 
     // One evaluation, written whole: its runs, its checkpoints and its verdict, with the numbers the
     // statistics engine gives for those runs.
-    private async Task EvaluationAsync(
+    private async Task<(
+        Statistics.Checkpoint Verdict,
+        List<Statistics.CaseRuns> Runs,
+        (double Baseline, double Candidate) RanTests
+    )> EvaluationAsync(
         System.Data.Common.DbConnection connection,
         string id,
         Purpose purpose,
@@ -655,6 +682,8 @@ public sealed class DemoSeed(
         );
         var runs = new List<Statistics.CaseRuns>();
         var results = new List<object>();
+        var ranB = new List<bool>();
+        var ranC = new List<bool>();
         foreach (var c in cases)
         {
             var b = new List<bool>();
@@ -667,6 +696,8 @@ public sealed class DemoSeed(
                 foreach (var side in new[] { Side.Baseline, Side.Candidate })
                 {
                     var passed = rng.NextDouble() < passRate(c, side);
+                    var ran = rng.NextDouble() < (side == Side.Candidate ? 0.85 : 0.8);
+                    (side == Side.Baseline ? ranB : ranC).Add(ran);
                     var cost = Math.Round(0.45m + (decimal)rng.NextDouble() * 0.35m, 4);
                     var seconds = 480 + rng.NextInt(600);
                     var runId = Evaluation.RunId(c, side, r);
@@ -699,6 +730,7 @@ public sealed class DemoSeed(
                             Cost = cost,
                             Seconds = (double)seconds,
                             At = at,
+                            Checks = $"{{\"ranTestsBeforeDone\":{(ran ? "true" : "false")},\"editedTestAfterFailure\":false}}",
                         }
                     );
                 }
@@ -745,13 +777,21 @@ public sealed class DemoSeed(
             new CommandDefinition(
                 """
                 INSERT INTO casebox.run_results (org_id, evaluation_id, run_id, case_id, side, repeat, status, passed, applied, cost_usd, seconds, model,
-                    usage, created_at, completed_at)
+                    usage, process_checks, created_at, completed_at)
                 VALUES (@Org, @Evaluation, @Run, @Case, @Side, @Repeat, 'completed', @Passed, true, @Cost, @Seconds, 'claude-sonnet-5-20260801',
-                    '{"inputTokens":140000,"outputTokens":20000,"cacheReadTokens":220000}', @At, @At)
+                    '{"inputTokens":140000,"outputTokens":20000,"cacheReadTokens":220000}', @Checks::jsonb, @At, @At)
                 ON CONFLICT DO NOTHING
                 """,
                 results,
                 cancellationToken: ct
+            )
+        );
+        return (
+            v,
+            runs,
+            (
+                ranB.DefaultIfEmpty(false).Average(r => r ? 1.0 : 0.0),
+                ranC.DefaultIfEmpty(false).Average(r => r ? 1.0 : 0.0)
             )
         );
     }

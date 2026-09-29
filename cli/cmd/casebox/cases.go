@@ -110,7 +110,7 @@ func newMineCommand() *cobra.Command {
 		Use:   "mine",
 		Short: "Mine cases from the workspace's history (member)",
 		Long: "Queue a mining job for each repository of the workspace in casebox.yml. A worker mines candidate cases\n" +
-			"from its mirror; a worker with a sandbox provider validates them, and one with an analysis model drafts\n" +
+			"from its mirror. A worker with a sandbox provider validates them. A worker with an analysis model drafts\n" +
 			"their instructions. With --wait, it polls until the case counts stop changing (at most 30 minutes).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -200,7 +200,7 @@ func newReviewCommand() *cobra.Command {
 		Use:   "review",
 		Short: "Review validated cases: approve, edit, reject or skip (member)",
 		Long: "Walk the review queue (validated cases with a drafted instruction). For each case it prints the source,\n" +
-			"the tests that decide it, the instruction and the interfaces, and asks: [a]pprove, [e]dit the instruction\n" +
+			"the tests that decide it, the instruction and the interfaces. Then it asks: [a]pprove, [e]dit the instruction\n" +
 			"in $EDITOR, [r]eject with a reason, [s]kip or [q]uit. --approve-all approves the whole queue and lists the\n" +
 			"cases the server refused, with the reason.",
 		Args: cobra.NoArgs,
@@ -461,9 +461,9 @@ func newCasesCommand() *cobra.Command {
 		Use:   "export --format harbor --out <dir> [ids…]",
 		Short: "Export approved cases as Harbor tasks",
 		Long: "Write each approved case (all of the workspace's, or the ids given) as a Harbor task (task format 1.4)\n" +
-			"in <dir>/<workspace>-<case id>. Run it inside a checkout of the case's repository: the base tree comes\n" +
-			"from git archive of the base commit, fetched from origin when missing, and the recipe from casebox.yml,\n" +
-			"which must be the recipe the case was validated with. Cases that span other repositories and steering\n" +
+			"in <dir>/<workspace>-<case id>. Run it inside a checkout of the case's repository. The base tree comes\n" +
+			"from git archive of the base commit, fetched from origin when missing. The recipe comes from casebox.yml,\n" +
+			"and must be the recipe the case was validated with. Cases that span other repositories and steering\n" +
 			"cases (decided by trace assertions) are skipped.\n" +
 			"The oracle and the patches are blobs only a worker token may read: set CASEBOX_WORKER_TOKEN.",
 		RunE: func(cmd *cobra.Command, ids []string) error {

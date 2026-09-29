@@ -3,6 +3,8 @@ title: A stalled projection
 description: A report, a page or a workflow stops moving because a projection or subscription no longer applies events.
 ---
 
+This runbook helps you find and restart a projection or workflow that stopped applying events.
+
 ## Symptom
 
 - The steering report, the case catalog or an evaluation page shows old data.

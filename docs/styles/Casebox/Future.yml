@@ -1,0 +1,8 @@
+extends: existence
+message: "Use the present tense; avoid '%s'."
+level: error
+ignorecase: true
+tokens:
+  - \bwill\b
+  - \bwould\b
+  - \bshall\b

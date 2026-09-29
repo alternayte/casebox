@@ -19,7 +19,10 @@ public sealed class RedactionTests
     [MemberData(nameof(Cases))]
     public void The_corpus_case_is_redacted(string name)
     {
-        var c = Corpus().RootElement.GetProperty("cases").EnumerateArray().Single(x => x.GetProperty("name").GetString() == name);
+        var c = Corpus()
+            .RootElement.GetProperty("cases")
+            .EnumerateArray()
+            .Single(x => x.GetProperty("name").GetString() == name);
         var output = Redaction.Redact(c.GetProperty("input").GetString()!);
         foreach (var absent in c.GetProperty("absent").EnumerateArray())
             Assert.DoesNotContain(absent.GetString()!, output, StringComparison.Ordinal);
@@ -28,5 +31,9 @@ public sealed class RedactionTests
     }
 
     private static JsonDocument Corpus() =>
-        JsonDocument.Parse(File.ReadAllText(Path.Combine(StackFixture.RepoRoot(), "testdata", "redaction-corpus.json")));
+        JsonDocument.Parse(
+            File.ReadAllText(
+                Path.Combine(StackFixture.RepoRoot(), "testdata", "redaction-corpus.json")
+            )
+        );
 }

@@ -17,7 +17,12 @@ public interface IInboxHandler
 
     string EventType { get; }
 
-    Task HandleAsync(InboxMessage message, IEventStore store, DbTransaction transaction, CancellationToken ct);
+    Task HandleAsync(
+        InboxMessage message,
+        IEventStore store,
+        DbTransaction transaction,
+        CancellationToken ct
+    );
 }
 
 public static class InboxSources
@@ -36,28 +41,51 @@ public sealed class InboxConsumer(
     NpgsqlDataSource dataSource,
     IServiceScopeFactory scopes,
     ILogger<InboxWorker> logger,
-    TimeProvider clock) : BackgroundService
+    TimeProvider clock
+) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var worker = new InboxWorker(InboxConnections.From(dataSource), new InboxOptions { Source = source }, logger, clock);
+        var worker = new InboxWorker(
+            InboxConnections.From(dataSource),
+            new InboxOptions { Source = source },
+            logger,
+            clock
+        );
         return worker.RunAsync(HandleAsync, stoppingToken);
     }
 
-    private async Task HandleAsync(InboxMessage message, DbTransaction transaction, CancellationToken ct)
+    private async Task HandleAsync(
+        InboxMessage message,
+        DbTransaction transaction,
+        CancellationToken ct
+    )
     {
         await using var scope = scopes.CreateAsyncScope();
-        var handler = scope.ServiceProvider.GetServices<IInboxHandler>()
-            .FirstOrDefault(h => h.Source == message.Source && h.EventType == message.EventType)
-            ?? throw new InvalidOperationException($"No inbox handler for source '{message.Source}' and event type '{message.EventType}'.");
+        var handler =
+            scope
+                .ServiceProvider.GetServices<IInboxHandler>()
+                .FirstOrDefault(h => h.Source == message.Source && h.EventType == message.EventType)
+            ?? throw new InvalidOperationException(
+                $"No inbox handler for source '{message.Source}' and event type '{message.EventType}'."
+            );
 
         var org = message.Payload.TryGetProperty("org", out var o) ? o.GetString() : null;
-        if (string.IsNullOrEmpty(org)) throw new InvalidOperationException($"Inbox message {message.Id} names no organisation.");
+        if (string.IsNullOrEmpty(org))
+            throw new InvalidOperationException(
+                $"Inbox message {message.Id} names no organisation."
+            );
 
         var context = scope.ServiceProvider.GetRequiredService<DeedboxContext>();
         context.TenantId = org;
-        context.Metadata = new EventMetadata { CorrelationId = message.CorrelationId ?? message.Id.ToString(), Actor = $"inbox:{message.Source}" };
-        var store = scope.ServiceProvider.GetRequiredService<IEventStore>().UseTransaction(transaction);
+        context.Metadata = new EventMetadata
+        {
+            CorrelationId = message.CorrelationId ?? message.Id.ToString(),
+            Actor = $"inbox:{message.Source}",
+        };
+        var store = scope
+            .ServiceProvider.GetRequiredService<IEventStore>()
+            .UseTransaction(transaction);
         await handler.HandleAsync(message, store, transaction, ct);
     }
 }
@@ -69,7 +97,10 @@ public sealed class PollPublisher(HttpClient http, IOptions<CaseboxOptions> opti
     public async Task PublishAsync(PollMessage message, CancellationToken ct)
     {
         var queueBox = options.Value.QueueBox;
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(queueBox.BaseUrl, "/inbox/poll"))
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(queueBox.BaseUrl, "/inbox/poll")
+        )
         {
             Content = JsonContent.Create(message),
         };

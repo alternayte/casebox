@@ -41,43 +41,129 @@ public sealed class WorkerRoutesTests(StackFixture stack)
             INSERT INTO casebox.pull_requests (org_id, repo, number, state, head_ref, base_ref, author, updated_at, snapshot)
             VALUES (@Org, 'github.com/acme/attr', 5, 'open', 'feature', 'main', 'person:x', now(), @Snapshot::jsonb)
             """,
-            new { Org = StackFixture.OrgA, Snapshot = $$"""{"commits":[{"sha":"{{sha}}"}]}""" });
+            new { Org = StackFixture.OrgA, Snapshot = $$"""{"commits":[{"sha":"{{sha}}"}]}""" }
+        );
 
         var worker = await stack.ServerA.TokenClientAsync(TokenKind.Worker);
-        (await worker.PostAsJsonAsync("/worker/v1/attributions", new
-        {
-            repo = "github.com/acme/attr",
-            // Real notes can hold thousands of ranges for one file; they must fit.
-            commits = new[] { new { sha, files = new[] {
-                new { path = "src/a.go", agent = "claude", model = "claude-sonnet-5", ranges = string.Join(',', Enumerable.Range(0, 1500).Select(i => $"{i * 3 + 1}")) },
-            } } },
-        }, Ct)).EnsureSuccessStatusCode();
+        (
+            await worker.PostAsJsonAsync(
+                "/worker/v1/attributions",
+                new
+                {
+                    repo = "github.com/acme/attr",
+                    // Real notes can hold thousands of ranges for one file; they must fit.
+                    commits = new[]
+                    {
+                        new
+                        {
+                            sha,
+                            files = new[]
+                            {
+                                new
+                                {
+                                    path = "src/a.go",
+                                    agent = "claude",
+                                    model = "claude-sonnet-5",
+                                    ranges = string.Join(
+                                        ',',
+                                        Enumerable.Range(0, 1500).Select(i => $"{i * 3 + 1}")
+                                    ),
+                                },
+                            },
+                        },
+                    },
+                },
+                Ct
+            )
+        ).EnsureSuccessStatusCode();
 
-        Assert.True(await db.QuerySingleAsync<bool>("SELECT is_agent FROM casebox.pull_requests WHERE org_id = @Org AND repo = 'github.com/acme/attr' AND number = 5", new { Org = StackFixture.OrgA }));
-        Assert.Equal(1, await db.QuerySingleAsync<int>("SELECT count(*) FROM casebox.commit_attributions WHERE org_id = @Org AND sha = @Sha", new { Org = StackFixture.OrgA, Sha = sha }));
+        Assert.True(
+            await db.QuerySingleAsync<bool>(
+                "SELECT is_agent FROM casebox.pull_requests WHERE org_id = @Org AND repo = 'github.com/acme/attr' AND number = 5",
+                new { Org = StackFixture.OrgA }
+            )
+        );
+        Assert.Equal(
+            1,
+            await db.QuerySingleAsync<int>(
+                "SELECT count(*) FROM casebox.commit_attributions WHERE org_id = @Org AND sha = @Sha",
+                new { Org = StackFixture.OrgA, Sha = sha }
+            )
+        );
     }
 
     [Fact]
     public async Task An_Entire_session_is_skipped_when_local_capture_already_has_it()
     {
         var admin = await stack.ServerA.AdminAsync();
-        var org = await admin.GetFromJsonAsync<OrgEndpoints.OrgView>("/api/v1/org", Json.Options, Ct);
+        var org = await admin.GetFromJsonAsync<OrgEndpoints.OrgView>(
+            "/api/v1/org",
+            Json.Options,
+            Ct
+        );
         if (org!.Settings.PromptMode is null)
-            (await admin.PutAsJsonAsync("/api/v1/org/settings", org.Settings with { PromptMode = PromptMode.Redacted }, Json.Options, Ct)).EnsureSuccessStatusCode();
+            (
+                await admin.PutAsJsonAsync(
+                    "/api/v1/org/settings",
+                    org.Settings with
+                    {
+                        PromptMode = PromptMode.Redacted,
+                    },
+                    Json.Options,
+                    Ct
+                )
+            ).EnsureSuccessStatusCode();
 
         var id = $"claude-code:{Guid.NewGuid()}";
         var at = DateTimeOffset.UtcNow;
-        CaptureBatch Batch(string source, long seq) => new(
-            new CapturedSession(id, "claude-code", null, null, "github.com/acme/app", "main", null, null, at, null, source, null, "⟦cbx:email:dev@example.com⟧"),
-            [new CapturedEvent(seq, at, "prompt", "fix it", null, null, null)]);
+        CaptureBatch Batch(string source, long seq) =>
+            new(
+                new CapturedSession(
+                    id,
+                    "claude-code",
+                    null,
+                    null,
+                    "github.com/acme/app",
+                    "main",
+                    null,
+                    null,
+                    at,
+                    null,
+                    source,
+                    null,
+                    "⟦cbx:email:dev@example.com⟧"
+                ),
+                [new CapturedEvent(seq, at, "prompt", "fix it", null, null, null)]
+            );
 
         var worker = await stack.ServerA.TokenClientAsync(TokenKind.Worker);
-        var first = await (await worker.PostAsJsonAsync("/worker/v1/sessions", Batch("entire", 3_000_000_000), Json.Options, Ct)).Content.ReadFromJsonAsync<SessionResult>(Ct);
+        var first = await (
+            await worker.PostAsJsonAsync(
+                "/worker/v1/sessions",
+                Batch("entire", 3_000_000_000),
+                Json.Options,
+                Ct
+            )
+        ).Content.ReadFromJsonAsync<SessionResult>(Ct);
         Assert.False(first!.Skipped);
 
         var ingest = await stack.ServerA.TokenClientAsync(TokenKind.Ingest);
-        (await ingest.PostAsJsonAsync("/ingest/v1/sessions", Batch("import", 0), Json.Options, Ct)).EnsureSuccessStatusCode();
-        var again = await (await worker.PostAsJsonAsync("/worker/v1/sessions", Batch("entire", 3_000_000_001), Json.Options, Ct)).Content.ReadFromJsonAsync<SessionResult>(Ct);
+        (
+            await ingest.PostAsJsonAsync(
+                "/ingest/v1/sessions",
+                Batch("import", 0),
+                Json.Options,
+                Ct
+            )
+        ).EnsureSuccessStatusCode();
+        var again = await (
+            await worker.PostAsJsonAsync(
+                "/worker/v1/sessions",
+                Batch("entire", 3_000_000_001),
+                Json.Options,
+                Ct
+            )
+        ).Content.ReadFromJsonAsync<SessionResult>(Ct);
         Assert.True(again!.Skipped);
     }
 

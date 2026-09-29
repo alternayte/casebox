@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
   <PropertyGroup>
     <RootNamespace>Casebox.Server</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -28,5 +27,4 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Casebox.Server.Tests" />
   </ItemGroup>
-
 </Project>

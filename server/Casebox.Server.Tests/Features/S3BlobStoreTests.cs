@@ -16,7 +16,13 @@ public sealed class S3BlobStoreTests(StackFixture stack)
         var ct = TestContext.Current.CancellationToken;
         using var s3 = new AmazonS3Client(
             new BasicAWSCredentials(StackFixture.S3AccessKey, StackFixture.S3SecretKey),
-            new AmazonS3Config { ServiceURL = stack.S3Url, ForcePathStyle = true, AuthenticationRegion = "us-east-1" });
+            new AmazonS3Config
+            {
+                ServiceURL = stack.S3Url,
+                ForcePathStyle = true,
+                AuthenticationRegion = "us-east-1",
+            }
+        );
         await s3.PutBucketAsync(StackFixture.Bucket, ct);
 
         await using var dataSource = NpgsqlDataSource.Create(stack.ConnectionString);
@@ -30,7 +36,13 @@ public sealed class S3BlobStoreTests(StackFixture stack)
         Assert.Equal(data, blob!.Data);
         Assert.Null(await store.GetAsync(StackFixture.OrgB, hash, ct));
 
-        var objects = await s3.ListObjectsV2Async(new() { BucketName = StackFixture.Bucket, Prefix = $"{StackFixture.OrgA}/" }, ct);
-        Assert.Contains(objects.S3Objects, o => o.Key.EndsWith($"{hash}.zst", StringComparison.Ordinal));
+        var objects = await s3.ListObjectsV2Async(
+            new() { BucketName = StackFixture.Bucket, Prefix = $"{StackFixture.OrgA}/" },
+            ct
+        );
+        Assert.Contains(
+            objects.S3Objects,
+            o => o.Key.EndsWith($"{hash}.zst", StringComparison.Ordinal)
+        );
     }
 }

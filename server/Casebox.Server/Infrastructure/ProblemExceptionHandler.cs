@@ -6,7 +6,11 @@ namespace Casebox.Server.Infrastructure;
 // Domain refusals become problem responses; anything else stays a 500.
 public sealed class ProblemExceptionHandler(IProblemDetailsService problems) : IExceptionHandler
 {
-    public async ValueTask<bool> TryHandleAsync(HttpContext http, Exception exception, CancellationToken ct)
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext http,
+        Exception exception,
+        CancellationToken ct
+    )
     {
         var status = exception switch
         {
@@ -16,14 +20,17 @@ public sealed class ProblemExceptionHandler(IProblemDetailsService problems) : I
             BadHttpRequestException bad => bad.StatusCode,
             _ => 0,
         };
-        if (status == 0) return false;
+        if (status == 0)
+            return false;
 
         http.Response.StatusCode = status;
-        return await problems.TryWriteAsync(new ProblemDetailsContext
-        {
-            HttpContext = http,
-            Exception = exception,
-            ProblemDetails = { Status = status, Title = exception.Message },
-        });
+        return await problems.TryWriteAsync(
+            new ProblemDetailsContext
+            {
+                HttpContext = http,
+                Exception = exception,
+                ProblemDetails = { Status = status, Title = exception.Message },
+            }
+        );
     }
 }

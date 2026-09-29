@@ -24,14 +24,21 @@ public sealed record CapturedSession(
     string? WorkItem,
     string Person,
     CapturedHarness? Harness = null,
-    int? Commits = null);
+    int? Commits = null
+);
 
 // The harness files of a session's commit: the hash of their sorted "<path> <blob sha>" lines.
 public sealed record CapturedHarness(string Hash, IReadOnlyList<string> Files);
 
 public sealed record CapturedTool(string? Name, string? Status, IReadOnlyList<string>? Files);
 
-public sealed record CapturedUsage(long? InputTokens, long? OutputTokens, long? CacheReadTokens, long? CacheWriteTokens, decimal? CostUsd);
+public sealed record CapturedUsage(
+    long? InputTokens,
+    long? OutputTokens,
+    long? CacheReadTokens,
+    long? CacheWriteTokens,
+    decimal? CostUsd
+);
 
 public sealed record CapturedEvent(
     long Seq,
@@ -40,7 +47,8 @@ public sealed record CapturedEvent(
     string? Text,
     CapturedTool? Tool,
     CapturedUsage? Usage,
-    IReadOnlyDictionary<string, string>? Attrs);
+    IReadOnlyDictionary<string, string>? Attrs
+);
 
 public sealed record CaptureBatch(CapturedSession Session, IReadOnlyList<CapturedEvent> Events);
 
@@ -54,95 +62,184 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
 
     private static readonly HashSet<string> Kinds =
     [
-        "session_start", "prompt", "response", "tool_call", "tool_result", "interruption", "denial",
-        "rewind", "human_edit", "compaction", "session_end", "api_request", "unknown",
+        "session_start",
+        "prompt",
+        "response",
+        "tool_call",
+        "tool_result",
+        "interruption",
+        "denial",
+        "rewind",
+        "human_edit",
+        "compaction",
+        "session_end",
+        "api_request",
+        "unknown",
     ];
 
     // Captured directly: Claude Code, Codex, Cursor CLI. Through Entire checkpoints also: OpenCode, Pi, Copilot CLI.
-    private static readonly HashSet<string> Agents = ["claude-code", "codex", "cursor-cli", "opencode", "pi", "copilot-cli"];
+    private static readonly HashSet<string> Agents =
+    [
+        "claude-code",
+        "codex",
+        "cursor-cli",
+        "opencode",
+        "pi",
+        "copilot-cli",
+    ];
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 
-    public async Task<int> StoreAsync(string orgId, OrgSettings settings, CaptureBatch batch, CancellationToken ct)
+    public async Task<int> StoreAsync(
+        string orgId,
+        OrgSettings settings,
+        CaptureBatch batch,
+        CancellationToken ct
+    )
     {
         if (settings.PromptMode is not { } mode)
-            throw new ConflictException("Capture is off until an admin chooses a prompt mode (casebox init).");
+            throw new ConflictException(
+                "Capture is off until an admin chooses a prompt mode (casebox init)."
+            );
         Validate(batch);
 
         var session = batch.Session;
         var sessionPeriod = Identities.PeriodOf(settings.PseudonymPeriod, session.StartedAt);
-        var (person, mapped) = await identities.SubjectOfMarkAsync(session.Person, sessionPeriod, ct)
+        var (person, mapped) =
+            await identities.SubjectOfMarkAsync(session.Person, sessionPeriod, ct)
             ?? throw new DomainException("The session's person must be one identity mark.");
 
         var rows = new List<object>(batch.Events.Count);
         foreach (var e in batch.Events)
         {
             var period = Identities.PeriodOf(settings.PseudonymPeriod, e.At);
-            var text = Keep(mode, e.Kind) && e.Text is { } t ? await identities.TokenizeAsync(Redaction.Redact(t), period, ct) : null;
+            var text =
+                Keep(mode, e.Kind) && e.Text is { } t
+                    ? await identities.TokenizeAsync(Redaction.Redact(t), period, ct)
+                    : null;
             var attrs = new Dictionary<string, string>();
             foreach (var (key, value) in e.Attrs ?? new Dictionary<string, string>())
                 attrs[key] = await identities.TokenizeAsync(Redaction.Redact(value), period, ct);
-            var tool = e.Tool is null ? null : e.Tool with { Files = e.Tool.Files?.Select(Redaction.Redact).ToList() };
-            rows.Add(new
-            {
-                Org = orgId,
-                Session = session.Id,
-                e.Seq,
-                e.At,
-                e.Kind,
-                Text = text,
-                Tool = tool is null ? null : JsonSerializer.Serialize(tool, Json),
-                Usage = e.Usage is null ? null : JsonSerializer.Serialize(e.Usage, Json),
-                Attrs = JsonSerializer.Serialize(attrs, Json),
-            });
+            var tool = e.Tool is null
+                ? null
+                : e.Tool with
+                {
+                    Files = e.Tool.Files?.Select(Redaction.Redact).ToList(),
+                };
+            rows.Add(
+                new
+                {
+                    Org = orgId,
+                    Session = session.Id,
+                    e.Seq,
+                    e.At,
+                    e.Kind,
+                    Text = text,
+                    Tool = tool is null ? null : JsonSerializer.Serialize(tool, Json),
+                    Usage = e.Usage is null ? null : JsonSerializer.Serialize(e.Usage, Json),
+                    Attrs = JsonSerializer.Serialize(attrs, Json),
+                }
+            );
         }
 
         await using var connection = await db.OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        foreach (var month in batch.Events.Select(e => new DateTime(e.At.UtcDateTime.Year, e.At.UtcDateTime.Month, 1, 0, 0, 0, DateTimeKind.Utc)).Distinct())
+        foreach (
+            var month in batch
+                .Events.Select(e => new DateTime(
+                    e.At.UtcDateTime.Year,
+                    e.At.UtcDateTime.Month,
+                    1,
+                    0,
+                    0,
+                    0,
+                    DateTimeKind.Utc
+                ))
+                .Distinct()
+        )
             await EnsurePartitionAsync(connection, transaction, month, ct);
 
         var now = clock.GetUtcNow();
-        await connection.ExecuteAsync(new CommandDefinition(
-            """
-            INSERT INTO casebox.sessions (org_id, id, agent, agent_version, model, repo, branch, head_start, head_end, person, person_mapped, period, work_item, source, started_at, ended_at,
-                harness_hash, commits, created_at, updated_at)
-            VALUES (@Org, @Id, @Agent, @AgentVersion, @Model, @Repo, @Branch, @HeadStart, @HeadEnd, @Person, @Mapped, @Period, @WorkItem, @Source, @StartedAt, @EndedAt,
-                @HarnessHash, @Commits, @Now, @Now)
-            ON CONFLICT (org_id, id) DO UPDATE SET
-                agent_version = COALESCE(EXCLUDED.agent_version, sessions.agent_version),
-                model = COALESCE(EXCLUDED.model, sessions.model),
-                repo = COALESCE(sessions.repo, EXCLUDED.repo),
-                branch = COALESCE(sessions.branch, EXCLUDED.branch),
-                head_start = COALESCE(sessions.head_start, EXCLUDED.head_start),
-                head_end = COALESCE(EXCLUDED.head_end, sessions.head_end),
-                work_item = COALESCE(EXCLUDED.work_item, sessions.work_item),
-                person = CASE WHEN EXCLUDED.person_mapped AND NOT sessions.person_mapped THEN EXCLUDED.person ELSE sessions.person END,
-                person_mapped = sessions.person_mapped OR EXCLUDED.person_mapped,
-                started_at = LEAST(sessions.started_at, EXCLUDED.started_at),
-                ended_at = GREATEST(sessions.ended_at, EXCLUDED.ended_at),
-                harness_hash = COALESCE(sessions.harness_hash, EXCLUDED.harness_hash),
-                commits = GREATEST(sessions.commits, EXCLUDED.commits),
-                updated_at = EXCLUDED.updated_at
-            """,
-            new
-            {
-                Org = orgId, session.Id, session.Agent, session.AgentVersion, session.Model, Repo = session.Repo?.ToLowerInvariant(), session.Branch,
-                session.HeadStart, session.HeadEnd, Person = person, Mapped = mapped, Period = sessionPeriod, session.WorkItem, session.Source, session.StartedAt, session.EndedAt,
-                HarnessHash = session.Harness?.Hash, Commits = session.Source == "entire" ? Math.Max(session.Commits ?? 1, 1) : session.Commits, Now = now,
-            },
-            transaction, cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                INSERT INTO casebox.sessions (org_id, id, agent, agent_version, model, repo, branch, head_start, head_end, person, person_mapped, period, work_item, source, started_at, ended_at,
+                    harness_hash, commits, created_at, updated_at)
+                VALUES (@Org, @Id, @Agent, @AgentVersion, @Model, @Repo, @Branch, @HeadStart, @HeadEnd, @Person, @Mapped, @Period, @WorkItem, @Source, @StartedAt, @EndedAt,
+                    @HarnessHash, @Commits, @Now, @Now)
+                ON CONFLICT (org_id, id) DO UPDATE SET
+                    agent_version = COALESCE(EXCLUDED.agent_version, sessions.agent_version),
+                    model = COALESCE(EXCLUDED.model, sessions.model),
+                    repo = COALESCE(sessions.repo, EXCLUDED.repo),
+                    branch = COALESCE(sessions.branch, EXCLUDED.branch),
+                    head_start = COALESCE(sessions.head_start, EXCLUDED.head_start),
+                    head_end = COALESCE(EXCLUDED.head_end, sessions.head_end),
+                    work_item = COALESCE(EXCLUDED.work_item, sessions.work_item),
+                    person = CASE WHEN EXCLUDED.person_mapped AND NOT sessions.person_mapped THEN EXCLUDED.person ELSE sessions.person END,
+                    person_mapped = sessions.person_mapped OR EXCLUDED.person_mapped,
+                    started_at = LEAST(sessions.started_at, EXCLUDED.started_at),
+                    ended_at = GREATEST(sessions.ended_at, EXCLUDED.ended_at),
+                    harness_hash = COALESCE(sessions.harness_hash, EXCLUDED.harness_hash),
+                    commits = GREATEST(sessions.commits, EXCLUDED.commits),
+                    updated_at = EXCLUDED.updated_at
+                """,
+                new
+                {
+                    Org = orgId,
+                    session.Id,
+                    session.Agent,
+                    session.AgentVersion,
+                    session.Model,
+                    Repo = session.Repo?.ToLowerInvariant(),
+                    session.Branch,
+                    session.HeadStart,
+                    session.HeadEnd,
+                    Person = person,
+                    Mapped = mapped,
+                    Period = sessionPeriod,
+                    session.WorkItem,
+                    session.Source,
+                    session.StartedAt,
+                    session.EndedAt,
+                    HarnessHash = session.Harness?.Hash,
+                    Commits = session.Source == "entire"
+                        ? Math.Max(session.Commits ?? 1, 1)
+                        : session.Commits,
+                    Now = now,
+                },
+                transaction,
+                cancellationToken: ct
+            )
+        );
 
-        var inserted = await connection.ExecuteAsync(new CommandDefinition(
-            """
-            INSERT INTO casebox.session_events (org_id, session_id, seq, at, kind, text, tool, usage, attrs)
-            VALUES (@Org, @Session, @Seq, @At, @Kind, @Text, @Tool::jsonb, @Usage::jsonb, @Attrs::jsonb)
-            ON CONFLICT DO NOTHING
-            """,
-            rows, transaction, cancellationToken: ct));
-        await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE casebox.sessions SET event_count = event_count + @Inserted WHERE org_id = @Org AND id = @Id",
-            new { Inserted = inserted, Org = orgId, session.Id }, transaction, cancellationToken: ct));
+        var inserted = await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                INSERT INTO casebox.session_events (org_id, session_id, seq, at, kind, text, tool, usage, attrs)
+                VALUES (@Org, @Session, @Seq, @At, @Kind, @Text, @Tool::jsonb, @Usage::jsonb, @Attrs::jsonb)
+                ON CONFLICT DO NOTHING
+                """,
+                rows,
+                transaction,
+                cancellationToken: ct
+            )
+        );
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                "UPDATE casebox.sessions SET event_count = event_count + @Inserted WHERE org_id = @Org AND id = @Id",
+                new
+                {
+                    Inserted = inserted,
+                    Org = orgId,
+                    session.Id,
+                },
+                transaction,
+                cancellationToken: ct
+            )
+        );
         await HarnessVersionAsync(connection, transaction, orgId, session, now, ct);
         await transaction.CommitAsync(ct);
         return inserted;
@@ -150,63 +247,128 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
 
     // A harness version is the hash of the harness files plus the agent and the model (SDD section
     // 3). The model can arrive in a later batch than the files, so the version follows the session.
-    private static async Task HarnessVersionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string orgId, CapturedSession session, DateTimeOffset now, CancellationToken ct)
+    private static async Task HarnessVersionAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string orgId,
+        CapturedSession session,
+        DateTimeOffset now,
+        CancellationToken ct
+    )
     {
-        var row = await connection.QuerySingleAsync<(string Agent, string? Model, string? HarnessHash)>(new CommandDefinition(
-            "SELECT agent, model, harness_hash FROM casebox.sessions WHERE org_id = @Org AND id = @Id", new { Org = orgId, session.Id }, transaction, cancellationToken: ct));
-        if (row.HarnessHash is null) return;
+        var row = await connection.QuerySingleAsync<(
+            string Agent,
+            string? Model,
+            string? HarnessHash
+        )>(
+            new CommandDefinition(
+                "SELECT agent, model, harness_hash FROM casebox.sessions WHERE org_id = @Org AND id = @Id",
+                new { Org = orgId, session.Id },
+                transaction,
+                cancellationToken: ct
+            )
+        );
+        if (row.HarnessHash is null)
+            return;
         var model = row.Model ?? "unknown";
-        var version = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{row.HarnessHash}\n{row.Agent}\n{model}")));
-        await connection.ExecuteAsync(new CommandDefinition(
-            """
-            INSERT INTO casebox.harness_versions (org_id, hash, files_hash, files, agent, model, created_at)
-            VALUES (@Org, @Version, @Hash, @Files::jsonb, @Agent, @Model, @Now) ON CONFLICT DO NOTHING;
-            UPDATE casebox.sessions SET harness_version = @Version WHERE org_id = @Org AND id = @Id AND harness_version IS DISTINCT FROM @Version;
-            """,
-            new
-            {
-                Org = orgId, Version = version, Hash = row.HarnessHash, row.Agent, Model = model, session.Id, Now = now,
-                Files = JsonSerializer.Serialize(session.Harness is { } h && h.Hash == row.HarnessHash ? h.Files.Select(Redaction.Redact).ToList() : []),
-            },
-            transaction, cancellationToken: ct));
+        var version = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes($"{row.HarnessHash}\n{row.Agent}\n{model}")
+            )
+        );
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                INSERT INTO casebox.harness_versions (org_id, hash, files_hash, files, agent, model, created_at)
+                VALUES (@Org, @Version, @Hash, @Files::jsonb, @Agent, @Model, @Now) ON CONFLICT DO NOTHING;
+                UPDATE casebox.sessions SET harness_version = @Version WHERE org_id = @Org AND id = @Id AND harness_version IS DISTINCT FROM @Version;
+                """,
+                new
+                {
+                    Org = orgId,
+                    Version = version,
+                    Hash = row.HarnessHash,
+                    row.Agent,
+                    Model = model,
+                    session.Id,
+                    Now = now,
+                    Files = JsonSerializer.Serialize(
+                        session.Harness is { } h && h.Hash == row.HarnessHash
+                            ? h.Files.Select(Redaction.Redact).ToList()
+                            : []
+                    ),
+                },
+                transaction,
+                cancellationToken: ct
+            )
+        );
     }
 
     // Prompt mode off keeps structure only; redacted keeps prompts and responses but not tool
     // output; full keeps everything.
-    private static bool Keep(PromptMode mode, string kind) => mode switch
-    {
-        PromptMode.Off => false,
-        PromptMode.Redacted => kind is not ("tool_result" or "tool_call"),
-        _ => true,
-    };
+    private static bool Keep(PromptMode mode, string kind) =>
+        mode switch
+        {
+            PromptMode.Off => false,
+            PromptMode.Redacted => kind is not ("tool_result" or "tool_call"),
+            _ => true,
+        };
 
     private static void Validate(CaptureBatch batch)
     {
         var s = batch.Session;
-        if (string.IsNullOrWhiteSpace(s.Id) || s.Id.Length > 200 || !s.Id.StartsWith($"{s.Agent}:", StringComparison.Ordinal))
-            throw new DomainException("A session ID is '<agent>:<native id>', at most 200 characters.");
-        if (!Agents.Contains(s.Agent)) throw new DomainException($"Unknown agent '{s.Agent}'.");
-        if (s.Source is not ("import" or "hook" or "otel" or "entire")) throw new DomainException($"Unknown source '{s.Source}'.");
-        if (batch.Events.Count > MaxEventsPerBatch) throw new DomainException($"A batch holds at most {MaxEventsPerBatch} events.");
+        if (
+            string.IsNullOrWhiteSpace(s.Id)
+            || s.Id.Length > 200
+            || !s.Id.StartsWith($"{s.Agent}:", StringComparison.Ordinal)
+        )
+            throw new DomainException(
+                "A session ID is '<agent>:<native id>', at most 200 characters."
+            );
+        if (!Agents.Contains(s.Agent))
+            throw new DomainException($"Unknown agent '{s.Agent}'.");
+        if (s.Source is not ("import" or "hook" or "otel" or "entire"))
+            throw new DomainException($"Unknown source '{s.Source}'.");
+        if (batch.Events.Count > MaxEventsPerBatch)
+            throw new DomainException($"A batch holds at most {MaxEventsPerBatch} events.");
         foreach (var e in batch.Events)
         {
-            if (!Kinds.Contains(e.Kind)) throw new DomainException($"Unknown event kind '{e.Kind}'.");
-            if (e.Seq < 0) throw new DomainException("An event sequence number is never negative.");
+            if (!Kinds.Contains(e.Kind))
+                throw new DomainException($"Unknown event kind '{e.Kind}'.");
+            if (e.Seq < 0)
+                throw new DomainException("An event sequence number is never negative.");
         }
 
-        if (s.Harness is { } h && (h.Hash.Length != 64 || !h.Hash.All(char.IsAsciiHexDigitLower) || h.Files.Count > 500))
-            throw new DomainException("A harness hash is 64 lower-case hex digits, over at most 500 files.");
-        if (s.Commits is < 0) throw new DomainException("A commit count is never negative.");
+        if (
+            s.Harness is { } h
+            && (
+                h.Hash.Length != 64 || !h.Hash.All(char.IsAsciiHexDigitLower) || h.Files.Count > 500
+            )
+        )
+            throw new DomainException(
+                "A harness hash is 64 lower-case hex digits, over at most 500 files."
+            );
+        if (s.Commits is < 0)
+            throw new DomainException("A commit count is never negative.");
     }
 
-    private static Task EnsurePartitionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, DateTime month, CancellationToken ct)
+    private static Task EnsurePartitionAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        DateTime month,
+        CancellationToken ct
+    )
     {
         var name = $"session_events_{month:yyyy_MM}";
         var next = month.AddMonths(1);
         // The advisory lock serializes concurrent first writers of a month.
-        return connection.ExecuteAsync(new CommandDefinition(
-            $"SELECT pg_advisory_xact_lock(hashtext('{name}')); CREATE TABLE IF NOT EXISTS casebox.{name} PARTITION OF casebox.session_events FOR VALUES FROM ('{month:yyyy-MM-dd}') TO ('{next:yyyy-MM-dd}')",
-            transaction: transaction, cancellationToken: ct));
+        return connection.ExecuteAsync(
+            new CommandDefinition(
+                $"SELECT pg_advisory_xact_lock(hashtext('{name}')); CREATE TABLE IF NOT EXISTS casebox.{name} PARTITION OF casebox.session_events FOR VALUES FROM ('{month:yyyy-MM-dd}') TO ('{next:yyyy-MM-dd}')",
+                transaction: transaction,
+                cancellationToken: ct
+            )
+        );
     }
 }
 
@@ -214,20 +376,41 @@ public static class Ingest
 {
     public static void MapIngest(this IEndpointRouteBuilder app)
     {
-        var ingest = app.MapGroup("/ingest/v1").WithTags("Ingest").RequireAuthorization(Policies.Ingest);
+        var ingest = app.MapGroup("/ingest/v1")
+            .WithTags("Ingest")
+            .RequireAuthorization(Policies.Ingest);
 
-        ingest.MapGet("/config", async (IEventStore store) =>
-        {
-            var (org, _) = await store.Load<Organisation>(Organisation.StreamId);
-            return Results.Ok(new CaptureConfig(org.Settings.PromptMode, org.Settings.PromptMode is not null));
-        });
+        ingest.MapGet(
+            "/config",
+            async (IEventStore store) =>
+            {
+                var (org, _) = await store.Load<Organisation>(Organisation.StreamId);
+                return Results.Ok(
+                    new CaptureConfig(org.Settings.PromptMode, org.Settings.PromptMode is not null)
+                );
+            }
+        );
 
-        ingest.MapPost("/sessions", async (CaptureBatch batch, HttpContext http, IEventStore store, CaptureStore capture, WorkItems.Linker linker) =>
-        {
-            var (org, _) = await store.Load<Organisation>(Organisation.StreamId);
-            var stored = await capture.StoreAsync(http.User.OrgId(), org.Settings, batch, http.RequestAborted);
-            await linker.LinkSessionAsync(batch.Session.Id, http.RequestAborted);
-            return Results.Ok(new { accepted = batch.Events.Count, stored });
-        });
+        ingest.MapPost(
+            "/sessions",
+            async (
+                CaptureBatch batch,
+                HttpContext http,
+                IEventStore store,
+                CaptureStore capture,
+                WorkItems.Linker linker
+            ) =>
+            {
+                var (org, _) = await store.Load<Organisation>(Organisation.StreamId);
+                var stored = await capture.StoreAsync(
+                    http.User.OrgId(),
+                    org.Settings,
+                    batch,
+                    http.RequestAborted
+                );
+                await linker.LinkSessionAsync(batch.Session.Id, http.RequestAborted);
+                return Results.Ok(new { accepted = batch.Events.Count, stored });
+            }
+        );
     }
 }

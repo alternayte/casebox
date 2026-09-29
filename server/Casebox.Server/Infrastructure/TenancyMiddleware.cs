@@ -12,7 +12,11 @@ public sealed class TenancyMiddleware(RequestDelegate next)
         if (http.User.Identity?.IsAuthenticated == true)
         {
             deedbox.TenantId = http.User.OrgId();
-            deedbox.Metadata = new EventMetadata { CorrelationId = http.TraceIdentifier, Actor = http.User.Actor() };
+            deedbox.Metadata = new EventMetadata
+            {
+                CorrelationId = http.TraceIdentifier,
+                Actor = http.User.Actor(),
+            };
         }
 
         return next(http);

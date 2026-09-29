@@ -33,12 +33,20 @@ public sealed class TestInboxHandler : IInboxHandler
 
     public string EventType => "test.create_workspace";
 
-    public async Task HandleAsync(InboxMessage message, IEventStore store, DbTransaction transaction, CancellationToken ct)
+    public async Task HandleAsync(
+        InboxMessage message,
+        IEventStore store,
+        DbTransaction transaction,
+        CancellationToken ct
+    )
     {
         var payload = message.Payload.GetProperty("payload");
         var name = payload.GetProperty("workspace").GetString()!;
         Attempts.AddOrUpdate(name, 1, (_, n) => n + 1);
-        await store.Execute<Workspace>(Workspace.StreamIdFor(name), w => w.Exists ? [] : WorkspaceDecider.Create(w, name));
+        await store.Execute<Workspace>(
+            Workspace.StreamIdFor(name),
+            w => w.Exists ? [] : WorkspaceDecider.Create(w, name)
+        );
         if (payload.TryGetProperty("fail", out var fail) && fail.GetBoolean())
             throw new InvalidOperationException("The test handler fails on purpose.");
     }
@@ -58,7 +66,11 @@ public sealed class TestJobHandler : IJobResultHandler
         var (state, version) = await result.Store.Load<Workspace>(Workspace.StreamIdFor(workspace));
         var events = WorkspaceDecider.AddRepo(state, repo).ToList();
         if (events.Count > 0)
-            await result.Store.Append(Workspace.StreamIdFor(workspace), ExpectedVersion.Exact(version), events);
+            await result.Store.Append(
+                Workspace.StreamIdFor(workspace),
+                ExpectedVersion.Exact(version),
+                events
+            );
     }
 }
 
@@ -84,7 +96,15 @@ public sealed class TestRoster : Casebox.Server.Features.Privacy.IRosterSource
 
     public static string TeamEmail(string login) => $"{login}.team@example.com";
 
-    public Task<IReadOnlyList<Casebox.Server.Features.Privacy.RosterPerson>> PeopleAsync(string orgId, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<Casebox.Server.Features.Privacy.RosterPerson>>(
-            [new(Canonical, [Email, "jira:ada"]), .. Team.Select(t => new Casebox.Server.Features.Privacy.RosterPerson($"github:{t}-team", [$"email:{TeamEmail(t)}"]))]);
+    public Task<IReadOnlyList<Casebox.Server.Features.Privacy.RosterPerson>> PeopleAsync(
+        string orgId,
+        CancellationToken ct
+    ) =>
+        Task.FromResult<IReadOnlyList<Casebox.Server.Features.Privacy.RosterPerson>>([
+            new(Canonical, [Email, "jira:ada"]),
+            .. Team.Select(t => new Casebox.Server.Features.Privacy.RosterPerson(
+                $"github:{t}-team",
+                [$"email:{TeamEmail(t)}"]
+            )),
+        ]);
 }

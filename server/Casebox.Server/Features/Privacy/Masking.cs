@@ -10,5 +10,6 @@ public static partial class Masking
     [GeneratedRegex("person:[a-z2-7]{26}")]
     private static partial Regex Token();
 
-    public static string? Mask(string? text) => text is null ? null : Token().Replace(text, "[person]");
+    public static string? Mask(string? text) =>
+        text is null ? null : Token().Replace(text, "[person]");
 }

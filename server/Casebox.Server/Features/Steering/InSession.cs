@@ -1,11 +1,23 @@
 namespace Casebox.Server.Features.Steering;
 
 // One stored event of a session, as the in-session detector reads it.
-public sealed record TraceEvent(long Seq, DateTimeOffset At, string Kind, string? Text, string? Denial);
+public sealed record TraceEvent(
+    long Seq,
+    DateTimeOffset At,
+    string Kind,
+    string? Text,
+    string? Denial
+);
 
 // An intervention inside a session: its signal, when it began, the human's words and the
 // sequence numbers of its human events.
-public sealed record SessionIntervention(string Id, Signal Signal, DateTimeOffset At, string? Text, IReadOnlyList<long> Seqs);
+public sealed record SessionIntervention(
+    string Id,
+    Signal Signal,
+    DateTimeOffset At,
+    string? Text,
+    IReadOnlyList<long> Seqs
+);
 
 // docs/specs/steering.md, "In-session grouping". A human event after agent activity opens an
 // intervention; human events before the next agent event join it. The task (human events before
@@ -16,10 +28,22 @@ public static class InSession
     public const long EntireSeqBase = 3_000_000_000;
 
     // Rewind is the strongest signal, a plain follow-up the weakest.
-    private static readonly Signal[] Strength = [Signal.Rewind, Signal.Interruption, Signal.HumanEdit, Signal.Denial, Signal.FollowUp];
+    private static readonly Signal[] Strength =
+    [
+        Signal.Rewind,
+        Signal.Interruption,
+        Signal.HumanEdit,
+        Signal.Denial,
+        Signal.FollowUp,
+    ];
 
     // Denials a rule or an automatic review made; no person intervened.
-    private static readonly HashSet<string> AutomaticDenials = ["permission-rule", "config", "auto-review"];
+    private static readonly HashSet<string> AutomaticDenials =
+    [
+        "permission-rule",
+        "config",
+        "auto-review",
+    ];
 
     public static bool IsOtel(long seq) => seq is >= OtelSeqBase and < EntireSeqBase;
 
@@ -37,11 +61,24 @@ public static class InSession
 
         void Close()
         {
-            if (open is null) return;
+            if (open is null)
+                return;
             var signal = Strength.First(s => open.Any(o => o.Signal == s));
-            var prompts = open.Where(o => o.Event.Kind == "prompt" && !string.IsNullOrWhiteSpace(o.Event.Text)).Select(o => o.Event.Text!).ToList();
+            var prompts = open.Where(o =>
+                    o.Event.Kind == "prompt" && !string.IsNullOrWhiteSpace(o.Event.Text)
+                )
+                .Select(o => o.Event.Text!)
+                .ToList();
             var text = prompts.Count == 0 ? null : string.Join("\n\n", prompts);
-            result.Add(new SessionIntervention($"e:{open[0].Event.Seq}", signal, open[0].Event.At, text, open.Select(o => o.Event.Seq).ToList()));
+            result.Add(
+                new SessionIntervention(
+                    $"e:{open[0].Event.Seq}",
+                    signal,
+                    open[0].Event.At,
+                    text,
+                    open.Select(o => o.Event.Seq).ToList()
+                )
+            );
             open = null;
         }
 
@@ -54,8 +91,10 @@ public static class InSession
                 continue;
             }
 
-            if (HumanSignal(e) is not { } signal) continue;
-            if (!agentActive) continue; // the task, or an amendment to it before the agent acts
+            if (HumanSignal(e) is not { } signal)
+                continue;
+            if (!agentActive)
+                continue; // the task, or an amendment to it before the agent acts
             open ??= [];
             open.Add((e, signal));
         }
@@ -64,20 +103,25 @@ public static class InSession
         return result;
     }
 
-    private static Signal? HumanSignal(TraceEvent e) => e.Kind switch
-    {
-        "prompt" when !IsCommand(e.Text) => Signal.FollowUp,
-        "interruption" => Signal.Interruption,
-        "denial" when e.Denial is null || !AutomaticDenials.Contains(e.Denial) => Signal.Denial,
-        "rewind" => Signal.Rewind,
-        "human_edit" => Signal.HumanEdit,
-        _ => null,
-    };
+    private static Signal? HumanSignal(TraceEvent e) =>
+        e.Kind switch
+        {
+            "prompt" when !IsCommand(e.Text) => Signal.FollowUp,
+            "interruption" => Signal.Interruption,
+            "denial" when e.Denial is null || !AutomaticDenials.Contains(e.Denial) => Signal.Denial,
+            "rewind" => Signal.Rewind,
+            "human_edit" => Signal.HumanEdit,
+            _ => null,
+        };
 
     // A slash command or its local output is the agent's interface, not an instruction.
     private static bool IsCommand(string? text)
     {
         var t = text?.TrimStart();
-        return t is not null && (t.StartsWith("<command-", StringComparison.Ordinal) || t.StartsWith("<local-command-", StringComparison.Ordinal));
+        return t is not null
+            && (
+                t.StartsWith("<command-", StringComparison.Ordinal)
+                || t.StartsWith("<local-command-", StringComparison.Ordinal)
+            );
     }
 }

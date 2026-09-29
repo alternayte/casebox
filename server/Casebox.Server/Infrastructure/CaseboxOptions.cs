@@ -44,7 +44,8 @@ public sealed class CaseboxOptions
         // OIDC subjects that become Owners on first login. Everyone else starts as a Viewer.
         public List<string> Owners { get; set; } = [];
 
-        public bool Enabled => !string.IsNullOrWhiteSpace(Authority) && !string.IsNullOrWhiteSpace(ClientId);
+        public bool Enabled =>
+            !string.IsNullOrWhiteSpace(Authority) && !string.IsNullOrWhiteSpace(ClientId);
     }
 
     public sealed class KeysOptions

@@ -13,6 +13,9 @@ public sealed class OrgBootstrap(IServiceProvider services, IOptions<CaseboxOpti
         context.TenantId = options.Value.Org.Id;
         context.Metadata = new EventMetadata { Actor = "system:bootstrap" };
         var store = scope.ServiceProvider.GetRequiredService<IEventStore>();
-        await store.Execute<Organisation>(Organisation.StreamId, org => OrgDecider.Create(org, options.Value.Org.Name));
+        await store.Execute<Organisation>(
+            Organisation.StreamId,
+            org => OrgDecider.Create(org, options.Value.Org.Name)
+        );
     }
 }

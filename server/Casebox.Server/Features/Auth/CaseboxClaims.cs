@@ -12,12 +12,15 @@ public static class CaseboxClaims
     public const string TokenKind = "casebox:token_kind";
 
     public static string OrgId(this ClaimsPrincipal user) =>
-        user.FindFirstValue(Org) ?? throw new InvalidOperationException("The request has no organisation.");
+        user.FindFirstValue(Org)
+        ?? throw new InvalidOperationException("The request has no organisation.");
 
     public static string? AccountId(this ClaimsPrincipal user) => user.FindFirstValue(Account);
 
     public static Role? AccountRole(this ClaimsPrincipal user) =>
-        Enum.TryParse<Role>(user.FindFirstValue(Role), ignoreCase: true, out var role) ? role : null;
+        Enum.TryParse<Role>(user.FindFirstValue(Role), ignoreCase: true, out var role)
+            ? role
+            : null;
 
     // Who acted, for event metadata: an account or a token, never a captured person.
     public static string? Actor(this ClaimsPrincipal user) =>

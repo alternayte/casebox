@@ -15,9 +15,12 @@ public sealed class QueueBoxSchemaTests(StackFixture stack)
             SELECT table_name, column_name FROM information_schema.columns
             WHERE table_schema = 'public' AND table_name IN ('outbox', 'inbox')
             """,
-            connection);
+            connection
+        );
         var columns = new HashSet<string>();
-        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(
+            TestContext.Current.CancellationToken
+        );
         while (await reader.ReadAsync(TestContext.Current.CancellationToken))
             columns.Add($"{reader.GetString(0)}.{reader.GetString(1)}");
 

@@ -13,12 +13,23 @@ public static partial class Periods
     public static DateTimeOffset? EndOf(string period)
     {
         var m = Pattern().Match(period);
-        if (!m.Success) return null;
+        if (!m.Success)
+            return null;
         var year = int.Parse(m.Groups["y"].Value, CultureInfo.InvariantCulture);
         if (m.Groups["q"].Success)
-            return new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(3 * int.Parse(m.Groups["q"].Value, CultureInfo.InvariantCulture));
+            return new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(
+                3 * int.Parse(m.Groups["q"].Value, CultureInfo.InvariantCulture)
+            );
         if (m.Groups["m"].Success)
-            return new DateTimeOffset(year, int.Parse(m.Groups["m"].Value, CultureInfo.InvariantCulture), 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1);
+            return new DateTimeOffset(
+                year,
+                int.Parse(m.Groups["m"].Value, CultureInfo.InvariantCulture),
+                1,
+                0,
+                0,
+                0,
+                TimeSpan.Zero
+            ).AddMonths(1);
         return new DateTimeOffset(year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
     }
 }

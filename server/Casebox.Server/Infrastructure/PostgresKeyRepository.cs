@@ -12,7 +12,8 @@ public sealed class PostgresKeyRepository(NpgsqlDataSource dataSource) : IXmlRep
     public IReadOnlyCollection<XElement> GetAllElements()
     {
         using var connection = dataSource.OpenConnection();
-        return connection.Query<string>("SELECT xml FROM casebox.data_protection_keys ORDER BY created_at")
+        return connection
+            .Query<string>("SELECT xml FROM casebox.data_protection_keys ORDER BY created_at")
             .Select(XElement.Parse)
             .ToList();
     }
@@ -22,6 +23,7 @@ public sealed class PostgresKeyRepository(NpgsqlDataSource dataSource) : IXmlRep
         using var connection = dataSource.OpenConnection();
         connection.Execute(
             "INSERT INTO casebox.data_protection_keys (id, xml) VALUES (@Id, @Xml) ON CONFLICT (id) DO NOTHING",
-            new { Id = friendlyName, Xml = element.ToString(SaveOptions.DisableFormatting) });
+            new { Id = friendlyName, Xml = element.ToString(SaveOptions.DisableFormatting) }
+        );
     }
 }

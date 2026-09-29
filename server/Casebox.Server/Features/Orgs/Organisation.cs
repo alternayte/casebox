@@ -3,11 +3,27 @@ using Deedbox;
 
 namespace Casebox.Server.Features.Orgs;
 
-public enum PromptMode { Off, Redacted, Full }
+public enum PromptMode
+{
+    Off,
+    Redacted,
+    Full,
+}
 
-public enum PseudonymPeriod { Month, Quarter, Year }
+public enum PseudonymPeriod
+{
+    Month,
+    Quarter,
+    Year,
+}
 
-public enum Role { Viewer, Member, Admin, Owner }
+public enum Role
+{
+    Viewer,
+    Member,
+    Admin,
+    Owner,
+}
 
 public sealed record Budgets(decimal MonthlyUsd, decimal PerEvaluationUsd, decimal ConfirmAboveUsd);
 
@@ -19,13 +35,15 @@ public sealed record OrgSettings(
     PseudonymPeriod PseudonymPeriod,
     Budgets Budgets,
     int? RetentionMonths = null,
-    int? TraceRetentionDays = null)
+    int? TraceRetentionDays = null
+)
 {
     public const int MinimumK = 2;
     public const int DefaultRetentionMonths = 12;
     public const int DefaultTraceRetentionDays = 180;
 
-    public static OrgSettings Defaults { get; } = new(null, 3, PseudonymPeriod.Quarter, new Budgets(500m, 150m, 50m));
+    public static OrgSettings Defaults { get; } =
+        new(null, 3, PseudonymPeriod.Quarter, new Budgets(500m, 150m, 50m));
 
     // How long correction text stays linkable: after this, a period's subjects are erased and its
     // pseudonym secret is destroyed.
@@ -60,39 +78,56 @@ public static class OrgEvents
 }
 
 // One organisation is one Deedbox tenant, and each tenant holds exactly one org stream.
-public sealed record Organisation(bool Exists, string Name, OrgSettings Settings) : IState<Organisation>
+public sealed record Organisation(bool Exists, string Name, OrgSettings Settings)
+    : IState<Organisation>
 {
     public const string StreamId = "org";
 
     public static Organisation Initial { get; } = new(false, "", OrgSettings.Defaults);
 
-    public static Organisation Evolve(Organisation state, object @event) => @event switch
-    {
-        OrgEvents.Created e => state with { Exists = true, Name = e.Name, Settings = e.Settings },
-        OrgEvents.SettingsChanged e => state with { Settings = e.Settings },
-        _ => state,
-    };
+    public static Organisation Evolve(Organisation state, object @event) =>
+        @event switch
+        {
+            OrgEvents.Created e => state with
+            {
+                Exists = true,
+                Name = e.Name,
+                Settings = e.Settings,
+            },
+            OrgEvents.SettingsChanged e => state with { Settings = e.Settings },
+            _ => state,
+        };
 }
 
 public static class OrgDecider
 {
     public static IEnumerable<object> Create(Organisation org, string name)
     {
-        if (org.Exists) return [];
-        if (string.IsNullOrWhiteSpace(name)) throw new DomainException("An organisation needs a name.");
+        if (org.Exists)
+            return [];
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DomainException("An organisation needs a name.");
         return [new OrgEvents.Created(name.Trim(), OrgSettings.Defaults)];
     }
 
     public static IEnumerable<object> ChangeSettings(Organisation org, OrgSettings settings)
     {
-        if (!org.Exists) throw new NotFoundException("The organisation does not exist.");
-        if (settings.K < OrgSettings.MinimumK) throw new DomainException($"k must be at least {OrgSettings.MinimumK}.");
-        if (settings.Budgets.MonthlyUsd < 0 || settings.Budgets.PerEvaluationUsd < 0 || settings.Budgets.ConfirmAboveUsd < 0)
+        if (!org.Exists)
+            throw new NotFoundException("The organisation does not exist.");
+        if (settings.K < OrgSettings.MinimumK)
+            throw new DomainException($"k must be at least {OrgSettings.MinimumK}.");
+        if (
+            settings.Budgets.MonthlyUsd < 0
+            || settings.Budgets.PerEvaluationUsd < 0
+            || settings.Budgets.ConfirmAboveUsd < 0
+        )
             throw new DomainException("Budgets cannot be negative.");
         if (org.Settings.PromptMode is not null && settings.PromptMode is null)
             throw new DomainException("The prompt mode cannot be unset once chosen.");
-        if (settings.RetentionMonths is < 1 or > 120) throw new DomainException("The retention window is 1 to 120 months.");
-        if (settings.TraceRetentionDays is < 7 or > 3650) throw new DomainException("Trace retention is 7 to 3650 days.");
+        if (settings.RetentionMonths is < 1 or > 120)
+            throw new DomainException("The retention window is 1 to 120 months.");
+        if (settings.TraceRetentionDays is < 7 or > 3650)
+            throw new DomainException("Trace retention is 7 to 3650 days.");
         return settings == org.Settings ? [] : [new OrgEvents.SettingsChanged(settings)];
     }
 }

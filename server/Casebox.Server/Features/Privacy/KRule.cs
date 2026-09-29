@@ -13,12 +13,14 @@ public sealed record KGroup<TKey>(TKey Key, int People, int Count);
 // would let a group of two pass as three. Every report route builds its groups through this rule.
 public static class KRule
 {
-    public static IReadOnlyList<KGroup<TKey>> Apply<TKey>(IEnumerable<(TKey Key, Person Person)> rows, int k)
+    public static IReadOnlyList<KGroup<TKey>> Apply<TKey>(
+        IEnumerable<(TKey Key, Person Person)> rows,
+        int k
+    )
         where TKey : notnull
     {
         RequireK(k);
-        return rows
-            .GroupBy(r => r.Key)
+        return rows.GroupBy(r => r.Key)
             .Select(g => new KGroup<TKey>(g.Key, People(g.Select(r => r.Person)), g.Count()))
             .Where(g => g.People >= k)
             .ToList();
@@ -28,7 +30,8 @@ public static class KRule
     // counts the largest number of distinct tokens in any one period: one person is never counted
     // twice.
     public static int People(IEnumerable<Person> people) =>
-        people.Where(p => p.Mapped)
+        people
+            .Where(p => p.Mapped)
             .GroupBy(p => p.Period, StringComparer.Ordinal)
             .Select(g => g.Select(p => p.Token).Distinct(StringComparer.Ordinal).Count())
             .DefaultIfEmpty(0)
@@ -42,6 +45,10 @@ public static class KRule
 
     private static void RequireK(int k)
     {
-        if (k < Orgs.OrgSettings.MinimumK) throw new ArgumentOutOfRangeException(nameof(k), $"k is at least {Orgs.OrgSettings.MinimumK}.");
+        if (k < Orgs.OrgSettings.MinimumK)
+            throw new ArgumentOutOfRangeException(
+                nameof(k),
+                $"k is at least {Orgs.OrgSettings.MinimumK}."
+            );
     }
 }

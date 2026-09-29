@@ -12,21 +12,43 @@ public sealed record ErasureResult(int Subjects, int Sessions);
 // Erases a person everywhere: every token the identity and its roster aliases had in every period
 // that still has a secret. Deedbox deletes the subject keys, so their correction text becomes
 // unreadable in every stream at once; Casebox deletes their sessions, trace events and telemetry.
-public sealed class Erasure(IPseudonyms pseudonyms, IEventStoreAdmin admin, Roster roster, NpgsqlDataSource db, IEventStore store, DeedboxContext context)
+public sealed class Erasure(
+    IPseudonyms pseudonyms,
+    IEventStoreAdmin admin,
+    Roster roster,
+    NpgsqlDataSource db,
+    IEventStore store,
+    DeedboxContext context
+)
 {
     public async Task<ErasureResult> EraseAsync(string rawIdentity, CancellationToken ct)
     {
         var colon = rawIdentity.IndexOf(':', StringComparison.Ordinal);
-        var identity = colon > 0 ? Identities.Identity(rawIdentity[..colon].Trim().ToLowerInvariant(), rawIdentity[(colon + 1)..]) : null;
-        if (identity is null) throw new DomainException("Name the identity with its kind, such as email:alice@example.com, github:alice or jira:alice.");
+        var identity =
+            colon > 0
+                ? Identities.Identity(
+                    rawIdentity[..colon].Trim().ToLowerInvariant(),
+                    rawIdentity[(colon + 1)..]
+                )
+                : null;
+        if (identity is null)
+            throw new DomainException(
+                "Name the identity with its kind, such as email:alice@example.com, github:alice or jira:alice."
+            );
 
         var orgId = context.TenantId;
         var identities = await roster.AliasesOfAsync(orgId, identity, ct);
 
         await using var connection = await db.OpenConnectionAsync(ct);
-        var periods = (await connection.QueryAsync<string>(new CommandDefinition(
-            "SELECT period FROM casebox.sessions WHERE org_id = @Org UNION SELECT period FROM casebox.steering_facts WHERE org_id = @Org",
-            new { Org = orgId }, cancellationToken: ct))).ToList();
+        var periods = (
+            await connection.QueryAsync<string>(
+                new CommandDefinition(
+                    "SELECT period FROM casebox.sessions WHERE org_id = @Org UNION SELECT period FROM casebox.steering_facts WHERE org_id = @Org",
+                    new { Org = orgId },
+                    cancellationToken: ct
+                )
+            )
+        ).ToList();
 
         var subjects = new HashSet<string>(StringComparer.Ordinal);
         foreach (var period in periods)
@@ -43,19 +65,42 @@ public sealed class Erasure(IPseudonyms pseudonyms, IEventStoreAdmin admin, Rost
         }
 
         await using var transaction = await connection.BeginTransactionAsync(ct);
-        var sessionIds = (await connection.QueryAsync<string>(new CommandDefinition(
-            "SELECT id FROM casebox.sessions WHERE org_id = @Org AND person = ANY(@Subjects)",
-            new { Org = orgId, Subjects = subjects.ToArray() }, transaction, cancellationToken: ct))).ToArray();
-        await connection.ExecuteAsync(new CommandDefinition(
-            """
-            DELETE FROM casebox.session_events WHERE org_id = @Org AND session_id = ANY(@Ids);
-            DELETE FROM casebox.session_metrics WHERE org_id = @Org AND agent || ':' || session_id = ANY(@Ids);
-            DELETE FROM casebox.sessions WHERE org_id = @Org AND id = ANY(@Ids);
-            DELETE FROM casebox.steering_facts WHERE org_id = @Org AND (person = ANY(@Subjects) OR session_id = ANY(@Ids));
-            """,
-            new { Org = orgId, Ids = sessionIds, Subjects = subjects.ToArray() }, transaction, cancellationToken: ct));
+        var sessionIds = (
+            await connection.QueryAsync<string>(
+                new CommandDefinition(
+                    "SELECT id FROM casebox.sessions WHERE org_id = @Org AND person = ANY(@Subjects)",
+                    new { Org = orgId, Subjects = subjects.ToArray() },
+                    transaction,
+                    cancellationToken: ct
+                )
+            )
+        ).ToArray();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                DELETE FROM casebox.session_events WHERE org_id = @Org AND session_id = ANY(@Ids);
+                DELETE FROM casebox.session_metrics WHERE org_id = @Org AND agent || ':' || session_id = ANY(@Ids);
+                DELETE FROM casebox.sessions WHERE org_id = @Org AND id = ANY(@Ids);
+                DELETE FROM casebox.steering_facts WHERE org_id = @Org AND (person = ANY(@Subjects) OR session_id = ANY(@Ids));
+                """,
+                new
+                {
+                    Org = orgId,
+                    Ids = sessionIds,
+                    Subjects = subjects.ToArray(),
+                },
+                transaction,
+                cancellationToken: ct
+            )
+        );
         var result = new ErasureResult(subjects.Count, sessionIds.Length);
-        await store.UseTransaction(transaction).Append(Organisation.StreamId, ExpectedVersion.Any, [new OrgEvents.ErasurePerformed(result.Subjects, result.Sessions)]);
+        await store
+            .UseTransaction(transaction)
+            .Append(
+                Organisation.StreamId,
+                ExpectedVersion.Any,
+                [new OrgEvents.ErasurePerformed(result.Subjects, result.Sessions)]
+            );
         await transaction.CommitAsync(ct);
 
         // Deedbox erases the subject keys in every period whose secret still exists.
@@ -71,8 +116,12 @@ public static class PrivacyEndpoints
 
     public static void MapPrivacy(this RouteGroupBuilder api)
     {
-        api.MapPost("/privacy/erasures", async (EraseRequest body, Erasure erasure, HttpContext http) =>
-            Results.Ok(await erasure.EraseAsync(body.Identity ?? "", http.RequestAborted)))
-            .WithTags("Privacy").RequireAuthorization(Policies.Admin);
+        api.MapPost(
+                "/privacy/erasures",
+                async (EraseRequest body, Erasure erasure, HttpContext http) =>
+                    Results.Ok(await erasure.EraseAsync(body.Identity ?? "", http.RequestAborted))
+            )
+            .WithTags("Privacy")
+            .RequireAuthorization(Policies.Admin);
     }
 }

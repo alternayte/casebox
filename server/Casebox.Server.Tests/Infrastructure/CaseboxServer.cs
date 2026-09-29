@@ -42,7 +42,10 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Casebox", _stack.ConnectionString);
         builder.UseSetting("Casebox:Org:Id", OrgId);
         builder.UseSetting("Casebox:Org:Name", $"Org {OrgId}");
-        builder.UseSetting("Casebox:ManagementPort", ManagementPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        builder.UseSetting(
+            "Casebox:ManagementPort",
+            ManagementPort.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        );
         builder.UseSetting("Casebox:Keys:Mode", "database");
         builder.UseSetting("Casebox:LocalAdmin:Password", StackFixture.AdminPassword);
         builder.UseSetting("Casebox:Oidc:Authority", _stack.OidcAuthority);
@@ -70,9 +73,13 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
     public HttpClient Anonymous() => Client(new CookieContainer());
 
     private HttpClient Client(CookieContainer cookies) =>
-        new(new HttpClientHandler { CookieContainer = cookies, AllowAutoRedirect = false }) { BaseAddress = new Uri($"http://127.0.0.1:{_apiPort}") };
+        new(new HttpClientHandler { CookieContainer = cookies, AllowAutoRedirect = false })
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{_apiPort}"),
+        };
 
-    public HttpClient Management() => new() { BaseAddress = new Uri($"http://127.0.0.1:{ManagementPort}") };
+    public HttpClient Management() =>
+        new() { BaseAddress = new Uri($"http://127.0.0.1:{ManagementPort}") };
 
     // A client in the local admin's session (an Owner), with the CSRF header. The admin logs in
     // once per server, because the login endpoint is rate-limited per address.
@@ -83,7 +90,13 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
         {
             if (!_adminLoggedIn)
             {
-                (await Client(_adminCookies).PostAsJsonAsync("/api/v1/auth/local", new { password = StackFixture.AdminPassword })).EnsureSuccessStatusCode();
+                (
+                    await Client(_adminCookies)
+                        .PostAsJsonAsync(
+                            "/api/v1/auth/local",
+                            new { password = StackFixture.AdminPassword }
+                        )
+                ).EnsureSuccessStatusCode();
                 _adminLoggedIn = true;
             }
         }
@@ -96,7 +109,8 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
         var cookies = new CookieContainer();
         var baseAddress = new Uri($"http://127.0.0.1:{_apiPort}");
         foreach (Cookie cookie in _adminCookies.GetCookies(baseAddress))
-            if (cookie.Name == "casebox.session") cookies.Add(baseAddress, cookie);
+            if (cookie.Name == "casebox.session")
+                cookies.Add(baseAddress, cookie);
         var client = Client(cookies);
         await AddCsrfAsync(client);
         return client;
@@ -112,11 +126,17 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
     public async Task<HttpClient> TokenClientAsync(TokenKind kind)
     {
         var admin = await AdminAsync();
-        var response = await admin.PostAsJsonAsync("/api/v1/tokens", new { kind = kind.ToString().ToLowerInvariant(), name = $"{kind} {Guid.NewGuid():N}" });
+        var response = await admin.PostAsJsonAsync(
+            "/api/v1/tokens",
+            new { kind = kind.ToString().ToLowerInvariant(), name = $"{kind} {Guid.NewGuid():N}" }
+        );
         response.EnsureSuccessStatusCode();
         var issued = await response.Content.ReadFromJsonAsync<IssuedTokenBody>();
         var client = Anonymous();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", issued!.Secret);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            issued!.Secret
+        );
         return client;
     }
 

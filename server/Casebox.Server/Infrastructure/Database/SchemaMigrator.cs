@@ -13,37 +13,75 @@ internal sealed class SchemaMigrator(NpgsqlDataSource dataSource, ILogger<Schema
     public async Task MigrateAsync(CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await connection.ExecuteAsync(new CommandDefinition("SELECT pg_advisory_lock(@LockKey)", new { LockKey }, cancellationToken: cancellationToken));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                "SELECT pg_advisory_lock(@LockKey)",
+                new { LockKey },
+                cancellationToken: cancellationToken
+            )
+        );
         try
         {
-            await connection.ExecuteAsync(new CommandDefinition(
-                """
-                CREATE SCHEMA IF NOT EXISTS casebox;
-                CREATE TABLE IF NOT EXISTS casebox.schema_migrations (
-                    version    integer     PRIMARY KEY,
-                    name       text        NOT NULL,
-                    applied_at timestamptz NOT NULL DEFAULT now()
-                );
-                """,
-                cancellationToken: cancellationToken));
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
+                    CREATE SCHEMA IF NOT EXISTS casebox;
+                    CREATE TABLE IF NOT EXISTS casebox.schema_migrations (
+                        version    integer     PRIMARY KEY,
+                        name       text        NOT NULL,
+                        applied_at timestamptz NOT NULL DEFAULT now()
+                    );
+                    """,
+                    cancellationToken: cancellationToken
+                )
+            );
 
-            var applied = (await connection.QueryAsync<int>(new CommandDefinition(
-                "SELECT version FROM casebox.schema_migrations", cancellationToken: cancellationToken))).ToHashSet();
+            var applied = (
+                await connection.QueryAsync<int>(
+                    new CommandDefinition(
+                        "SELECT version FROM casebox.schema_migrations",
+                        cancellationToken: cancellationToken
+                    )
+                )
+            ).ToHashSet();
 
             foreach (var migration in Migrations().Where(m => !applied.Contains(m.Version)))
             {
-                await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-                await connection.ExecuteAsync(new CommandDefinition(migration.Sql, transaction: transaction, cancellationToken: cancellationToken));
-                await connection.ExecuteAsync(new CommandDefinition(
-                    "INSERT INTO casebox.schema_migrations (version, name) VALUES (@Version, @Name)",
-                    new { migration.Version, migration.Name }, transaction, cancellationToken: cancellationToken));
+                await using var transaction = await connection.BeginTransactionAsync(
+                    cancellationToken
+                );
+                await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        migration.Sql,
+                        transaction: transaction,
+                        cancellationToken: cancellationToken
+                    )
+                );
+                await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        "INSERT INTO casebox.schema_migrations (version, name) VALUES (@Version, @Name)",
+                        new { migration.Version, migration.Name },
+                        transaction,
+                        cancellationToken: cancellationToken
+                    )
+                );
                 await transaction.CommitAsync(cancellationToken);
-                logger.LogInformation("Applied migration {Version} {Name}", migration.Version, migration.Name);
+                logger.LogInformation(
+                    "Applied migration {Version} {Name}",
+                    migration.Version,
+                    migration.Name
+                );
             }
         }
         finally
         {
-            await connection.ExecuteAsync(new CommandDefinition("SELECT pg_advisory_unlock(@LockKey)", new { LockKey }, cancellationToken: CancellationToken.None));
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    "SELECT pg_advisory_unlock(@LockKey)",
+                    new { LockKey },
+                    cancellationToken: CancellationToken.None
+                )
+            );
         }
     }
 
@@ -51,13 +89,20 @@ internal sealed class SchemaMigrator(NpgsqlDataSource dataSource, ILogger<Schema
     {
         var assembly = typeof(SchemaMigrator).Assembly;
         const string prefix = "Casebox.Server.Infrastructure.Database.Migrations.";
-        var migrations = assembly.GetManifestResourceNames()
-            .Where(n => n.StartsWith(prefix, StringComparison.Ordinal) && n.EndsWith(".sql", StringComparison.Ordinal))
+        var migrations = assembly
+            .GetManifestResourceNames()
+            .Where(n =>
+                n.StartsWith(prefix, StringComparison.Ordinal)
+                && n.EndsWith(".sql", StringComparison.Ordinal)
+            )
             .Select(n =>
             {
                 var file = n[prefix.Length..^".sql".Length];
                 var separator = file.IndexOf('_', StringComparison.Ordinal);
-                var version = int.Parse(file[..separator], System.Globalization.CultureInfo.InvariantCulture);
+                var version = int.Parse(
+                    file[..separator],
+                    System.Globalization.CultureInfo.InvariantCulture
+                );
                 using var stream = assembly.GetManifestResourceStream(n)!;
                 using var reader = new StreamReader(stream);
                 return new Migration(version, file[(separator + 1)..], reader.ReadToEnd());
@@ -68,7 +113,9 @@ internal sealed class SchemaMigrator(NpgsqlDataSource dataSource, ILogger<Schema
         for (var i = 0; i < migrations.Count; i++)
         {
             if (migrations[i].Version != i + 1)
-                throw new InvalidOperationException($"Migration numbers must run 1, 2, 3 without gaps; found {migrations[i].Version} at position {i + 1}.");
+                throw new InvalidOperationException(
+                    $"Migration numbers must run 1, 2, 3 without gaps; found {migrations[i].Version} at position {i + 1}."
+                );
         }
 
         return migrations;

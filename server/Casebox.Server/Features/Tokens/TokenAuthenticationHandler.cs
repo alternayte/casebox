@@ -12,17 +12,23 @@ public sealed class TokenAuthenticationHandler(
     ILoggerFactory logger,
     UrlEncoder encoder,
     TokenStore tokens,
-    AccountStore accounts) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    AccountStore accounts
+) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "casebox-token";
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
-        if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return AuthenticateResult.NoResult();
+        if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return AuthenticateResult.NoResult();
 
-        var token = await tokens.AuthenticateAsync(header["Bearer ".Length..].Trim(), Context.RequestAborted);
-        if (token is null) return AuthenticateResult.Fail("The token is unknown or revoked.");
+        var token = await tokens.AuthenticateAsync(
+            header["Bearer ".Length..].Trim(),
+            Context.RequestAborted
+        );
+        if (token is null)
+            return AuthenticateResult.Fail("The token is unknown or revoked.");
 
         var claims = new List<Claim>
         {
@@ -35,13 +41,16 @@ public sealed class TokenAuthenticationHandler(
         if (token.AccountId is { } accountId)
         {
             var role = await accounts.RoleOfAsync(token.OrgId, accountId, Context.RequestAborted);
-            if (role is null) return AuthenticateResult.Fail("The token's account no longer exists.");
+            if (role is null)
+                return AuthenticateResult.Fail("The token's account no longer exists.");
             claims.Add(new Claim(ClaimTypes.NameIdentifier, accountId));
             claims.Add(new Claim(CaseboxClaims.Account, accountId));
             claims.Add(new Claim(CaseboxClaims.Role, AccountStore.RoleName(role.Value)));
         }
 
         var identity = new ClaimsIdentity(claims, SchemeName);
-        return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));
+        return AuthenticateResult.Success(
+            new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)
+        );
     }
 }

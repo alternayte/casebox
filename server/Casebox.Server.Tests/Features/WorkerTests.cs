@@ -20,11 +20,19 @@ public sealed class WorkerTests(StackFixture stack)
     public async Task A_revoked_token_stops_working()
     {
         var admin = await stack.ServerA.AdminAsync();
-        var issued = await (await admin.PostAsJsonAsync("/api/v1/tokens", new { kind = "worker", name = "revoke me" }, Ct))
-            .Content.ReadFromJsonAsync<CaseboxServer.IssuedTokenBody>(Ct);
+        var issued = await (
+            await admin.PostAsJsonAsync(
+                "/api/v1/tokens",
+                new { kind = "worker", name = "revoke me" },
+                Ct
+            )
+        ).Content.ReadFromJsonAsync<CaseboxServer.IssuedTokenBody>(Ct);
         var worker = stack.ServerA.Anonymous();
         worker.DefaultRequestHeaders.Authorization = new("Bearer", issued!.Secret);
-        Assert.NotEqual(HttpStatusCode.Unauthorized, (await Lease(worker, "w1", "none")).StatusCode);
+        Assert.NotEqual(
+            HttpStatusCode.Unauthorized,
+            (await Lease(worker, "w1", "none")).StatusCode
+        );
 
         (await admin.DeleteAsync($"/api/v1/tokens/{issued.Info.Id}", Ct)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Unauthorized, (await Lease(worker, "w1", "none")).StatusCode);
@@ -34,12 +42,23 @@ public sealed class WorkerTests(StackFixture stack)
     public async Task An_ingest_token_uploads_blobs_but_cannot_lease_jobs_or_read_blobs()
     {
         var ingest = await stack.ServerA.TokenClientAsync(TokenKind.Ingest);
-        Assert.Equal(HttpStatusCode.Forbidden, (await Lease(ingest, "w1", TestJobHandler.JobKind)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await Lease(ingest, "w1", TestJobHandler.JobKind)).StatusCode
+        );
 
         var data = Encoding.UTF8.GetBytes($"ingest {Guid.NewGuid()}");
         var hash = BlobStore.HashOf(data);
-        Assert.Equal(HttpStatusCode.Created, (await ingest.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await ingest.GetAsync($"/worker/v1/blobs/{hash}", Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (
+                await ingest.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)
+            ).StatusCode
+        );
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await ingest.GetAsync($"/worker/v1/blobs/{hash}", Ct)).StatusCode
+        );
     }
 
     [Fact]
@@ -49,15 +68,34 @@ public sealed class WorkerTests(StackFixture stack)
         var jobId = await EnqueueAsync(workspace);
         var worker = await stack.ServerA.TokenClientAsync(TokenKind.Worker);
 
-        var job = await (await Lease(worker, "w1", TestJobHandler.JobKind)).Content.ReadFromJsonAsync<Job>(Ct);
+        var job = await (
+            await Lease(worker, "w1", TestJobHandler.JobKind)
+        ).Content.ReadFromJsonAsync<Job>(Ct);
         Assert.Equal(jobId, job!.Id);
         Assert.Equal(1, job.Attempts);
 
         var result = new { workerId = "w1", result = new { repo = "github.com/acme/api" } };
-        Assert.Equal(HttpStatusCode.NoContent, (await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/complete", result, Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/complete", result, Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (
+                await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/complete", result, Ct)
+            ).StatusCode
+        );
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (
+                await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/complete", result, Ct)
+            ).StatusCode
+        );
 
-        Assert.Equal(1, await EventCountAsync(StackFixture.OrgA, Workspace.StreamIdFor(workspace), "workspace.repo_added"));
+        Assert.Equal(
+            1,
+            await EventCountAsync(
+                StackFixture.OrgA,
+                Workspace.StreamIdFor(workspace),
+                "workspace.repo_added"
+            )
+        );
         Assert.Equal("succeeded", await StatusAsync(jobId));
     }
 
@@ -69,9 +107,32 @@ public sealed class WorkerTests(StackFixture stack)
         (await Lease(worker, "w1", TestJobHandler.JobKind)).EnsureSuccessStatusCode();
 
         var other = new { workerId = "w2", result = new { repo = "github.com/acme/api" } };
-        Assert.Equal(HttpStatusCode.Conflict, (await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/complete", other, Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/heartbeat", new { workerId = "w2" }, Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/heartbeat", new { workerId = "w1" }, Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            (
+                await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/complete", other, Ct)
+            ).StatusCode
+        );
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            (
+                await worker.PostAsJsonAsync(
+                    $"/worker/v1/jobs/{jobId}/heartbeat",
+                    new { workerId = "w2" },
+                    Ct
+                )
+            ).StatusCode
+        );
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (
+                await worker.PostAsJsonAsync(
+                    $"/worker/v1/jobs/{jobId}/heartbeat",
+                    new { workerId = "w1" },
+                    Ct
+                )
+            ).StatusCode
+        );
     }
 
     [Fact]
@@ -82,11 +143,16 @@ public sealed class WorkerTests(StackFixture stack)
 
         (await Lease(worker, "w1", TestJobHandler.JobKind)).EnsureSuccessStatusCode();
         await ExpireLeaseAsync(jobId);
-        var again = await (await Lease(worker, "w2", TestJobHandler.JobKind)).Content.ReadFromJsonAsync<Job>(Ct);
+        var again = await (
+            await Lease(worker, "w2", TestJobHandler.JobKind)
+        ).Content.ReadFromJsonAsync<Job>(Ct);
         Assert.Equal((jobId, 2), (again!.Id, again.Attempts));
 
         await ExpireLeaseAsync(jobId);
-        Assert.Equal(HttpStatusCode.NoContent, (await Lease(worker, "w3", TestJobHandler.JobKind)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await Lease(worker, "w3", TestJobHandler.JobKind)).StatusCode
+        );
         Assert.Equal("failed", await StatusAsync(jobId));
     }
 
@@ -97,10 +163,21 @@ public sealed class WorkerTests(StackFixture stack)
         var worker = await stack.ServerA.TokenClientAsync(TokenKind.Worker);
         (await Lease(worker, "w1", TestJobHandler.JobKind)).EnsureSuccessStatusCode();
 
-        var fail = new { workerId = "w1", error = "sandbox start timed out", retryable = true };
-        Assert.Equal(HttpStatusCode.NoContent, (await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/fail", fail, Ct)).StatusCode);
+        var fail = new
+        {
+            workerId = "w1",
+            error = "sandbox start timed out",
+            retryable = true,
+        };
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await worker.PostAsJsonAsync($"/worker/v1/jobs/{jobId}/fail", fail, Ct)).StatusCode
+        );
         Assert.Equal("queued", await StatusAsync(jobId));
-        Assert.Equal(HttpStatusCode.NoContent, (await Lease(worker, "w1", TestJobHandler.JobKind)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await Lease(worker, "w1", TestJobHandler.JobKind)).StatusCode
+        );
     }
 
     [Fact]
@@ -108,14 +185,21 @@ public sealed class WorkerTests(StackFixture stack)
     {
         var workspace = await CreateWorkspaceAsync();
         var jobs = new List<string>();
-        for (var i = 0; i < 20; i++) jobs.Add(await EnqueueAsync(workspace));
+        for (var i = 0; i < 20; i++)
+            jobs.Add(await EnqueueAsync(workspace));
         var worker = await stack.ServerA.TokenClientAsync(TokenKind.Worker);
 
-        var leases = await Task.WhenAll(Enumerable.Range(0, 30).Select(async i =>
-        {
-            var response = await Lease(worker, $"w{i}", TestJobHandler.JobKind);
-            return response.StatusCode == HttpStatusCode.OK ? (await response.Content.ReadFromJsonAsync<Job>(Ct))!.Id : null;
-        }));
+        var leases = await Task.WhenAll(
+            Enumerable
+                .Range(0, 30)
+                .Select(async i =>
+                {
+                    var response = await Lease(worker, $"w{i}", TestJobHandler.JobKind);
+                    return response.StatusCode == HttpStatusCode.OK
+                        ? (await response.Content.ReadFromJsonAsync<Job>(Ct))!.Id
+                        : null;
+                })
+        );
 
         var leased = leases.Where(id => id is not null && jobs.Contains(id)).ToList();
         Assert.Equal(leased.Count, leased.Distinct().Count());
@@ -125,26 +209,51 @@ public sealed class WorkerTests(StackFixture stack)
     public async Task Blobs_are_content_addressed_and_stored_once()
     {
         var worker = await stack.ServerA.TokenClientAsync(TokenKind.Worker);
-        var data = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat($"transcript line {Guid.NewGuid()}\n", 500)));
+        var data = Encoding.UTF8.GetBytes(
+            string.Concat(Enumerable.Repeat($"transcript line {Guid.NewGuid()}\n", 500))
+        );
         var hash = BlobStore.HashOf(data);
 
-        Assert.Equal(HttpStatusCode.Created, (await worker.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await worker.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (
+                await worker.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)
+            ).StatusCode
+        );
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (
+                await worker.PutAsync($"/worker/v1/blobs/{hash}", new ByteArrayContent(data), Ct)
+            ).StatusCode
+        );
         Assert.Equal(data, await worker.GetByteArrayAsync($"/worker/v1/blobs/{hash}", Ct));
 
         var wrong = BlobStore.HashOf([1, 2, 3]);
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await worker.PutAsync($"/worker/v1/blobs/{wrong}", new ByteArrayContent(data), Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.UnprocessableEntity,
+            (
+                await worker.PutAsync($"/worker/v1/blobs/{wrong}", new ByteArrayContent(data), Ct)
+            ).StatusCode
+        );
 
         await using var db = new NpgsqlConnection(stack.ConnectionString);
-        var stored = await db.QuerySingleAsync<int>("SELECT length(data) FROM casebox.blobs WHERE org_id = @Org AND hash = @Hash", new { Org = StackFixture.OrgA, Hash = hash });
-        Assert.True(stored < data.Length / 10, $"zstd should shrink {data.Length} repetitive bytes; stored {stored}.");
+        var stored = await db.QuerySingleAsync<int>(
+            "SELECT length(data) FROM casebox.blobs WHERE org_id = @Org AND hash = @Hash",
+            new { Org = StackFixture.OrgA, Hash = hash }
+        );
+        Assert.True(
+            stored < data.Length / 10,
+            $"zstd should shrink {data.Length} repetitive bytes; stored {stored}."
+        );
     }
 
     private async Task<string> CreateWorkspaceAsync()
     {
         var admin = await stack.ServerA.AdminAsync();
         var name = $"jobs-{Guid.NewGuid():N}"[..20];
-        (await admin.PostAsJsonAsync("/api/v1/workspaces", new { name }, Ct)).EnsureSuccessStatusCode();
+        (
+            await admin.PostAsJsonAsync("/api/v1/workspaces", new { name }, Ct)
+        ).EnsureSuccessStatusCode();
         return name;
     }
 
@@ -154,27 +263,59 @@ public sealed class WorkerTests(StackFixture stack)
         await using var db = new NpgsqlConnection(stack.ConnectionString);
         await db.OpenAsync(Ct);
         await using var transaction = await db.BeginTransactionAsync(Ct);
-        var id = await queue.EnqueueAsync(transaction, StackFixture.OrgA, TestJobHandler.JobKind, $"test:{Guid.NewGuid()}", new { workspace }, maxAttempts, Ct);
+        var id = await queue.EnqueueAsync(
+            transaction,
+            StackFixture.OrgA,
+            TestJobHandler.JobKind,
+            $"test:{Guid.NewGuid()}",
+            new { workspace },
+            maxAttempts,
+            Ct
+        );
         await transaction.CommitAsync(Ct);
         return id;
     }
 
-    private static Task<HttpResponseMessage> Lease(HttpClient worker, string workerId, string kind) =>
-        worker.PostAsJsonAsync("/worker/v1/jobs/lease", new { workerId, version = "test", kinds = new[] { kind } }, Ct);
+    private static Task<HttpResponseMessage> Lease(
+        HttpClient worker,
+        string workerId,
+        string kind
+    ) =>
+        worker.PostAsJsonAsync(
+            "/worker/v1/jobs/lease",
+            new
+            {
+                workerId,
+                version = "test",
+                kinds = new[] { kind },
+            },
+            Ct
+        );
 
     private async Task ExpireLeaseAsync(string jobId)
     {
         await using var db = new NpgsqlConnection(stack.ConnectionString);
-        await db.ExecuteAsync("UPDATE casebox.jobs SET lease_expires_at = now() - interval '1 second' WHERE id = @Id", new { Id = jobId });
+        await db.ExecuteAsync(
+            "UPDATE casebox.jobs SET lease_expires_at = now() - interval '1 second' WHERE id = @Id",
+            new { Id = jobId }
+        );
     }
 
     private async Task<string> StatusAsync(string jobId)
     {
         await using var db = new NpgsqlConnection(stack.ConnectionString);
-        return await db.QuerySingleAsync<string>("SELECT status FROM casebox.jobs WHERE id = @Id", new { Id = jobId });
+        return await db.QuerySingleAsync<string>(
+            "SELECT status FROM casebox.jobs WHERE id = @Id",
+            new { Id = jobId }
+        );
     }
 
-    internal static async Task<int> EventCountAsync(string connectionString, string tenant, string streamId, string type)
+    internal static async Task<int> EventCountAsync(
+        string connectionString,
+        string tenant,
+        string streamId,
+        string type
+    )
     {
         await using var db = new NpgsqlConnection(connectionString);
         return await db.QuerySingleAsync<int>(
@@ -182,8 +323,15 @@ public sealed class WorkerTests(StackFixture stack)
             SELECT count(*) FROM deedbox.events e
             WHERE e.tenant_id = @Tenant AND e.stream_id = @Stream AND e.event_type = @Type
             """,
-            new { Tenant = tenant, Stream = streamId, Type = type });
+            new
+            {
+                Tenant = tenant,
+                Stream = streamId,
+                Type = type,
+            }
+        );
     }
 
-    private Task<int> EventCountAsync(string tenant, string streamId, string type) => EventCountAsync(stack.ConnectionString, tenant, streamId, type);
+    private Task<int> EventCountAsync(string tenant, string streamId, string type) =>
+        EventCountAsync(stack.ConnectionString, tenant, streamId, type);
 }

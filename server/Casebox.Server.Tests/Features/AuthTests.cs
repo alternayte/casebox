@@ -24,9 +24,16 @@ public sealed partial class AuthTests(StackFixture stack)
     public async Task A_wrong_password_is_refused()
     {
         var client = stack.ServerA.Anonymous();
-        var response = await client.PostAsJsonAsync("/api/v1/auth/local", new { password = "wrong" }, Ct);
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/local",
+            new { password = "wrong" },
+            Ct
+        );
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/me", Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            (await client.GetAsync("/api/v1/me", Ct)).StatusCode
+        );
     }
 
     [Fact]
@@ -34,11 +41,20 @@ public sealed partial class AuthTests(StackFixture stack)
     {
         var admin = await stack.ServerA.AdminAsync();
         admin.DefaultRequestHeaders.Remove(AuthSetup.CsrfHeader);
-        var response = await admin.PostAsJsonAsync("/api/v1/workspaces", new { name = "csrf-probe" }, Ct);
+        var response = await admin.PostAsJsonAsync(
+            "/api/v1/workspaces",
+            new { name = "csrf-probe" },
+            Ct
+        );
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
 
         await CaseboxServer.AddCsrfAsync(admin);
-        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/v1/workspaces", new { name = "csrf-probe" }, Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (
+                await admin.PostAsJsonAsync("/api/v1/workspaces", new { name = "csrf-probe" }, Ct)
+            ).StatusCode
+        );
     }
 
     [Fact]
@@ -47,24 +63,65 @@ public sealed partial class AuthTests(StackFixture stack)
         var viewer = await OidcLoginAsync();
         var me = await viewer.GetFromJsonAsync<AuthEndpoints.Me>("/api/v1/me", Json.Options, Ct);
         Assert.Equal(Role.Viewer, me!.Role);
-        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/v1/workspaces", new { name = "viewer-probe" }, Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (
+                await viewer.PostAsJsonAsync(
+                    "/api/v1/workspaces",
+                    new { name = "viewer-probe" },
+                    Ct
+                )
+            ).StatusCode
+        );
 
         var admin = await stack.ServerA.AdminAsync();
-        (await admin.PutAsJsonAsync($"/api/v1/accounts/{me.AccountId}/role", new { role = "admin" }, Ct)).EnsureSuccessStatusCode();
+        (
+            await admin.PutAsJsonAsync(
+                $"/api/v1/accounts/{me.AccountId}/role",
+                new { role = "admin" },
+                Ct
+            )
+        ).EnsureSuccessStatusCode();
 
-        Assert.Equal(HttpStatusCode.Created, (await viewer.PostAsJsonAsync("/api/v1/workspaces", new { name = "viewer-probe" }, Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            (
+                await viewer.PostAsJsonAsync(
+                    "/api/v1/workspaces",
+                    new { name = "viewer-probe" },
+                    Ct
+                )
+            ).StatusCode
+        );
     }
 
     [Fact]
     public async Task Only_an_Admin_changes_privacy_settings_and_k_stays_at_least_two()
     {
         var admin = await stack.ServerA.AdminAsync();
-        var org = await admin.GetFromJsonAsync<OrgEndpoints.OrgView>("/api/v1/org", Json.Options, Ct);
-        var tooLow = await admin.PutAsJsonAsync("/api/v1/org/settings", org!.Settings with { K = 1 }, Json.Options, Ct);
+        var org = await admin.GetFromJsonAsync<OrgEndpoints.OrgView>(
+            "/api/v1/org",
+            Json.Options,
+            Ct
+        );
+        var tooLow = await admin.PutAsJsonAsync(
+            "/api/v1/org/settings",
+            org!.Settings with
+            {
+                K = 1,
+            },
+            Json.Options,
+            Ct
+        );
         Assert.Equal(HttpStatusCode.UnprocessableEntity, tooLow.StatusCode);
 
         var viewer = await OidcLoginAsync();
-        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PutAsJsonAsync("/api/v1/org/settings", org.Settings, Json.Options, Ct)).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (
+                await viewer.PutAsJsonAsync("/api/v1/org/settings", org.Settings, Json.Options, Ct)
+            ).StatusCode
+        );
     }
 
     [Fact]
@@ -72,7 +129,11 @@ public sealed partial class AuthTests(StackFixture stack)
     {
         var admin = await stack.ServerB.AdminAsync();
         var me = await admin.GetFromJsonAsync<AuthEndpoints.Me>("/api/v1/me", Json.Options, Ct);
-        var response = await admin.PutAsJsonAsync($"/api/v1/accounts/{me!.AccountId}/role", new { role = "admin" }, Ct);
+        var response = await admin.PutAsJsonAsync(
+            $"/api/v1/accounts/{me!.AccountId}/role",
+            new { role = "admin" },
+            Ct
+        );
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 

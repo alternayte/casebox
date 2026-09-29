@@ -23,8 +23,11 @@ web:
     cd web && bun install --frozen-lockfile
     cd web && bun run build
 
-# Server: build, then every test on Postgres 16 and the pinned QueueBox image (Testcontainers).
+# Server: CSharpier's formatting (its defaults, the version pinned in dotnet-tools.json), build, then
+# every test on Postgres 16 and the pinned QueueBox image (Testcontainers).
 server:
+    dotnet tool restore
+    dotnet csharpier check server
     dotnet build server/Casebox.slnx -c Release
     dotnet test server/Casebox.slnx -c Release --no-build
 

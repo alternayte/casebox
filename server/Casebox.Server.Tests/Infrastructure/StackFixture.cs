@@ -34,9 +34,11 @@ public sealed class StackFixture : IAsyncLifetime
 
     public string ConnectionString => _postgres!.GetConnectionString();
 
-    public Uri QueueBoxUrl => new($"http://{_queueBox!.Hostname}:{_queueBox.GetMappedPublicPort(8080)}");
+    public Uri QueueBoxUrl =>
+        new($"http://{_queueBox!.Hostname}:{_queueBox.GetMappedPublicPort(8080)}");
 
-    public Uri QueueBoxHealthUrl => new($"http://{_queueBox!.Hostname}:{_queueBox.GetMappedPublicPort(9090)}/health");
+    public Uri QueueBoxHealthUrl =>
+        new($"http://{_queueBox!.Hostname}:{_queueBox.GetMappedPublicPort(9090)}/health");
 
     public string OidcAuthority => $"http://localhost:{_oidc!.GetMappedPublicPort(8080)}/default";
 
@@ -50,47 +52,72 @@ public sealed class StackFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var (apiA, managementA, apiB, managementB) = (FreePort(), FreePort(), FreePort(), FreePort());
+        var (apiA, managementA, apiB, managementB) = (
+            FreePort(),
+            FreePort(),
+            FreePort(),
+            FreePort()
+        );
         // QueueBox delivers effects to server A's management port on the host.
         await TestcontainersSettings.ExposeHostPortsAsync((ushort)managementA);
         await _network.CreateAsync();
 
         _postgres = new PostgreSqlBuilder(Images.Postgres)
-            .WithDatabase(Database).WithUsername(User).WithPassword(Password)
-            .WithNetwork(_network).WithNetworkAliases("postgres")
+            .WithDatabase(Database)
+            .WithUsername(User)
+            .WithPassword(Password)
+            .WithNetwork(_network)
+            .WithNetworkAliases("postgres")
             .Build();
 
         _oidc = new ContainerBuilder(Images.Oidc)
             .WithEnvironment("JSON_CONFIG", """{"interactiveLogin": false}""")
             .WithPortBinding(8080, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(8080).ForPath("/default/.well-known/openid-configuration")))
+            .WithWaitStrategy(
+                Wait.ForUnixContainer()
+                    .UntilHttpRequestIsSucceeded(r =>
+                        r.ForPort(8080).ForPath("/default/.well-known/openid-configuration")
+                    )
+            )
             .Build();
 
         _s3 = new ContainerBuilder(Images.S3)
             .WithEnvironment("RUSTFS_ACCESS_KEY", S3AccessKey)
             .WithEnvironment("RUSTFS_SECRET_KEY", S3SecretKey)
             .WithPortBinding(9000, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/health")))
+            .WithWaitStrategy(
+                Wait.ForUnixContainer()
+                    .UntilHttpRequestIsSucceeded(r => r.ForPort(9000).ForPath("/health"))
+            )
             .Build();
 
         await Task.WhenAll(_postgres.StartAsync(), _oidc.StartAsync(), _s3.StartAsync());
 
         _queueBox = new ContainerBuilder(Images.QueueBox)
             .WithNetwork(_network)
-            .WithResourceMapping(new FileInfo(Path.Combine(RepoRoot(), "deploy", "queuebox.yml")), "/etc/queuebox/")
+            .WithResourceMapping(
+                new FileInfo(Path.Combine(RepoRoot(), "deploy", "queuebox.yml")),
+                "/etc/queuebox/"
+            )
             .WithEnvironment("QUEUEBOX_CONFIG_FILE", "/etc/queuebox/queuebox.yml")
             .WithEnvironment("QUEUEBOX_DATABASE_URL", $"jdbc:postgresql://postgres:5432/{Database}")
             .WithEnvironment("QUEUEBOX_DATABASE_USERNAME", User)
             .WithEnvironment("QUEUEBOX_DATABASE_PASSWORD", Password)
             .WithEnvironment("CASEBOX_QUEUEBOX_ADMIN_TOKEN", "test-admin-token")
-            .WithEnvironment("CASEBOX_EFFECTS_URL", $"http://host.testcontainers.internal:{managementA}")
+            .WithEnvironment(
+                "CASEBOX_EFFECTS_URL",
+                $"http://host.testcontainers.internal:{managementA}"
+            )
             .WithEnvironment("CASEBOX_EFFECTS_TOKEN", EffectsToken)
             .WithEnvironment("CASEBOX_POLL_TOKEN", PollToken)
             // Fast retries keep the retry tests short; production uses the file's backoff.
             .WithEnvironment("QUEUEBOX_OUTBOX_RETRYBASEDELAYMS", "100")
             .WithPortBinding(8080, true)
             .WithPortBinding(9090, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(9090).ForPath("/health")))
+            .WithWaitStrategy(
+                Wait.ForUnixContainer()
+                    .UntilHttpRequestIsSucceeded(r => r.ForPort(9090).ForPath("/health"))
+            )
             .Build();
         await _queueBox.StartAsync();
 
@@ -105,16 +132,24 @@ public sealed class StackFixture : IAsyncLifetime
         await ServerA.DisposeAsync();
         await ServerB.DisposeAsync();
         foreach (var container in new[] { _queueBox, _oidc, _s3, _postgres })
-            if (container is not null) await container.DisposeAsync();
+            if (container is not null)
+                await container.DisposeAsync();
         await _network.DisposeAsync();
         await Fakes.DisposeAsync();
     }
 
     public static string RepoRoot()
     {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "justfile"))) return dir.FullName;
-        throw new InvalidOperationException("The repository root (the directory with the justfile) was not found.");
+        for (
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            dir is not null;
+            dir = dir.Parent
+        )
+            if (File.Exists(Path.Combine(dir.FullName, "justfile")))
+                return dir.FullName;
+        throw new InvalidOperationException(
+            "The repository root (the directory with the justfile) was not found."
+        );
     }
 
     private static int FreePort()

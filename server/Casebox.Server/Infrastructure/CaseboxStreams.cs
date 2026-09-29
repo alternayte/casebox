@@ -15,13 +15,13 @@ public static class CaseboxStreams
     // Enums are stored and served as snake_case names, never as numbers.
     public static readonly JsonStringEnumConverter Enums = new(JsonNamingPolicy.SnakeCaseLower);
 
-    public static DeedboxBuilder Register(DeedboxBuilder es) => es
-        .ConfigureJson(o => o.Converters.Add(Enums))
-        .Stream<Organisation>("org", s => s.EventsNestedIn(typeof(OrgEvents)))
-        .Stream<Workspace>(s => s.EventsNestedIn(typeof(WorkspaceEvents)))
-        .Stream<WorkItem>("work_item", s => s.EventsNestedIn(typeof(WorkItemEvents)))
-        .Stream<SteeringState>("steering", s => s.EventsNestedIn(typeof(SteeringEvents)))
-        .Projection<WorkspaceProjection>(WorkspaceProjection.Name, Run.Inline)
-        .Projection<WorkItemProjection>(WorkItemProjection.Name, Run.Inline)
-        .Projection<SteeringFacts>(SteeringFacts.Name, Run.Inline);
+    public static DeedboxBuilder Register(DeedboxBuilder es) =>
+        es.ConfigureJson(o => o.Converters.Add(Enums))
+            .Stream<Organisation>("org", s => s.EventsNestedIn(typeof(OrgEvents)))
+            .Stream<Workspace>(s => s.EventsNestedIn(typeof(WorkspaceEvents)))
+            .Stream<WorkItem>("work_item", s => s.EventsNestedIn(typeof(WorkItemEvents)))
+            .Stream<SteeringState>("steering", s => s.EventsNestedIn(typeof(SteeringEvents)))
+            .Projection<WorkspaceProjection>(WorkspaceProjection.Name, Run.Inline)
+            .Projection<WorkItemProjection>(WorkItemProjection.Name, Run.Inline)
+            .Projection<SteeringFacts>(SteeringFacts.Name, Run.Inline);
 }

@@ -27,9 +27,18 @@ public static partial class Redaction
         {
             text = name switch
             {
-                "assignment" => pattern.Replace(text, m => $"{m.Groups["key"].Value}{m.Groups["sep"].Value}[redacted:{name}]"),
-                "url_credentials" => pattern.Replace(text, m => $"{m.Groups["scheme"].Value}[redacted:{name}]@"),
-                "bearer" => pattern.Replace(text, m => $"{m.Groups["prefix"].Value}[redacted:{name}]"),
+                "assignment" => pattern.Replace(
+                    text,
+                    m => $"{m.Groups["key"].Value}{m.Groups["sep"].Value}[redacted:{name}]"
+                ),
+                "url_credentials" => pattern.Replace(
+                    text,
+                    m => $"{m.Groups["scheme"].Value}[redacted:{name}]@"
+                ),
+                "bearer" => pattern.Replace(
+                    text,
+                    m => $"{m.Groups["prefix"].Value}[redacted:{name}]"
+                ),
                 _ => pattern.Replace(text, $"[redacted:{name}]"),
             };
         }
@@ -64,7 +73,9 @@ public static partial class Redaction
     [GeneratedRegex(@"(?<scheme>\b[a-z][a-z0-9+.-]*://)[^\s/:@]+:[^\s/@]+@")]
     private static partial Regex UrlCredentials();
 
-    [GeneratedRegex(@"(?i)(?<key>\b[\w.-]*(password|passwd|secret|token|key)[\w.-]*)(?<sep>[""']?\s*[:=]\s*[""']?)(?!\[redacted:)[^\s""',;]{4,}")]
+    [GeneratedRegex(
+        @"(?i)(?<key>\b[\w.-]*(password|passwd|secret|token|key)[\w.-]*)(?<sep>[""']?\s*[:=]\s*[""']?)(?!\[redacted:)[^\s""',;]{4,}"
+    )]
     private static partial Regex Assignment();
 
     [GeneratedRegex(@"(/Users/|/home/|[A-Z]:\\Users\\)[^/\\\s""']+")]

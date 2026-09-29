@@ -27,55 +27,147 @@ public static class AuthEndpoints
         var auth = api.MapGroup("/auth").WithTags("Auth");
 
         // Which sign-in methods the login page offers.
-        auth.MapGet("/methods", (IOptions<CaseboxOptions> options) =>
-            Results.Ok(new Methods(!string.IsNullOrEmpty(options.Value.LocalAdmin.Password), options.Value.Oidc.Enabled))).AllowAnonymous();
+        auth.MapGet(
+                "/methods",
+                (IOptions<CaseboxOptions> options) =>
+                    Results.Ok(
+                        new Methods(
+                            !string.IsNullOrEmpty(options.Value.LocalAdmin.Password),
+                            options.Value.Oidc.Enabled
+                        )
+                    )
+            )
+            .AllowAnonymous();
 
-        auth.MapPost("/local", async (LocalLogin body, IOptions<CaseboxOptions> options, AccountStore accounts, HttpContext http) =>
-        {
-            var configured = options.Value.LocalAdmin.Password;
-            if (string.IsNullOrEmpty(configured)) return Results.NotFound();
-            if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(body.Password ?? ""), Encoding.UTF8.GetBytes(configured)))
-                return Results.Problem(statusCode: StatusCodes.Status401Unauthorized, title: "The password is wrong.");
+        auth.MapPost(
+                "/local",
+                async (
+                    LocalLogin body,
+                    IOptions<CaseboxOptions> options,
+                    AccountStore accounts,
+                    HttpContext http
+                ) =>
+                {
+                    var configured = options.Value.LocalAdmin.Password;
+                    if (string.IsNullOrEmpty(configured))
+                        return Results.NotFound();
+                    if (
+                        !CryptographicOperations.FixedTimeEquals(
+                            Encoding.UTF8.GetBytes(body.Password ?? ""),
+                            Encoding.UTF8.GetBytes(configured)
+                        )
+                    )
+                        return Results.Problem(
+                            statusCode: StatusCodes.Status401Unauthorized,
+                            title: "The password is wrong."
+                        );
 
-            var orgId = options.Value.Org.Id;
-            var account = await accounts.LoginAsync(orgId, "local", "admin", "Local admin", Role.Owner, http.RequestAborted);
-            await http.SignInAsync(AuthSetup.CookieScheme, AuthSetup.SessionPrincipal(orgId, account));
-            return Results.NoContent();
-        }).AllowAnonymous().RequireRateLimiting(LoginRateLimit);
+                    var orgId = options.Value.Org.Id;
+                    var account = await accounts.LoginAsync(
+                        orgId,
+                        "local",
+                        "admin",
+                        "Local admin",
+                        Role.Owner,
+                        http.RequestAborted
+                    );
+                    await http.SignInAsync(
+                        AuthSetup.CookieScheme,
+                        AuthSetup.SessionPrincipal(orgId, account)
+                    );
+                    return Results.NoContent();
+                }
+            )
+            .AllowAnonymous()
+            .RequireRateLimiting(LoginRateLimit);
 
-        auth.MapGet("/oidc/login", (string? returnUrl, IOptions<CaseboxOptions> options) =>
-        {
-            if (!options.Value.Oidc.Enabled) return Results.NotFound();
-            var target = returnUrl is { Length: > 0 } && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//", StringComparison.Ordinal) ? returnUrl : "/";
-            return Results.Challenge(new AuthenticationProperties { RedirectUri = target }, [AuthSetup.OidcScheme]);
-        }).AllowAnonymous();
+        auth.MapGet(
+                "/oidc/login",
+                (string? returnUrl, IOptions<CaseboxOptions> options) =>
+                {
+                    if (!options.Value.Oidc.Enabled)
+                        return Results.NotFound();
+                    var target =
+                        returnUrl is { Length: > 0 }
+                        && returnUrl.StartsWith('/')
+                        && !returnUrl.StartsWith("//", StringComparison.Ordinal)
+                            ? returnUrl
+                            : "/";
+                    return Results.Challenge(
+                        new AuthenticationProperties { RedirectUri = target },
+                        [AuthSetup.OidcScheme]
+                    );
+                }
+            )
+            .AllowAnonymous();
 
-        auth.MapPost("/logout", async (HttpContext http) =>
-        {
-            await http.SignOutAsync(AuthSetup.CookieScheme);
-            return Results.NoContent();
-        }).RequireAuthorization(Policies.Viewer);
-
-        auth.MapGet("/csrf", (IAntiforgery antiforgery, HttpContext http) =>
-            Results.Ok(new Csrf(antiforgery.GetAndStoreTokens(http).RequestToken!)))
+        auth.MapPost(
+                "/logout",
+                async (HttpContext http) =>
+                {
+                    await http.SignOutAsync(AuthSetup.CookieScheme);
+                    return Results.NoContent();
+                }
+            )
             .RequireAuthorization(Policies.Viewer);
 
-        api.MapGet("/me", async (HttpContext http, AccountStore accounts) =>
-        {
-            var user = http.User;
-            var account = await accounts.GetAsync(user.OrgId(), user.AccountId()!, http.RequestAborted);
-            return account is null ? Results.Unauthorized() : Results.Ok(new Me(account.Id, account.DisplayName, account.Role, user.OrgId()));
-        }).RequireAuthorization(Policies.Viewer).WithTags("Auth");
+        auth.MapGet(
+                "/csrf",
+                (IAntiforgery antiforgery, HttpContext http) =>
+                    Results.Ok(new Csrf(antiforgery.GetAndStoreTokens(http).RequestToken!))
+            )
+            .RequireAuthorization(Policies.Viewer);
 
-        var accountsGroup = api.MapGroup("/accounts").WithTags("Accounts").RequireAuthorization(Policies.Admin);
+        api.MapGet(
+                "/me",
+                async (HttpContext http, AccountStore accounts) =>
+                {
+                    var user = http.User;
+                    var account = await accounts.GetAsync(
+                        user.OrgId(),
+                        user.AccountId()!,
+                        http.RequestAborted
+                    );
+                    return account is null
+                        ? Results.Unauthorized()
+                        : Results.Ok(
+                            new Me(account.Id, account.DisplayName, account.Role, user.OrgId())
+                        );
+                }
+            )
+            .RequireAuthorization(Policies.Viewer)
+            .WithTags("Auth");
 
-        accountsGroup.MapGet("/", async (HttpContext http, AccountStore accounts) =>
-            Results.Ok(await accounts.ListAsync(http.User.OrgId(), http.RequestAborted)));
+        var accountsGroup = api.MapGroup("/accounts")
+            .WithTags("Accounts")
+            .RequireAuthorization(Policies.Admin);
 
-        accountsGroup.MapPut("/{id}/role", async (string id, RoleChange body, HttpContext http, AccountStore accounts, IEventStore store) =>
-        {
-            await accounts.ChangeRoleAsync(http.User.OrgId(), id, body.Role, http.User.AccountRole()!.Value, store, http.RequestAborted);
-            return Results.NoContent();
-        });
+        accountsGroup.MapGet(
+            "/",
+            async (HttpContext http, AccountStore accounts) =>
+                Results.Ok(await accounts.ListAsync(http.User.OrgId(), http.RequestAborted))
+        );
+
+        accountsGroup.MapPut(
+            "/{id}/role",
+            async (
+                string id,
+                RoleChange body,
+                HttpContext http,
+                AccountStore accounts,
+                IEventStore store
+            ) =>
+            {
+                await accounts.ChangeRoleAsync(
+                    http.User.OrgId(),
+                    id,
+                    body.Role,
+                    http.User.AccountRole()!.Value,
+                    store,
+                    http.RequestAborted
+                );
+                return Results.NoContent();
+            }
+        );
     }
 }

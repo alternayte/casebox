@@ -7,7 +7,8 @@ It is a Go CLI and worker, a .NET server on Deedbox and Postgres, QueueBox for e
 
 ## Run
 
-- `docker compose -f deploy/compose.yaml up --build` starts Postgres, QueueBox and the server on port 8080.
+- `CASEBOX_ADMIN_PASSWORD=pw CASEBOX_EFFECTS_TOKEN=ef CASEBOX_POLL_TOKEN=po CASEBOX_QUEUEBOX_ADMIN_TOKEN=qa docker compose -f deploy/compose.yaml up --build` starts Postgres, QueueBox and the server on port 8080; the four secrets are required, and casebox up generates them.
+- `cd cli && go run ./cmd/casebox --help` runs the CLI; set CASEBOX_HOME to a scratch directory to keep its files out of ~/.casebox.
 - `cd web && bun run dev` serves the UI with hot reload.
 
 ## Test
@@ -46,5 +47,6 @@ It is a Go CLI and worker, a .NET server on Deedbox and Postgres, QueueBox for e
 - pattern: a cluster of corrections or failures that share a cause.
 - proposal: a small harness edit, delivered as a pull request after it passes the gate.
 - token: the pseudonymous ID of a person, stable within a period.
+- identity mark: an identity the CLI wraps as ⟦cbx:kind:value⟧; only the server turns it into a token.
 - k: the minimum number of distinct people behind any shown group.
 - gate: a step in the build prompt where work stops for human review.

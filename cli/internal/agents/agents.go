@@ -1,8 +1,8 @@
 package agents
 
 import (
-	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"net/url"
 	"path"
 	"sort"
@@ -194,7 +194,7 @@ func (a Adapter) providers(worker map[string]string) []string {
 func (a Adapter) Env(worker map[string]string) (map[string]string, error) {
 	providers := a.providers(worker)
 	if len(providers) == 0 {
-		return nil, errors.New("the worker holds no model key: set ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY")
+		return nil, cbx.Errorf(cbx.NoModelKey, "the worker holds no model key: set ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY")
 	}
 	env := map[string]string{}
 	for _, p := range providers {

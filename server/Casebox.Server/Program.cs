@@ -22,6 +22,7 @@ using Casebox.Server.Features.Privacy;
 using Casebox.Server.Features.Proposals;
 using Casebox.Server.Features.Repos;
 using Casebox.Server.Features.Steering;
+using Casebox.Server.Features.Telemetry;
 using Casebox.Server.Features.Tokens;
 using Casebox.Server.Features.WorkItems;
 using Casebox.Server.Features.Workspaces;
@@ -34,6 +35,9 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 var options =
@@ -73,6 +77,33 @@ builder.Services.AddDeedbox(es =>
             .Keys(keys => ConfigureKeys(keys, options.Keys))
     )
 );
+
+// OpenTelemetry (docs/specs/operations.md, Telemetry): Prometheus on the management port, and
+// OTLP when the standard OTEL_EXPORTER_OTLP_ENDPOINT variable is set.
+var otlp = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+builder
+    .Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("casebox-server"))
+    .WithMetrics(m =>
+    {
+        m.AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddRuntimeInstrumentation()
+            .AddMeter(CaseboxMetrics.Name, "Deedbox", "Npgsql")
+            .AddPrometheusExporter();
+        if (otlp)
+            m.AddOtlpExporter();
+    })
+    .WithTracing(t =>
+    {
+        t.AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddSource("Npgsql", "Deedbox");
+        if (otlp)
+            t.AddOtlpExporter();
+    });
+builder.Services.AddSingleton<MetricsSnapshot>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MetricsSnapshot>());
 
 builder.Services.AddCaseboxAuth(options);
 builder.Services.AddRateLimiter(o =>
@@ -132,6 +163,7 @@ builder.Services.AddSingleton<IJobResultHandler, VerifyResultHandler>();
 builder.Services.AddScoped<Planner>();
 builder.Services.AddScoped<CiPullRequests>();
 builder.Services.AddScoped<PatternScan>();
+builder.Services.AddScoped<Casebox.Server.Features.Demo.DemoSeed>();
 builder.Services.AddScoped<ProposalSteps>();
 builder.Services.AddScoped<ProposerRuns>();
 builder.Services.AddSingleton<IJobResultHandler, DraftResultHandler>();
@@ -227,7 +259,25 @@ builder
     .AddDeedboxHealthChecks();
 
 builder.Services.AddOpenApi();
-builder.Services.AddProblemDetails();
+
+// Refusals by authentication or a role carry their code too (docs/specs/operations.md).
+builder.Services.AddProblemDetails(o =>
+    o.CustomizeProblemDetails = ctx =>
+    {
+        if (ctx.ProblemDetails.Extensions.ContainsKey("code"))
+            return;
+        var code = ctx.ProblemDetails.Status switch
+        {
+            StatusCodes.Status401Unauthorized => Cbx.Unauthenticated,
+            StatusCodes.Status403Forbidden => Cbx.Forbidden,
+            _ => null,
+        };
+        if (code is null)
+            return;
+        ctx.ProblemDetails.Extensions["code"] = code;
+        ctx.ProblemDetails.Type = Cbx.Url(code);
+    }
+);
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 
 var app = builder.Build();
@@ -240,6 +290,9 @@ if (options.Keys.Mode == "database")
 await app.Services.GetRequiredService<SchemaMigrator>().MigrateAsync(CancellationToken.None);
 
 app.UseExceptionHandler();
+
+// An error answer without a body (401, 403, 404) becomes a problem with its CBX code.
+app.UseStatusCodePages();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
@@ -250,6 +303,7 @@ app.UseAuthorization();
 var management = $"*:{options.ManagementPort}";
 var internalRoutes = app.MapGroup("").RequireHost(management);
 internalRoutes.MapEffects();
+internalRoutes.MapPrometheusScrapingEndpoint("/metrics");
 internalRoutes.MapHealthChecks("/healthz/live", new HealthCheckOptions { Predicate = _ => false });
 internalRoutes.MapHealthChecks(
     "/healthz/ready",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"os"
 	"os/signal"
@@ -72,6 +73,11 @@ func newWorkerCommand() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			shutdown, err := worker.Telemetry(ctx, buildinfo.Version)
+			if err != nil {
+				return fmt.Errorf("start OpenTelemetry: %w", err)
+			}
+			defer func() { _ = shutdown(context.WithoutCancel(ctx)) }()
 			fmt.Fprintf(cmd.OutOrStdout(), "Worker %s is running against %s. Ctrl-C stops it.\n", id, server)
 			if err := w.Run(ctx); err != nil && !errors.Is(err, ctx.Err()) {
 				return err
@@ -143,6 +149,7 @@ func workerHandlers(ctx context.Context, client *api.Client, out io.Writer) (map
 		handlers["case.validate"] = caseJobs.Validate
 		fmt.Fprintf(out, "Sandboxes: %s; this worker prepares environments, validates cases and verifies evaluation runs.\n", name)
 		evalJobs.Provider = provider
+		evalJobs.ProviderName = name
 		handlers["verify"] = evalJobs.Verify
 		// Only a worker with a model key runs agents.
 		runnable := evaluate.Available(evalJobs.Env)
@@ -150,10 +157,10 @@ func workerHandlers(ctx context.Context, client *api.Client, out io.Writer) (map
 			handlers["run"] = evalJobs.Run
 			fmt.Fprintf(out, "Agents: this worker runs %s.\n", strings.Join(runnable, ", "))
 		} else {
-			fmt.Fprintln(out, "Agents: no model key (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY), so this worker runs no evaluation runs.")
+			fmt.Fprintln(out, cbx.Line(cbx.NoModelKey, "Agents: no model key (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY), so this worker runs no evaluation runs."))
 		}
 	} else {
-		fmt.Fprintf(out, "Sandboxes: %v. This worker does not prepare environments, validate cases or run evaluations.\n", err)
+		fmt.Fprintf(out, "Sandboxes: %v. This worker does not prepare environments, validate cases or run evaluations.\n", cbx.Wrap(cbx.NoSandbox, err))
 	}
 	return handlers, nil
 }

@@ -1,0 +1,18 @@
+{{- if .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "casebox.fullname" . }}
+  labels:
+    {{- include "casebox.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: casebox
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  endpoints:
+    # The server's /metrics, and QueueBox's (outbox dead letters, inbox backlog).
+    - port: management
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}

@@ -71,7 +71,10 @@ public static class IntegrationEndpoints
                 }
                 catch (HttpRequestException e)
                 {
-                    throw new DomainException($"GitHub refused the credential: {e.Message}");
+                    throw new DomainException(
+                        $"GitHub refused the credential: {e.Message}",
+                        Cbx.GitHubRefused
+                    );
                 }
 
                 await store.SaveAsync(
@@ -126,7 +129,8 @@ public static class IntegrationEndpoints
                     .SendAsync(request, http.RequestAborted);
                 if (!response.IsSuccessStatusCode)
                     throw new DomainException(
-                        $"Jira refused the token ({(int)response.StatusCode})."
+                        $"Jira refused the token ({(int)response.StatusCode}).",
+                        Cbx.JiraRefused
                     );
 
                 await store.SaveAsync(

@@ -79,7 +79,8 @@ public sealed class CaseMining(
             throw new NotFoundException("The workspace does not exist.");
         if (!workspace.CanMine)
             throw new DomainException(
-                "Cases are mined only in a workspace with a confirmed recipe. Run casebox env check, then casebox env confirm."
+                "Cases are mined only in a workspace with a confirmed recipe. Run casebox env check, then casebox env confirm.",
+                Cbx.RecipeNotConfirmed
             );
 
         await using var connection = await db.OpenConnectionAsync(ct);

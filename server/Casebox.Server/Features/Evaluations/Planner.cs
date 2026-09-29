@@ -118,7 +118,8 @@ public sealed class Planner(
         foreach (var model in new[] { request.Baseline.Model, request.Candidate.Model }.Distinct())
             if (!prices.ContainsKey(model))
                 throw new DomainException(
-                    $"casebox.yml has no price for {model}. Add it under prices (USD per million tokens); there is no live price lookup."
+                    $"casebox.yml has no price for {model}. Add it under prices (USD per million tokens); there is no live price lookup.",
+                    Cbx.MissingPrice
                 );
 
         var (org, _) = await store.Load<Organisation>(Organisation.StreamId, ct);
@@ -151,7 +152,8 @@ public sealed class Planner(
             cases = cases.Take(max).ToList();
         if (cases.Count == 0)
             throw new DomainException(
-                $"Workspace {request.Workspace} has no approved {split} case to evaluate."
+                $"Workspace {request.Workspace} has no approved {split} case to evaluate.",
+                Cbx.NoCases
             );
 
         var history = (
@@ -285,7 +287,8 @@ public sealed class Planner(
     {
         if (plan.MonthSpentUsd + plan.Requested.Estimate.TotalUsd > plan.MonthlyUsd)
             throw new DomainException(
-                $"This month's spend of {plan.MonthSpentUsd:0.00} USD plus the estimate of {plan.Requested.Estimate.TotalUsd:0.00} USD is over the monthly limit of {plan.MonthlyUsd:0.00} USD."
+                $"This month's spend of {plan.MonthSpentUsd:0.00} USD plus the estimate of {plan.Requested.Estimate.TotalUsd:0.00} USD is over the monthly limit of {plan.MonthlyUsd:0.00} USD.",
+                Cbx.MonthlyBudget
             );
     }
 
@@ -314,7 +317,8 @@ public sealed class Planner(
         {
             if (!HarnessSpec.SharedAgents.Contains(spec.Agent))
                 throw new DomainException(
-                    $"The {side} uses a shared harness, but {spec.Agent} has no user-level configuration to put it in; only claude-code and codex do."
+                    $"The {side} uses a shared harness, but {spec.Agent} has no user-level configuration to put it in; only claude-code and codex do.",
+                    Cbx.SharedHarnessAgent
                 );
             if (string.IsNullOrWhiteSpace(shared.Repo) || string.IsNullOrWhiteSpace(shared.Ref))
                 throw new DomainException(

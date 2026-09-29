@@ -21,6 +21,11 @@ if [[ "$fail" -eq 0 && "$compose" != "$tests" ]]; then
   echo "rule: deploy/compose.yaml pins $compose but server tests pin $tests" >&2
   fail=1
 fi
+chart="ghcr.io/alternayte/queuebox:$(sed -n '/queuebox:/,/tag:/s/^ *tag: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' deploy/helm/casebox/values.yaml)"
+if [[ "$fail" -eq 0 && "$compose" != "$chart" ]]; then
+  echo "rule: deploy/compose.yaml pins $compose but the Helm chart pins $chart" >&2
+  fail=1
+fi
 if grep -qE 'queuebox:(latest|[0-9]+(\.[0-9]+)?)$' <<< "$compose$tests"; then
   echo "rule: pin QueueBox by exact version, not a moving tag" >&2
   fail=1

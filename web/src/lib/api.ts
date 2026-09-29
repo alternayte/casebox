@@ -5,6 +5,9 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     title: string,
+    // The problem's CBX code and its docs page (docs/specs/operations.md, Error codes).
+    public code?: string,
+    public docs?: string,
   ) {
     super(title);
   }
@@ -30,8 +33,8 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) {
-    const problem = (await res.json().catch(() => ({}))) as { title?: string };
-    throw new ApiError(res.status, problem.title ?? `The server answered ${res.status}.`);
+    const problem = (await res.json().catch(() => ({}))) as { title?: string; code?: string; type?: string };
+    throw new ApiError(res.status, problem.title ?? `The server answered ${res.status}.`, problem.code, problem.code ? problem.type : undefined);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

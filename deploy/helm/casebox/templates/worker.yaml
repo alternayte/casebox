@@ -1,0 +1,44 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "casebox.fullname" . }}-worker
+  labels:
+    {{- include "casebox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "casebox.selector" (dict "Release" .Release "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "casebox.selector" (dict "Release" .Release "component" "worker") | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: worker
+          image: {{ include "casebox.image" (dict "image" .Values.image.worker "root" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: CASEBOX_SERVER
+              value: {{ printf "http://%s-server:8080" (include "casebox.fullname" .) | quote }}
+            - name: CASEBOX_SANDBOX
+              value: {{ .Values.worker.sandbox | quote }}
+            - name: CASEBOX_SANDBOX_CONCURRENCY
+              value: {{ .Values.worker.concurrency | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ required "worker.envSecret is required: it holds CASEBOX_WORKER_TOKEN and the provider's credentials" .Values.worker.envSecret }}
+          volumeMounts:
+            - name: home
+              mountPath: /home/casebox
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+      volumes:
+        - name: home
+          emptyDir: {}
+{{- end }}

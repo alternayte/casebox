@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"net/http"
 	"os"
@@ -308,7 +309,7 @@ func setUpMachine(ctx context.Context, client *api.Client, server, mode string, 
 			default:
 				fmt.Fprintln(out, "  codex: native telemetry goes to the server.")
 			}
-			fmt.Fprintln(out, "  codex: Codex runs a new hook only after you trust it. Open Codex and approve the Casebox hooks in /hooks.")
+			fmt.Fprintln(out, "  codex: "+cbx.Line(cbx.CodexHookTrust, "Codex runs a new hook only after you trust it. Open Codex and approve the Casebox hooks in /hooks."))
 		}
 	}
 	if found == 0 {

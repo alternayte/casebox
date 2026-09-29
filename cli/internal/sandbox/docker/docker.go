@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"math"
 	"os"
@@ -704,7 +705,7 @@ func (p *Provider) Check(ctx context.Context) error {
 		return fmt.Errorf("docker does not answer: %s", strings.TrimSpace(string(out)))
 	}
 	if os := strings.TrimSpace(string(out)); os != "linux" {
-		return fmt.Errorf("the Docker daemon runs %s containers; Casebox sandboxes need Linux containers", os)
+		return cbx.Errorf(cbx.DockerNotLinux, "the Docker daemon runs %s containers; Casebox sandboxes need Linux containers", os)
 	}
 	return nil
 }

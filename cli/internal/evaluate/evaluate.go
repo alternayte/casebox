@@ -40,13 +40,16 @@ type Jobs struct {
 	MirrorRoot  string
 	GitHubToken string
 	Provider    sandbox.Provider
-	Model       *analysis.Client
-	Env         map[string]string
+	// ProviderName names the provider in the sandbox start time the run reports.
+	ProviderName string
+	Model        *analysis.Client
+	Env          map[string]string
 }
 
 // deps are what the pipeline reaches outside itself; tests replace the server and the mirrors.
 type deps struct {
 	provider sandbox.Provider
+	name     string
 	open     func(ctx context.Context, repo string) (string, error)
 	put      func(ctx context.Context, contentType string, data []byte) (string, error)
 	get      func(ctx context.Context, hash string) ([]byte, error)
@@ -59,6 +62,7 @@ func (j Jobs) deps() deps {
 	opened := map[string]string{}
 	return deps{
 		provider: j.Provider,
+		name:     j.ProviderName,
 		open: func(ctx context.Context, name string) (string, error) {
 			if dir, ok := opened[name]; ok {
 				return dir, nil

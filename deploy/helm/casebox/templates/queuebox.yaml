@@ -1,0 +1,102 @@
+{{- $name := printf "%s-queuebox" (include "casebox.fullname" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "casebox.labels" . | nindent 4 }}
+data:
+  queuebox.yml: |
+    {{- .Files.Get "files/queuebox.yml" | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "casebox.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "casebox.selector" (dict "Release" .Release "component" "queuebox") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: management
+      port: 9090
+      targetPort: management
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "casebox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: queuebox
+spec:
+  replicas: {{ .Values.queuebox.replicas }}
+  selector:
+    matchLabels:
+      {{- include "casebox.selector" (dict "Release" .Release "component" "queuebox") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "casebox.selector" (dict "Release" .Release "component" "queuebox") | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Files.Get "files/queuebox.yml" | sha256sum }}
+        {{- if .Values.metrics.annotations }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: /metrics
+        {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # The QueueBox image's user, by number, so the kubelet can verify it.
+        runAsUser: 100
+        runAsGroup: 101
+      containers:
+        - name: queuebox
+          image: {{ include "casebox.image" (dict "image" .Values.image.queuebox "root" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9090
+          env:
+            {{- include "casebox.dbPassword" . | nindent 12 }}
+            - name: QUEUEBOX_CONFIG_FILE
+              value: /etc/queuebox/queuebox.yml
+            - name: QUEUEBOX_DATABASE_URL
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?sslmode=%s" (required "database.host is required" .Values.database.host) .Values.database.port .Values.database.name (.Values.database.sslMode | lower) | quote }}
+            - name: QUEUEBOX_DATABASE_USERNAME
+              value: {{ .Values.database.user | quote }}
+            - name: QUEUEBOX_DATABASE_PASSWORD
+              value: $(DB_PASSWORD)
+            - name: CASEBOX_EFFECTS_URL
+              value: {{ printf "http://%s-server:8081" (include "casebox.fullname" .) | quote }}
+            {{- range $env, $key := dict "CASEBOX_EFFECTS_TOKEN" "effects-token" "CASEBOX_POLL_TOKEN" "poll-token" "CASEBOX_QUEUEBOX_ADMIN_TOKEN" "queuebox-admin-token" }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "casebox.tokensSecret" $ }}
+                  key: {{ $key }}
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/queuebox
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /health, port: management }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: management }
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.queuebox.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}

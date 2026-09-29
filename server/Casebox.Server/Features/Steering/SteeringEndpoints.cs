@@ -152,9 +152,10 @@ public static class SteeringEndpoints
                         org.Settings.K
                     )
                 )
-                    return Results.Problem(
-                        statusCode: StatusCodes.Status403Forbidden,
-                        title: $"Fewer than {org.Settings.K} people are behind this theme, so its interventions stay hidden."
+                    return Cbx.Problem(
+                        StatusCodes.Status403Forbidden,
+                        Cbx.BelowK,
+                        $"Fewer than {org.Settings.K} people are behind this theme, so its interventions stay hidden."
                     );
 
                 var number = Math.Max(1, page ?? 1);

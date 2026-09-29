@@ -244,7 +244,10 @@ public sealed class ProposerRuns(
             throw new DomainException("A search budget is 2 to 400 runs.");
         var (workspace, _) = await store.Load<Workspace>(Workspace.StreamIdFor(body.Workspace), ct);
         if (!workspace.Exists)
-            throw new NotFoundException($"Workspace {body.Workspace} does not exist.");
+            throw new NotFoundException(
+                $"Workspace {body.Workspace} does not exist.",
+                Cbx.NoWorkspace
+            );
         var repo = body.Repo is { } r
             ? WorkspaceDecider.NormalizeRepo(r)
             : workspace.Repos.FirstOrDefault();

@@ -123,6 +123,19 @@ public sealed class ProposalDeciderTests
             .ThenNothing();
 
     [Fact]
+    public void A_gate_verdict_delivered_again_appends_nothing() =>
+        Decider
+            .Given<Proposal>(
+                Drafted,
+                Scored,
+                new ProposalEvents.GateRequested(0, "g"),
+                new ProposalEvents.GatePassed("g", []),
+                new ProposalEvents.PrOpened("github.com/acme/api", 5, "b", "u")
+            )
+            .When(p => ProposalDecider.Conclude(p, new ProposalEvents.GatePassed("g", [])))
+            .ThenNothing();
+
+    [Fact]
     public void A_merged_proposal_is_not_rejected() =>
         Decider
             .Given<Proposal>(

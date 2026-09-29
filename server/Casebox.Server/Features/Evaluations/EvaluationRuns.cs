@@ -38,7 +38,10 @@ public sealed record RunAnswer(
     bool TimedOut,
     bool TokenCapExceeded,
     ProcessChecks? ProcessChecks,
-    string? HarnessHash
+    string? HarnessHash,
+    // The time to prepare and start the agent's sandbox, and the provider (docs/specs/operations.md).
+    double? SandboxSeconds = null,
+    string? Provider = null
 );
 
 public sealed record TestCount(int Passed, int Total);
@@ -112,6 +115,11 @@ public sealed class RunResultHandler(IServiceProvider services, TimeProvider clo
             )
         );
 
+        if (answer.SandboxSeconds is { } started)
+            Telemetry.CaseboxMetrics.SandboxStart.Record(
+                started,
+                new KeyValuePair<string, object?>("provider", answer.Provider ?? "unknown")
+            );
         if (answer.HarnessHash is { Length: 64 } harness)
             await HarnessVersionAsync(
                 connection,
@@ -288,6 +296,10 @@ public sealed class VerifyResultHandler(TimeProvider clock) : IJobResultHandler
                 ),
             ct
         );
+        Telemetry.CaseboxMetrics.Runs.Add(
+            1,
+            new KeyValuePair<string, object?>("outcome", "completed")
+        );
     }
 }
 
@@ -391,6 +403,11 @@ public sealed class RunFailureSweeper(
                         ct
                     );
             await transaction.CommitAsync(ct);
+            if (evaluation.Open)
+                Telemetry.CaseboxMetrics.Runs.Add(
+                    1,
+                    new KeyValuePair<string, object?>("outcome", "failed")
+                );
         }
     }
 }

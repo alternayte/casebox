@@ -33,6 +33,8 @@ type Options struct {
 	Port    int
 	Image   string // overrides the server image; empty uses the CLI's version
 	Version string
+	// Demo loads a synthetic team into the organisation when it has no session yet.
+	Demo bool
 }
 
 // Env holds the stack's settings and generated secrets, kept in ~/.casebox/stack/.env so a
@@ -57,6 +59,7 @@ func Up(ctx context.Context, opts Options, out io.Writer) (Env, error) {
 	}
 	env["CASEBOX_PORT"] = fmt.Sprint(opts.Port)
 	env["CASEBOX_VERSION"] = opts.Version
+	env["CASEBOX_DEMO"] = fmt.Sprint(opts.Demo)
 	if opts.Image != "" {
 		env["CASEBOX_SERVER_IMAGE"] = opts.Image
 	} else {

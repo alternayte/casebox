@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"net/http"
 	"net/url"
@@ -69,7 +70,7 @@ func newProposeCommand() *cobra.Command {
 				return err
 			}
 			if cfg.Workspace == "" {
-				return errors.New("casebox.yml names no workspace; the proposer runs in a workspace repository")
+				return cbx.Errorf(cbx.NoWorkspace, "casebox.yml names no workspace; the proposer runs in a workspace repository")
 			}
 			client, err := proposerClient(cfg)
 			if err != nil {

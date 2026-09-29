@@ -123,9 +123,10 @@ public static class PatternEndpoints
                     return Results.NotFound();
                 var facts = await FactsAsync(connection, org, row, ct);
                 if (!Meets(facts, k))
-                    return Results.Problem(
-                        statusCode: StatusCodes.Status403Forbidden,
-                        title: $"Fewer than {k} people are behind this pattern, so it is not shown."
+                    return Cbx.Problem(
+                        StatusCodes.Status403Forbidden,
+                        Cbx.BelowK,
+                        $"Fewer than {k} people are behind this pattern, so it is not shown."
                     );
                 var refs = JsonSerializer.Deserialize<string[]>(row.Refs)!;
                 var cases = (

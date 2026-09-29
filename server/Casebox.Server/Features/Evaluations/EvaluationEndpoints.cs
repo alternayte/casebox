@@ -396,9 +396,10 @@ public static class EvaluationEndpoints
     }
 
     private static IResult HeldOut() =>
-        Results.Problem(
-            statusCode: StatusCodes.Status403Forbidden,
-            title: "A held-out evaluation shows only its verdict, counts and cost."
+        Cbx.Problem(
+            StatusCodes.Status403Forbidden,
+            Cbx.HeldOut,
+            "A held-out evaluation shows only its verdict, counts and cost."
         );
 
     private static EstimateView View(Plan plan) =>

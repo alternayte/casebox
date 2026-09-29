@@ -135,11 +135,11 @@ public sealed class JobQueue(
             )
         );
 
-        var row = await connection.QuerySingleOrDefaultAsync<Row>(
+        var row = await connection.QuerySingleOrDefaultAsync<LeaseRow>(
             new CommandDefinition(
                 """
                 WITH next AS (
-                    SELECT id FROM casebox.jobs
+                    SELECT id, status = 'leased' AS expired FROM casebox.jobs
                     WHERE org_id = @Org AND kind = ANY(@Kinds) AND (@CiRun::text IS NULL OR payload->>'ciRun' = @CiRun)
                       AND ((status = 'queued' AND available_at <= @Now) OR (status = 'leased' AND lease_expires_at < @Now))
                     ORDER BY available_at, id
@@ -149,7 +149,7 @@ public sealed class JobQueue(
                 UPDATE casebox.jobs j
                 SET status = 'leased', lease_owner = @Worker, lease_expires_at = @Expires, attempts = j.attempts + 1, updated_at = @Now
                 FROM next WHERE j.id = next.id
-                RETURNING j.id, j.kind, j.idempotency_key, j.payload::text AS payload, j.attempts, j.max_attempts, j.lease_expires_at, j.status, j.lease_owner
+                RETURNING j.id, j.kind, j.idempotency_key, j.payload::text AS payload, j.attempts, j.max_attempts, j.lease_expires_at, j.status, j.lease_owner, next.expired
                 """,
                 new
                 {
@@ -166,7 +166,24 @@ public sealed class JobQueue(
         );
 
         await transaction.CommitAsync(ct);
-        return row?.ToJob();
+        if (row is { Expired: true })
+            Telemetry.CaseboxMetrics.LeaseExpiries.Add(
+                1,
+                new KeyValuePair<string, object?>("kind", row.Kind)
+            );
+        return row is null
+            ? null
+            : new Row(
+                row.Id,
+                row.Kind,
+                row.IdempotencyKey,
+                row.Payload,
+                row.Attempts,
+                row.MaxAttempts,
+                row.LeaseExpiresAt,
+                row.Status,
+                row.LeaseOwner
+            ).ToJob();
     }
 
     public async Task<bool> HeartbeatAsync(
@@ -342,6 +359,20 @@ public sealed class JobQueue(
                 cancellationToken: ct
             )
         );
+
+    // A leased row, and whether its previous lease had expired.
+    private sealed record LeaseRow(
+        string Id,
+        string Kind,
+        string IdempotencyKey,
+        string Payload,
+        int Attempts,
+        int MaxAttempts,
+        DateTime? LeaseExpiresAt,
+        string Status,
+        string? LeaseOwner,
+        bool Expired
+    );
 
     private sealed record Row(
         string Id,

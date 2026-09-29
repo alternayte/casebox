@@ -1,0 +1,121 @@
+{{- $name := printf "%s-server" (include "casebox.fullname" .) }}
+{{- $qb := printf "%s-queuebox" (include "casebox.fullname" .) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "casebox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  selector:
+    {{- include "casebox.selector" (dict "Release" .Release "component" "server") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    # /internal/effects, /healthz and /metrics; never exposed by the ingress.
+    - name: management
+      port: 8081
+      targetPort: management
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "casebox.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  selector:
+    matchLabels:
+      {{- include "casebox.selector" (dict "Release" .Release "component" "server") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "casebox.selector" (dict "Release" .Release "component" "server") | nindent 8 }}
+      {{- if .Values.metrics.annotations }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: /metrics
+      {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: server
+          image: {{ include "casebox.image" (dict "image" .Values.image.server "root" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 8081
+          env:
+            {{- include "casebox.dbPassword" . | nindent 12 }}
+            - name: ConnectionStrings__Casebox
+              value: {{ printf "Host=%s;Port=%v;Database=%s;Username=%s;Password=$(DB_PASSWORD);SSL Mode=%s" .Values.database.host .Values.database.port .Values.database.name .Values.database.user .Values.database.sslMode | quote }}
+            - name: ASPNETCORE_URLS
+              value: http://+:8080
+            - name: Casebox__ManagementPort
+              value: "8081"
+            - name: Casebox__Org__Id
+              value: {{ .Values.org.id | quote }}
+            - name: Casebox__Org__Name
+              value: {{ .Values.org.name | quote }}
+            - name: Casebox__Keys__Mode
+              value: {{ .Values.keys.mode | quote }}
+            {{- if eq .Values.keys.mode "environment" }}
+            - name: DEEDBOX_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "keys.masterKeySecret.name is required in environment mode" .Values.keys.masterKeySecret.name }}
+                  key: {{ .Values.keys.masterKeySecret.key }}
+            {{- else if eq .Values.keys.mode "azure" }}
+            - name: Casebox__Keys__AzureKeyId
+              value: {{ required "keys.azureKeyId is required in azure mode" .Values.keys.azureKeyId | quote }}
+            {{- end }}
+            - name: Casebox__QueueBox__BaseUrl
+              value: {{ printf "http://%s:8080" $qb | quote }}
+            - name: Casebox__QueueBox__HealthUrl
+              value: {{ printf "http://%s:9090/health" $qb | quote }}
+            - name: Casebox__QueueBox__PollToken
+              valueFrom:
+                secretKeyRef: { name: {{ include "casebox.tokensSecret" . }}, key: poll-token }
+            - name: Casebox__QueueBox__EffectsToken
+              valueFrom:
+                secretKeyRef: { name: {{ include "casebox.tokensSecret" . }}, key: effects-token }
+            {{- if .Values.oidc.authority }}
+            - name: Casebox__Oidc__Authority
+              value: {{ .Values.oidc.authority | quote }}
+            - name: Casebox__Oidc__ClientId
+              value: {{ required "oidc.clientId is required with an authority" .Values.oidc.clientId | quote }}
+            {{- if .Values.oidc.clientSecretSecret.name }}
+            - name: Casebox__Oidc__ClientSecret
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.oidc.clientSecretSecret.name }}, key: {{ .Values.oidc.clientSecretSecret.key }} }
+            {{- end }}
+            {{- range $i, $owner := .Values.oidc.owners }}
+            - name: Casebox__Oidc__Owners__{{ $i }}
+              value: {{ $owner | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.localAdmin.passwordSecret.name }}
+            - name: Casebox__LocalAdmin__Password
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.localAdmin.passwordSecret.name }}, key: {{ .Values.localAdmin.passwordSecret.key }} }
+            {{- end }}
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /healthz/ready, port: management }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz/live, port: management }
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}

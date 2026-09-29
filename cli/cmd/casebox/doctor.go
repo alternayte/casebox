@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +71,7 @@ func newDoctorCommand() *cobra.Command {
 				}
 				if t.NeedsTrust && installed {
 					missing, err := hooks.CodexUntrusted(t, filepath.Join(home, ".codex", "config.toml"))
-					report(err == nil && len(missing) == 0, "%s: %s", t.Agent, map[bool]string{true: "hooks trusted", false: "hooks not trusted yet: open Codex and approve them in /hooks"}[err == nil && len(missing) == 0])
+					report(err == nil && len(missing) == 0, "%s: %s", t.Agent, map[bool]string{true: "hooks trusted", false: cbx.Line(cbx.CodexHookTrust, "hooks not trusted yet: open Codex and approve them in /hooks")}[err == nil && len(missing) == 0])
 				}
 			}
 			fmt.Fprintln(out, "  Coverage: Claude Code and Codex give full transcripts, hooks and telemetry; Cursor CLI gives hooks only.")

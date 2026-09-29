@@ -250,7 +250,10 @@ public static class CiEndpoints
         {
             var (w, _) = await store.Load<Workspace>(Workspace.StreamIdFor(workspace), ct);
             if (!w.Exists)
-                throw new NotFoundException($"Workspace {workspace} does not exist.");
+                throw new NotFoundException(
+                    $"Workspace {workspace} does not exist.",
+                    Cbx.NoWorkspace
+                );
             return;
         }
         await store.Execute<Workspace>(

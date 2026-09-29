@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"math"
 	"net/http"
@@ -286,7 +287,7 @@ func compareBaseline(cfg *repo.Baseline, shared, overrides string, branch func()
 		}
 	}
 	if s.Agent == "" || s.Model == "" {
-		return s, errors.New("the baseline names no agent or model; add evaluation.baseline to casebox.yml or pass --baseline agent=…,agent_version=…,model=…")
+		return s, cbx.Errorf(cbx.NoBaseline, "the baseline names no agent or model; add evaluation.baseline to casebox.yml or pass --baseline agent=…,agent_version=…,model=…")
 	}
 	if !contains(compareAgents, s.Agent) {
 		return s, fmt.Errorf("the baseline agent %q is not claude-code, codex, cursor-cli or command", s.Agent)
@@ -394,7 +395,7 @@ func compareRequest(workspace string, base, cand harnessSpec, prices map[string]
 	}
 	for _, m := range []string{base.Model, cand.Model} {
 		if _, ok := prices[m]; !ok {
-			return req, fmt.Errorf("casebox.yml has no price for %s; add it under prices (USD per million tokens: input, output, and optional cache_read and cache_write)", m)
+			return req, cbx.Errorf(cbx.MissingPrice, "casebox.yml has no price for %s; add it under prices (USD per million tokens: input, output, and optional cache_read and cache_write)", m)
 		}
 	}
 	if req.Prices == nil {

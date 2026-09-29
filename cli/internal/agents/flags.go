@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"regexp"
 	"strconv"
 	"strings"
@@ -84,7 +85,7 @@ func lookup(agent, version string) (Row, error) {
 	if !agentKnown {
 		return Row{}, fmt.Errorf("unknown agent %q: use %s, %s, %s or %s", agent, ClaudeCode, Codex, CursorCLI, CommandCLI)
 	}
-	return Row{}, fmt.Errorf("%s version %q is not in the flag table; known versions: %s", agent, version, strings.Join(known, "; "))
+	return Row{}, cbx.Errorf(cbx.AgentVersion, "%s version %q is not in the flag table; known versions: %s", agent, version, strings.Join(known, "; "))
 }
 
 func inRange(agent, version, lo, hi string) (bool, error) {

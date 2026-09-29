@@ -123,6 +123,7 @@ export function sideValue(s: HarnessSpec, change: string): string {
       return s.effort ?? "default";
     case "harness":
       if (s.harness === "none") return "no harness";
+      if (s.overrides) return `${s.harness} + proposed edit`;
       return s.shared ? `${s.harness} + ${s.shared.repo.split("/").pop()}@${s.shared.ref.slice(0, 12)}` : s.harness;
     case "settings":
       return settingsText(s);

@@ -28,12 +28,17 @@ func newUpCommand() *cobra.Command {
 			fmt.Fprintf(out, "\nCasebox is running at http://localhost:%d\n", opts.Port)
 			fmt.Fprintf(out, "Admin password: %s\n", env["CASEBOX_ADMIN_PASSWORD"])
 			fmt.Fprintln(out, "Keys are in database mode: the master key sits next to the data. Use this stack for trials only.")
+			if opts.Demo {
+				fmt.Fprintln(out, "Demo data: a synthetic team of five in workspace demo, with a steering report, cases, an evaluation and a proposal.")
+				fmt.Fprintln(out, "It loads only while the organisation has no session of its own.")
+			}
 			fmt.Fprintln(out, "Next: run casebox init in a repository.")
 			return nil
 		},
 	}
 	cmd.Flags().IntVar(&opts.Port, "port", opts.Port, "the port of the web UI and API")
 	cmd.Flags().StringVar(&opts.Image, "image", "", "the server image to run instead of the one that matches this CLI")
+	cmd.Flags().BoolVar(&opts.Demo, "demo", false, "load a synthetic team to see every page before connecting anything")
 	return cmd
 }
 

@@ -14,4 +14,8 @@ for f in compose.yaml queuebox.yml; do
     fail=1
   fi
 done
+if ! cmp -s deploy/queuebox.yml deploy/helm/casebox/files/queuebox.yml; then
+  echo "rule: deploy/helm/casebox/files/queuebox.yml differs from deploy/queuebox.yml; run just sync-stack" >&2
+  fail=1
+fi
 exit "$fail"

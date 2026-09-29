@@ -53,6 +53,7 @@ services:
       Casebox__QueueBox__HealthUrl: http://queuebox:9090/health
       Casebox__QueueBox__PollToken: ${CASEBOX_POLL_TOKEN}
       Casebox__QueueBox__EffectsToken: ${CASEBOX_EFFECTS_TOKEN}
+      Casebox__Demo: ${CASEBOX_DEMO:-false}
     ports:
       - "${CASEBOX_PORT:-8080}:8080"
     depends_on:

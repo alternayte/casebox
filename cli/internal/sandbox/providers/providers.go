@@ -5,6 +5,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"os"
 	"strconv"
 
@@ -50,7 +51,7 @@ func Available(ctx context.Context) (sandbox.Provider, string, error) {
 	switch name {
 	case docker.Name:
 		if err := p.(*docker.Provider).Check(ctx); err != nil {
-			return nil, "", err
+			return nil, "", cbx.Wrap(cbx.NoSandbox, err)
 		}
 	}
 	n, _ := strconv.Atoi(os.Getenv("CASEBOX_SANDBOX_CONCURRENCY"))

@@ -374,7 +374,8 @@ public static class EvaluationDecider
             throw new DomainException("Harness CI needs a cached baseline score for every case.");
         if (requested.Estimate.TotalUsd > requested.CapUsd)
             throw new DomainException(
-                $"The estimate of {requested.Estimate.TotalUsd:0.00} USD is over this evaluation's cap of {requested.CapUsd:0.00} USD."
+                $"The estimate of {requested.Estimate.TotalUsd:0.00} USD is over this evaluation's cap of {requested.CapUsd:0.00} USD.",
+                Cbx.EvaluationCap
             );
         return [requested];
     }

@@ -1,0 +1,19 @@
+# A full set of values for helm lint and helm template in just checks.
+database:
+  host: postgres.example.internal
+  passwordSecret: { name: casebox-db }
+keys:
+  masterKeySecret: { name: casebox-keys }
+oidc:
+  authority: https://login.example.com
+  clientId: casebox
+  clientSecretSecret: { name: casebox-oidc }
+  owners: ["subject-1"]
+worker:
+  enabled: true
+  envSecret: casebox-worker
+ingress:
+  enabled: true
+  host: casebox.example.com
+metrics:
+  serviceMonitor: { enabled: true }

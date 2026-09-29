@@ -58,10 +58,14 @@ public sealed class CiTests(StackFixture stack)
         ).EnsureSuccessStatusCode();
         var ci = await stack.ServerA.TokenClientAsync(TokenKind.Ci);
 
-        // A ci token reads nothing else of the API.
+        // A ci token reads nothing else of the API, and the refusal says so with its code.
+        var forbidden = await ci.GetAsync("/api/v1/evaluations/", Ct);
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
         Assert.Equal(
-            HttpStatusCode.Forbidden,
-            (await ci.GetAsync("/api/v1/evaluations/", Ct)).StatusCode
+            "CBX011",
+            (await forbidden.Content.ReadFromJsonAsync<JsonElement>(Ct))
+                .GetProperty("code")
+                .GetString()
         );
 
         // The nightly baseline: every case is missing, so all ten are scored, 2 repeats each. The

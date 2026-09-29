@@ -1,0 +1,93 @@
+# Casebox for a team self-host (docs/specs/operations.md, Helm chart). Postgres is external.
+
+image:
+  server:
+    repository: ghcr.io/alternayte/casebox-server
+    tag: ""            # default: the chart's appVersion
+  worker:
+    repository: ghcr.io/alternayte/casebox-worker
+    tag: ""
+  # Pinned with the compose file and the server tests (checks/queuebox-pin.sh).
+  queuebox:
+    repository: ghcr.io/alternayte/queuebox
+    tag: "0.6.0"
+  pullPolicy: IfNotPresent
+
+# The organisation this deployment serves.
+org:
+  id: default
+  name: Casebox
+
+# The external Postgres 16 database. Casebox, Deedbox and QueueBox share it.
+database:
+  host: ""
+  port: 5432
+  name: casebox
+  user: casebox
+  sslMode: Require
+  passwordSecret:
+    name: ""
+    key: password
+
+# Deedbox's master key wraps every tenant's keys. Production uses environment (a Secret) or azure.
+keys:
+  mode: environment    # environment | azure | database (a warning on every start)
+  # Deedbox's key ring: "v1:<32 random bytes, base64>", current first when you rotate
+  # (v2:…,v1:…). Create it with: kubectl create secret generic casebox-keys
+  #   --from-literal=master-key="v1:$(openssl rand -base64 32)"
+  masterKeySecret:
+    name: ""
+    key: master-key
+  azureKeyId: ""
+
+# The effects, poll and QueueBox admin tokens. With existingSecret empty the chart generates them
+# once and keeps them across upgrades. An existing Secret holds effects-token, poll-token and
+# queuebox-admin-token.
+existingSecret: ""
+
+# People log in with OIDC. The local admin is for a trial only.
+oidc:
+  authority: ""
+  clientId: ""
+  clientSecretSecret:
+    name: ""
+    key: client-secret
+  owners: []           # OIDC subjects that start as Owners
+localAdmin:
+  passwordSecret:
+    name: ""           # empty: no local admin login
+    key: password
+
+server:
+  replicas: 1
+  resources: {}
+  extraEnv: []
+
+queuebox:
+  replicas: 1
+  resources: {}
+
+# Workers on Kubernetes use Kiln or Daytona sandboxes; Docker in a pod needs privileges and is not offered.
+worker:
+  enabled: false
+  replicas: 1
+  sandbox: kiln        # kiln | daytona
+  concurrency: 2
+  # A Secret with CASEBOX_WORKER_TOKEN, the provider's credentials, GITHUB_TOKEN, the model keys and
+  # the analysis model settings, as environment variables.
+  envSecret: ""
+  resources: {}
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tls: []
+  annotations: {}
+
+metrics:
+  # Adds prometheus.io annotations to the pods; or a ServiceMonitor for the Prometheus operator.
+  annotations: true
+  serviceMonitor:
+    enabled: false
+    interval: 30s

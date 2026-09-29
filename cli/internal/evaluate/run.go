@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"os"
 	"sort"
@@ -56,6 +57,8 @@ type RunAnswer struct {
 	TokenCapExceeded bool           `json:"tokenCapExceeded"`
 	ProcessChecks    *ProcessChecks `json:"processChecks"`
 	HarnessHash      *string        `json:"harnessHash"`
+	SandboxSeconds   *float64       `json:"sandboxSeconds,omitempty"`
+	Provider         string         `json:"provider,omitempty"`
 }
 
 // Usage is a run's tokens by kind, and the cost the agent reported, if it did.
@@ -105,7 +108,7 @@ func run(ctx context.Context, d deps, pl RunPayload) (RunAnswer, error) {
 	// would break the evaluation's budget.
 	price, ok := pl.Prices[pl.Spec.Model]
 	if !ok {
-		return RunAnswer{}, worker.Permanent{Err: fmt.Errorf("the price table has no price for the model %s", pl.Spec.Model)}
+		return RunAnswer{}, worker.Permanent{Err: cbx.Errorf(cbx.MissingPrice, "the price table has no price for the model %s", pl.Spec.Model)}
 	}
 
 	env, hosts, err := agentAccess(a, d.env)
@@ -150,10 +153,13 @@ func run(ctx context.Context, d deps, pl RunPayload) (RunAnswer, error) {
 	spec.Install = append(append([]string(nil), spec.Install...), a.Install()...)
 
 	p := d.provider
+	sealStart := time.Now()
 	sb, err := runner.Seal(ctx, p, spec, tree, o.TestFiles, hosts, &denied, env)
+	sandboxSeconds := time.Since(sealStart).Seconds()
+	worker.RecordSandboxStart(ctx, d.name, time.Since(sealStart))
 	if err != nil {
 		if errors.Is(err, sandbox.ErrUnsupported) {
-			return RunAnswer{}, worker.Permanent{Err: fmt.Errorf("the sandbox provider cannot close the agent's network to the model API and the registry mirror, and an agent never runs with open network: %w", err)}
+			return RunAnswer{}, worker.Permanent{Err: cbx.Errorf(cbx.NetworkUnsupported, "the sandbox provider cannot close the agent's network to the model API and the registry mirror, and an agent never runs with open network: %w", err)}
 		}
 		return RunAnswer{}, err
 	}
@@ -223,6 +229,8 @@ func run(ctx context.Context, d deps, pl RunPayload) (RunAnswer, error) {
 		TokenCapExceeded: capped,
 		ProcessChecks:    &ProcessChecks{RanTestsBeforeDone: ranTests, EditedTestAfterFailure: editedTests},
 		HarnessHash:      &overlay.hash,
+		SandboxSeconds:   &sandboxSeconds,
+		Provider:         d.name,
 	}
 	model := metrics.Model
 	if model == "" {

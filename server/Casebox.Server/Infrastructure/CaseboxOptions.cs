@@ -19,6 +19,9 @@ public sealed class CaseboxOptions
         public Uri ApiUrl { get; set; } = new("https://api.github.com/");
     }
 
+    // `casebox up --demo`: load a synthetic team into an organisation with no session yet.
+    public bool Demo { get; set; }
+
     // The port of /internal/effects and /healthz. It is never exposed outside the cluster or compose network.
     public int ManagementPort { get; set; } = 8081;
 

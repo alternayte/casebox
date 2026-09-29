@@ -370,7 +370,8 @@ public sealed class ProposalSteps(
         );
         if (spent + plan.Requested.Estimate.TotalUsd > share)
             throw new DomainException(
-                $"The proposer's spend this month ({spent:0.00} USD) plus this estimate ({plan.Requested.Estimate.TotalUsd:0.00} USD) passes its share of the monthly budget ({share:0.00} USD)."
+                $"The proposer's spend this month ({spent:0.00} USD) plus this estimate ({plan.Requested.Estimate.TotalUsd:0.00} USD) passes its share of the monthly budget ({share:0.00} USD).",
+                Cbx.ProposerShare
             );
     }
 
@@ -408,6 +409,14 @@ public sealed class ProposalSteps(
             ct
         );
         if (verdict is null)
+            return;
+        // Only a proposal that still searches or waits for its gate records a verdict: the verdict
+        // can arrive again, or before the proposal's own events.
+        var (current, _) = await store.Load<Proposal>(Proposal.StreamId(id), ct);
+        if (
+            !current.Exists
+            || current.Status is not (ProposalStatus.Searching or ProposalStatus.Gating)
+        )
             return;
 
         if (request.Purpose == Purpose.Search)

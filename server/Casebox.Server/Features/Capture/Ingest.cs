@@ -103,7 +103,8 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
     {
         if (settings.PromptMode is not { } mode)
             throw new ConflictException(
-                "Capture is off until an admin chooses a prompt mode (casebox init)."
+                "Capture is off until an admin chooses a prompt mode (casebox init).",
+                Cbx.NoPromptMode
             );
         Validate(batch);
 
@@ -412,6 +413,16 @@ public static class Ingest
                     http.RequestAborted
                 );
                 await linker.LinkSessionAsync(batch.Session.Id, http.RequestAborted);
+                var now = DateTimeOffset.UtcNow;
+                if (batch.Events.Count > 0)
+                    Telemetry.CaseboxMetrics.IngestLag.Record(
+                        Math.Max(0, (now - batch.Events.Max(e => e.At)).TotalSeconds)
+                    );
+                if (
+                    long.TryParse(http.Request.Headers["X-Casebox-Spool-Backlog"], out var backlog)
+                    && http.User.FindFirst(Auth.CaseboxClaims.Token)?.Value is { } token
+                )
+                    Telemetry.CaseboxMetrics.ReportSpool(token, backlog, now);
                 return Results.Ok(new { accepted = batch.Events.Count, stored });
             }
         );

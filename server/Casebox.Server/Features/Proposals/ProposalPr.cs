@@ -47,7 +47,7 @@ public sealed class ProposalPrEffect(
         var client =
             await github.ForOrgAsync(org, ct)
             ?? throw new InvalidOperationException(
-                "GitHub is not connected, so the proposal's pull request cannot open."
+                $"GitHub is not connected, so the proposal\'s pull request cannot open ({Cbx.GitHubNotConnected})."
             );
         var path = Ci.CiRuns.ApiPath(draft.Repo);
         var branch = Branch(id);

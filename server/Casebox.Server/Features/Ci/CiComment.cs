@@ -39,7 +39,7 @@ public sealed class CiCommentEffect(
         var client =
             await github.ForOrgAsync(org, ct)
             ?? throw new InvalidOperationException(
-                "GitHub is not connected, so the harness CI comment cannot be posted."
+                $"GitHub is not connected, so the harness CI comment cannot be posted ({Cbx.GitHubNotConnected})."
             );
 
         var marker = Marker(run.Workspace);

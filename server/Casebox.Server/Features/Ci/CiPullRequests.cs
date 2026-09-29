@@ -137,7 +137,7 @@ public sealed class CiPullRequests(
         {
             status = CiRuns.Skipped;
             message =
-                $"No approved dev case of workspace {workspace} has a baseline score for this agent and model yet. Run casebox ci --baseline on the default branch (the scheduled Action does it nightly), then push again.";
+                $"No approved dev case of workspace {workspace} has a baseline score for this agent and model yet. Run casebox ci --baseline on the default branch (the scheduled Action does it nightly), then push again. ({Cbx.NoBaselineScore}: {Cbx.Url(Cbx.NoBaselineScore)})";
         }
         else
         {

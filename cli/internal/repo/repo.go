@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,7 +47,7 @@ type Config struct {
 }
 
 // ErrNotEnrolled means the directory is not inside a repository with .casebox/casebox.yml.
-var ErrNotEnrolled = errors.New("this repository is not enrolled; run casebox init")
+var ErrNotEnrolled error = &cbx.Error{Code: cbx.NotEnrolled, Err: errors.New("this repository is not enrolled; run casebox init")}
 
 // Root returns the top directory of the git repository that contains dir.
 func Root(ctx context.Context, dir string) (string, error) {
@@ -72,7 +73,7 @@ func LoadConfig(ctx context.Context, dir string) (string, Config, error) {
 	}
 	var c Config
 	if err := yaml.Unmarshal(data, &c); err != nil {
-		return root, Config{}, fmt.Errorf("read %s: %w", ConfigPath, err)
+		return root, Config{}, cbx.Errorf(cbx.BadConfig, "read %s: %w", ConfigPath, err)
 	}
 	return root, c, nil
 }
@@ -122,7 +123,7 @@ func NormalizeRemote(url string) string {
 func UserEmail(ctx context.Context, root string) (string, error) {
 	email, err := git(ctx, root, "config", "user.email")
 	if err != nil || email == "" {
-		return "", errors.New("git user.email is not set; set it so Casebox can count distinct people without knowing who they are")
+		return "", cbx.Errorf(cbx.NoGitEmail, "git user.email is not set; set it so Casebox can count distinct people without knowing who they are")
 	}
 	return email, nil
 }

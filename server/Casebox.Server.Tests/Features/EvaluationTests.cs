@@ -333,9 +333,14 @@ public sealed class EvaluationTests(StackFixture stack)
             (await admin.PostAsJsonAsync("/api/v1/evaluations/estimate", twoChanges, Ct)).StatusCode
         );
         var noPrice = Request(workspace, repeats: 1, prices: new Dictionary<string, object>());
+        var refused = await admin.PostAsJsonAsync("/api/v1/evaluations/estimate", noPrice, Ct);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
+        // The problem carries its code and the page that says how to fix it.
+        var problem = await refused.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Equal("CBX024", problem.GetProperty("code").GetString());
         Assert.Equal(
-            HttpStatusCode.UnprocessableEntity,
-            (await admin.PostAsJsonAsync("/api/v1/evaluations/estimate", noPrice, Ct)).StatusCode
+            "https://casebox-docs.pages.dev/reference/errors/cbx024/",
+            problem.GetProperty("type").GetString()
         );
     }
 

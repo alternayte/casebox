@@ -86,9 +86,23 @@ export function ShareBar({ share, interval, tone = "ink" }: { share: number; int
 
 export function ErrorNote({ error }: { error: unknown }) {
   const message = error instanceof ApiError ? error.message : "The server cannot be reached.";
+  const code = error instanceof ApiError ? error.code : undefined;
+  const docs = error instanceof ApiError ? error.docs : undefined;
   return (
     <p role="alert" className="border-l-2 border-destructive py-1 pl-3 text-sm text-destructive">
       {message}
+      {code && (
+        <>
+          {" "}
+          {docs ? (
+            <a href={docs} className="font-mono text-xs underline" target="_blank" rel="noreferrer">
+              {code}
+            </a>
+          ) : (
+            <span className="font-mono text-xs">{code}</span>
+          )}
+        </>
+      )}
     </p>
   );
 }

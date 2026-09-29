@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"net/http"
 	"os"
@@ -35,7 +36,7 @@ type Config struct {
 func (c Config) String() string { return c.Provider + " " + c.Model }
 
 // ErrNotConfigured means the environment names no analysis model.
-var ErrNotConfigured = errors.New("no analysis model: set CASEBOX_ANALYSIS_PROVIDER (anthropic or openai) and CASEBOX_ANALYSIS_MODEL")
+var ErrNotConfigured error = &cbx.Error{Code: cbx.NoAnalysisModel, Err: errors.New("no analysis model: set CASEBOX_ANALYSIS_PROVIDER (anthropic or openai) and CASEBOX_ANALYSIS_MODEL")}
 
 // FromEnv reads the analysis model from the environment. It returns ErrNotConfigured when neither
 // the provider nor the model is set, and a specific error when the setting is incomplete.

@@ -17,5 +17,10 @@ public sealed class OrgBootstrap(IServiceProvider services, IOptions<CaseboxOpti
             Organisation.StreamId,
             org => OrgDecider.Create(org, options.Value.Org.Name)
         );
+        if (options.Value.Demo)
+        {
+            context.Metadata = new EventMetadata { Actor = "system:demo" };
+            await scope.ServiceProvider.GetRequiredService<Demo.DemoSeed>().SeedAsync(default);
+        }
     }
 }

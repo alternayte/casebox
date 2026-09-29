@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"net/http"
 	"net/url"
@@ -220,7 +221,7 @@ func (c *ciRun) run(ctx context.Context, baseline, inline, failOnRegression bool
 		return exitError{2, err}
 	}
 	if _, ok := prices[spec.Model]; !ok {
-		return exitError{2, fmt.Errorf("casebox.yml has no price for %s; add it under prices", spec.Model)}
+		return exitError{2, cbx.Errorf(cbx.MissingPrice, "casebox.yml has no price for %s; add it under prices", spec.Model)}
 	}
 	var shared *string
 	if c.cfg.Harness.Shared != "" {

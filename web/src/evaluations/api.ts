@@ -15,6 +15,8 @@ export type HarnessSpec = {
   command: CommandTemplate | null;
   // A shared harness repository at a ref (casebox.yml harness.shared).
   shared?: { repo: string; ref: string } | null;
+  // A proposal candidate's files over the harness at the ref (docs/specs/self-evolution.md).
+  overrides?: string | null;
 };
 
 export type Estimate = {

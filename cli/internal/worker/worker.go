@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/alternayte/casebox/cli/internal/api"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Job is a leased job.
@@ -104,7 +107,16 @@ func (w *Worker) runOne(ctx context.Context, job Job) {
 	}()
 
 	fmt.Fprintf(w.Log, "job %s (%s) started\n", job.ID, job.Kind)
+	jobCtx, span := otel.Tracer("casebox").Start(jobCtx, "job "+job.Kind, trace.WithAttributes(attribute.String("casebox.job.kind", job.Kind)))
+	started := time.Now()
 	result, err := w.Handlers[job.Kind](jobCtx, job)
+	outcome := "done"
+	if err != nil {
+		outcome = "failed"
+		span.RecordError(err)
+	}
+	span.End()
+	recordJob(ctx, job.Kind, outcome, time.Since(started))
 	if err != nil {
 		var permanent Permanent
 		retryable := !errors.As(err, &permanent)

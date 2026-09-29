@@ -7,9 +7,10 @@ check: checks cli web server
 checks:
     @for c in checks/*.sh; do bash "$c" || { echo "FAIL $c" >&2; exit 1; }; done
 
-# Copy the local stack files into the CLI, which embeds them for `casebox up`.
+# Copy the local stack files into the CLI, which embeds them for `casebox up`, and the chart.
 sync-stack:
     cp deploy/compose.yaml deploy/queuebox.yml cli/internal/stack/assets/
+    cp deploy/queuebox.yml deploy/helm/casebox/files/queuebox.yml
 
 # CLI and worker: format, vet, test, build.
 cli:

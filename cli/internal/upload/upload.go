@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"net/http"
+	"strconv"
 
 	"github.com/alternayte/casebox/cli/internal/api"
 	"github.com/alternayte/casebox/cli/internal/spool"
@@ -26,7 +28,7 @@ type Result struct {
 }
 
 // ErrCaptureOff means the server accepts nothing until an admin chooses a prompt mode.
-var ErrCaptureOff = errors.New("capture is off on the server until an admin chooses a prompt mode (casebox init)")
+var ErrCaptureOff error = &cbx.Error{Code: cbx.NoPromptMode, Err: errors.New("capture is off on the server until an admin chooses a prompt mode (casebox init)")}
 
 // Run uploads until the spool has nothing pending, the context ends, or the server cannot take more.
 func Run(ctx context.Context, client *api.Client, s *spool.Spool) (Result, error) {
@@ -39,12 +41,17 @@ func Run(ctx context.Context, client *api.Client, s *spool.Spool) (Result, error
 		if len(batches) == 0 {
 			return res, nil
 		}
+		// The server's spool-backlog metric: what this machine has not uploaded yet.
+		headers := map[string]string{}
+		if st, err := s.Stats(ctx); err == nil {
+			headers["X-Casebox-Spool-Backlog"] = strconv.FormatInt(st.Pending, 10)
+		}
 		for _, b := range batches {
 			seqs := make([]int64, len(b.Events))
 			for i, e := range b.Events {
 				seqs[i] = e.Seq
 			}
-			err := client.Do(ctx, http.MethodPost, "/ingest/v1/sessions", b, nil)
+			err := client.DoWith(ctx, http.MethodPost, "/ingest/v1/sessions", headers, b, nil)
 			switch status := api.StatusOf(err); {
 			case err == nil:
 				if err := s.Ack(ctx, b.Session.ID, seqs); err != nil {

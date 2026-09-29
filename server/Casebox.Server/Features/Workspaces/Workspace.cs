@@ -164,7 +164,7 @@ public static partial class WorkspaceDecider
     )
     {
         if (!workspace.Exists)
-            throw new NotFoundException("The workspace does not exist.");
+            throw new NotFoundException("The workspace does not exist.", Cbx.NoWorkspace);
         var normalized = string.IsNullOrWhiteSpace(shared) ? null : NormalizeRepo(shared);
         var clean = globs.Select(g => g.Trim()).Where(g => g.Length > 0).Distinct().ToList();
         if (
@@ -196,6 +196,6 @@ public static partial class WorkspaceDecider
     private static void Require(Workspace workspace)
     {
         if (!workspace.Exists)
-            throw new NotFoundException("The workspace does not exist.");
+            throw new NotFoundException("The workspace does not exist.", Cbx.NoWorkspace);
     }
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"net/http"
 	"os"
@@ -112,7 +113,7 @@ func envContext(ctx context.Context) (string, repo.Config, *api.Client, error) {
 		return "", cfg, nil, err
 	}
 	if cfg.Workspace == "" {
-		return "", cfg, nil, errors.New("casebox.yml names no workspace; run casebox init")
+		return "", cfg, nil, cbx.Errorf(cbx.NoWorkspace, "casebox.yml names no workspace; run casebox init")
 	}
 	client, err := cliClient()
 	return root, cfg, client, err

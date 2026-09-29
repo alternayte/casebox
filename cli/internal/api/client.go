@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alternayte/casebox/cli/internal/cbx"
 	"io"
 	"net/http"
 	"strings"
@@ -27,17 +28,35 @@ func New(server, token string) *Client {
 	return &Client{Server: strings.TrimRight(server, "/"), Token: token, HTTP: &http.Client{Timeout: 30 * time.Second}}
 }
 
-// Error is a non-2xx answer. Title is the problem title the server sent.
+// Error is a non-2xx answer. Title is the problem title the server sent, Code its CBX code.
 type Error struct {
 	Status int
 	Title  string
+	Code   string
 }
 
 func (e *Error) Error() string {
+	msg := fmt.Sprintf("the server answered %d", e.Status)
 	if e.Title != "" {
-		return fmt.Sprintf("the server answered %d: %s", e.Status, e.Title)
+		msg = fmt.Sprintf("the server answered %d: %s", e.Status, e.Title)
 	}
-	return fmt.Sprintf("the server answered %d", e.Status)
+	if e.Code != "" {
+		msg += fmt.Sprintf(" (%s: %s)", e.Code, cbx.URL(e.Code))
+	}
+	return msg
+}
+
+// codeOf is the problem's code, or the code its status implies.
+func codeOf(status int, code string) string {
+	switch {
+	case code != "":
+		return code
+	case status == http.StatusUnauthorized:
+		return cbx.Unauthenticated
+	case status == http.StatusForbidden:
+		return cbx.Forbidden
+	}
+	return ""
 }
 
 // StatusOf returns the HTTP status of an *Error, or 0.
@@ -51,6 +70,11 @@ func StatusOf(err error) int {
 
 // Do sends body as JSON and decodes a JSON answer into out, when out is not nil.
 func (c *Client) Do(ctx context.Context, method, path string, body, out any) error {
+	return c.DoWith(ctx, method, path, nil, body, out)
+}
+
+// DoWith is Do with extra request headers.
+func (c *Client) DoWith(ctx context.Context, method, path string, headers map[string]string, body, out any) error {
 	var reader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -69,9 +93,12 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	if c.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("reach %s: %w", c.Server, err)
+		return cbx.Errorf(cbx.Unreachable, "reach %s: %w", c.Server, err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
@@ -81,9 +108,10 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var problem struct {
 			Title string `json:"title"`
+			Code  string `json:"code"`
 		}
 		_ = json.Unmarshal(data, &problem)
-		return &Error{Status: resp.StatusCode, Title: problem.Title}
+		return &Error{Status: resp.StatusCode, Title: problem.Title, Code: codeOf(resp.StatusCode, problem.Code)}
 	}
 	if out != nil && len(data) > 0 {
 		return json.Unmarshal(data, out)
@@ -103,15 +131,16 @@ func (c *Client) PutBlob(ctx context.Context, contentType string, data []byte) (
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("reach %s: %w", c.Server, err)
+		return "", cbx.Errorf(cbx.Unreachable, "reach %s: %w", c.Server, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var problem struct {
 			Title string `json:"title"`
+			Code  string `json:"code"`
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&problem)
-		return "", &Error{Status: resp.StatusCode, Title: problem.Title}
+		return "", &Error{Status: resp.StatusCode, Title: problem.Title, Code: codeOf(resp.StatusCode, problem.Code)}
 	}
 	return hash, nil
 }

@@ -80,7 +80,7 @@ function NextSteps({ r }: { r: Report }) {
   if (!c.workerSeen) {
     steps.push(
       <>
-        No worker is running, so no intervention is classified. Start one with an analysis model:{" "}
+        No worker was seen in the last 10 minutes, so new interventions stay unclassified. Start one with an analysis model:{" "}
         <Cmd>CASEBOX_ANALYSIS_PROVIDER=anthropic CASEBOX_ANALYSIS_MODEL=&lt;model id&gt; casebox worker</Cmd>. Structural numbers still show
         below.
       </>,

@@ -245,12 +245,15 @@ public static class ProposalDecider
             )
         )
             throw new ArgumentException("Not a gate outcome.", nameof(outcome));
+        // A concluded proposal takes no second outcome: the verdict can be delivered again.
+        if (p.Status is not (ProposalStatus.Searching or ProposalStatus.Gating))
+            return [];
         if (
             outcome is ProposalEvents.GatePassed or ProposalEvents.GateFailed
             && p.Status != ProposalStatus.Gating
         )
             throw new DomainException("A gate verdict needs a gate request.");
-        return p.Status is ProposalStatus.Searching or ProposalStatus.Gating ? [outcome] : [];
+        return [outcome];
     }
 
     public static IEnumerable<object> OpenPr(Proposal p, ProposalEvents.PrOpened pr)

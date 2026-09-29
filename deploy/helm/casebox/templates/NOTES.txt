@@ -1,0 +1,9 @@
+Casebox {{ .Chart.AppVersion }} is installed.
+
+- The UI and API: the service {{ include "casebox.fullname" . }}-server, port 8080{{ if .Values.ingress.enabled }}, and https://{{ .Values.ingress.host }}{{ end }}.
+- Health and metrics answer on port 8081 only: /healthz/ready, /healthz/live and /metrics.
+- Workers: {{ if .Values.worker.enabled }}{{ .Values.worker.replicas }} with {{ .Values.worker.sandbox }} sandboxes{{ else }}none here; run casebox worker where your sandboxes are{{ end }}.
+{{- if eq .Values.keys.mode "database" }}
+
+WARNING: keys.mode is database. The Deedbox master key is in the database it protects; use environment or azure in production.
+{{- end }}

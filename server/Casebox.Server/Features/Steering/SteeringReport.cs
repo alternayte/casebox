@@ -118,9 +118,11 @@ public static class ReportShapes
         bool WorkerSeen
     );
 
+    // Solo: the organisation's only person sees their own data without k (Privacy/Solo.cs).
     public sealed record Report(
         Period Period,
         int K,
+        bool Solo,
         Coverage Coverage,
         Headline Headline,
         IReadOnlyList<Theme> Themes,
@@ -134,7 +136,12 @@ public static class ReportShapes
 // The steering report (SDD section 6, docs/specs/steering.md "Report"). Every metric is
 // observational. Every shown number has at least k distinct mapped people behind it; everything
 // else is null or counted as hidden.
-public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context, IEventStore store)
+public sealed class SteeringReports(
+    NpgsqlDataSource db,
+    DeedboxContext context,
+    IEventStore store,
+    Solo solo
+)
 {
     private static readonly HashSet<string> HarnessFixable =
     [
@@ -296,7 +303,7 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
     public async Task<ReportShapes.Report> BuildAsync(ReportQuery q, CancellationToken ct)
     {
         var (org, _) = await store.Load<Organisation>(Organisation.StreamId, ct);
-        var k = org.Settings.K;
+        var k = await solo.ViewAsync(org, ct);
         await using var connection = await db.OpenConnectionAsync(ct);
         var args = new
         {
@@ -451,7 +458,7 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
                 ? new ReportShapes.AfterMerge(
                     afterMergeFacts.Count(f => f.Signal == "revert"),
                     afterMergeFacts.Count(f => f.Signal == "fix"),
-                    KRule.People(afterMergePeople)
+                    KRule.People(afterMergePeople, k)
                 )
                 : null;
 
@@ -485,7 +492,7 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
                 groups.Add(
                     new ReportShapes.Group(
                         key,
-                        KRule.People(people),
+                        KRule.People(people, k),
                         gSessions.Count,
                         KRule.Meets(gItems.SelectMany(i => i.People), k)
                             ? CorrectionFree(gItems)
@@ -516,7 +523,7 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
 
         var coverage = new ReportShapes.Coverage(
             sessions.Count,
-            KRule.People(sessionPeople),
+            KRule.People(sessionPeople, k),
             sessions.Count(s => !s.Row.PersonMapped),
             sessions
                 .GroupBy(s => s.Row.Agent)
@@ -606,7 +613,8 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
 
         return new ReportShapes.Report(
             new ReportShapes.Period(q.From, q.To),
-            k,
+            k.K,
+            k.Solo,
             coverage,
             headline,
             themes,
@@ -788,7 +796,7 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
 
     private static (IReadOnlyList<ReportShapes.Theme>, int Hidden) Themes(
         IReadOnlyList<FactRow> corrections,
-        int k
+        KView k
     )
     {
         var themes = new List<ReportShapes.Theme>();
@@ -831,7 +839,7 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
                     g.Key.Item1,
                     g.Key.Label,
                     list.Count,
-                    KRule.People(people),
+                    KRule.People(people, k),
                     fixable,
                     prevention,
                     new ReportShapes.Phases(
@@ -874,7 +882,7 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
 
     private static (IReadOnlyList<ReportShapes.MixEntry>, int Hidden) PreventionMix(
         IReadOnlyList<FactRow> corrections,
-        int k
+        KView k
     )
     {
         var mix = new List<ReportShapes.MixEntry>();

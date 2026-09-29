@@ -87,6 +87,7 @@ public static class SteeringEndpoints
                 HttpContext http,
                 NpgsqlDataSource db,
                 IEventStore store,
+                Solo solo,
                 TimeProvider clock
             ) =>
             {
@@ -95,6 +96,7 @@ public static class SteeringEndpoints
                     Organisation.StreamId,
                     http.RequestAborted
                 );
+                var k = await solo.ViewAsync(org, http.RequestAborted);
                 var unclassified = wentWrong == "unclassified";
                 if (
                     !unclassified
@@ -149,7 +151,7 @@ public static class SteeringEndpoints
                 if (
                     !KRule.Meets(
                         rows.Select(r => new Person(r.Person, r.PersonMapped, r.Period)),
-                        org.Settings.K
+                        k
                     )
                 )
                     return Cbx.Problem(
@@ -257,7 +259,7 @@ public static class SteeringEndpoints
         // How often the model's labels agree with the team's relabels (SDD section 6).
         steering.MapGet(
             "/agreement",
-            async (HttpContext http, NpgsqlDataSource db, IEventStore store) =>
+            async (HttpContext http, NpgsqlDataSource db, IEventStore store, Solo solo) =>
             {
                 var (org, _) = await store.Load<Organisation>(
                     Organisation.StreamId,
@@ -288,7 +290,8 @@ public static class SteeringEndpoints
                 ).ToList();
                 var people = rows.Select(r => new Person(r.Person, r.PersonMapped, r.Period))
                     .ToList();
-                if (!KRule.Meets(people, org.Settings.K))
+                var k = await solo.ViewAsync(org, http.RequestAborted);
+                if (!KRule.Meets(people, k))
                     return Results.Ok(new { hidden = true, k = org.Settings.K });
 
                 var corrections = rows.Where(r =>
@@ -297,7 +300,7 @@ public static class SteeringEndpoints
                     .ToList();
                 return Results.Ok(
                     new AgreementReport(
-                        KRule.People(people),
+                        KRule.People(people, k),
                         rows.Count,
                         Agreement(rows.Select(r => (r.Intent, r.ModelIntent)).ToList()),
                         Agreement(

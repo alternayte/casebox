@@ -166,7 +166,7 @@ casebox erase --identity <kind:value> [flags]
 
 ## casebox import
 
-Import the Claude Code and Codex sessions of the last days that ran in this repository, and upload them.
+Import the Claude Code, Codex and Cursor CLI sessions of the last days that ran in this repository, and upload them.
 Then run steering detection, wait while a worker classifies the interventions, and print the report's headline.
 Running it again imports only what is new.
 
@@ -358,6 +358,17 @@ casebox token create --kind worker|ingest|ci --name <name> [flags]
       --name string   what the token is for
 ```
 
+## casebox uninstall
+
+Remove the capture hooks casebox init and casebox join wrote for Claude Code, Codex and the Cursor CLI, and the
+native telemetry settings that send Claude Code's and Codex's telemetry to the server. Every other hook and
+setting stays. The server keeps what it received; ~/.casebox keeps this machine's login and spool, and you can
+delete that directory and the casebox binary afterwards.
+
+```text
+casebox uninstall
+```
+
 ## casebox up
 
 Start a local Casebox server, QueueBox and Postgres in Docker, and wait until they are healthy.
@@ -381,9 +392,10 @@ Model API keys stay in this host's environment; the server never sees them.
 Sandboxes come from CASEBOX_SANDBOX (docker, kiln or daytona; default docker), at most CASEBOX_SANDBOX_CONCURRENCY
 at once (default 2); environments, case validation and evaluation runs need one.
 Evaluation runs also need a model key for the agents they run (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY).
-Steering classification and case instructions need an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic or openai, any
-OpenAI-compatible API), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and CASEBOX_ANALYSIS_API_KEY
-(default ANTHROPIC_API_KEY or OPENAI_API_KEY).
+Steering classification and case instructions need an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic, openai for
+any OpenAI-compatible API, or cursor-agent), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and
+CASEBOX_ANALYSIS_API_KEY (default ANTHROPIC_API_KEY or OPENAI_API_KEY). cursor-agent uses this machine's Cursor CLI
+login and needs no key; its model defaults to auto.
 
 ```text
 casebox worker [flags]

@@ -73,6 +73,7 @@ public sealed class PatternScan(
     DeedboxContext context,
     JobQueue jobs,
     SteeringWindows windows,
+    Solo solo,
     TimeProvider clock
 )
 {
@@ -100,7 +101,7 @@ public sealed class PatternScan(
     public async Task RunAsync(CancellationToken ct)
     {
         var (org, _) = await store.Load<Organisation>(Organisation.StreamId, ct);
-        var k = org.Settings.K;
+        var k = await solo.ViewAsync(org, ct);
         await using var connection = await db.OpenConnectionAsync(ct);
         var corrections = await CorrectionsAsync(connection, null, ct);
         await PathsAsync(connection, corrections, ct);
@@ -256,7 +257,7 @@ public sealed class PatternScan(
         );
 
     // At least 3 corrections from at least k mapped people (per pseudonym period).
-    public static bool Ready(IEnumerable<Correction> corrections, int k)
+    public static bool Ready(IEnumerable<Correction> corrections, KView k)
     {
         var list = corrections.ToList();
         return list.Count >= MinimumCorrections

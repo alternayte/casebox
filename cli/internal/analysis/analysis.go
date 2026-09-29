@@ -1,7 +1,7 @@
-// Package analysis calls the team's analysis model: Anthropic's Messages API or any
-// OpenAI-compatible chat completions API (OpenAI, DeepSeek, OpenRouter, a company gateway). The
-// worker reads the provider, model, base URL and key from its own environment; the server never
-// holds the key.
+// Package analysis calls the team's analysis model: Anthropic's Messages API, any
+// OpenAI-compatible chat completions API (OpenAI, DeepSeek, OpenRouter, a company gateway), or the
+// Cursor CLI in print mode, which uses the Cursor login already on the machine. The worker reads
+// the provider, model, base URL and key from its own environment; the server never holds the key.
 package analysis
 
 import (
@@ -21,8 +21,9 @@ import (
 
 // Providers.
 const (
-	Anthropic = "anthropic"
-	OpenAI    = "openai"
+	Anthropic   = "anthropic"
+	OpenAI      = "openai"
+	CursorAgent = "cursor-agent"
 )
 
 // Config is the analysis model of this host.
@@ -36,7 +37,7 @@ type Config struct {
 func (c Config) String() string { return c.Provider + " " + c.Model }
 
 // ErrNotConfigured means the environment names no analysis model.
-var ErrNotConfigured error = &cbx.Error{Code: cbx.NoAnalysisModel, Err: errors.New("no analysis model: set CASEBOX_ANALYSIS_PROVIDER (anthropic or openai) and CASEBOX_ANALYSIS_MODEL")}
+var ErrNotConfigured error = &cbx.Error{Code: cbx.NoAnalysisModel, Err: errors.New("no analysis model: set CASEBOX_ANALYSIS_PROVIDER (anthropic, openai or cursor-agent) and CASEBOX_ANALYSIS_MODEL")}
 
 // FromEnv reads the analysis model from the environment. It returns ErrNotConfigured when neither
 // the provider nor the model is set, and a specific error when the setting is incomplete.
@@ -52,14 +53,27 @@ func FromEnv() (Config, error) {
 	}
 	var defaultURL, keyVar string
 	switch c.Provider {
+	case CursorAgent:
+		// The Cursor CLI uses its own login (or CURSOR_API_KEY); "auto" is the model every plan has.
+		if c.Model == "" {
+			c.Model = "auto"
+		}
+		c.BaseURL = strings.TrimSpace(os.Getenv("CASEBOX_CURSOR_AGENT"))
+		if c.BaseURL == "" {
+			c.BaseURL = cursorAgentPath()
+		}
+		if c.BaseURL == "" {
+			return c, errors.New("CASEBOX_ANALYSIS_PROVIDER is cursor-agent but neither cursor-agent nor agent is on PATH; install the Cursor CLI or set CASEBOX_CURSOR_AGENT to its path")
+		}
+		return c, nil
 	case Anthropic:
 		defaultURL, keyVar = "https://api.anthropic.com", "ANTHROPIC_API_KEY"
 	case OpenAI:
 		defaultURL, keyVar = "https://api.openai.com/v1", "OPENAI_API_KEY"
 	case "":
-		return c, errors.New("CASEBOX_ANALYSIS_MODEL is set but CASEBOX_ANALYSIS_PROVIDER is not; set it to anthropic or openai")
+		return c, errors.New("CASEBOX_ANALYSIS_MODEL is set but CASEBOX_ANALYSIS_PROVIDER is not; set it to anthropic, openai or cursor-agent")
 	default:
-		return c, fmt.Errorf("CASEBOX_ANALYSIS_PROVIDER is %q; set it to anthropic or openai (any OpenAI-compatible API)", c.Provider)
+		return c, fmt.Errorf("CASEBOX_ANALYSIS_PROVIDER is %q; set it to anthropic, openai (any OpenAI-compatible API) or cursor-agent", c.Provider)
 	}
 	if c.Model == "" {
 		return c, errors.New("CASEBOX_ANALYSIS_MODEL is required; there is no default model")
@@ -117,6 +131,8 @@ func (c *Client) Complete(ctx context.Context, req Request) (Reply, error) {
 		reply, err = c.anthropic(ctx, req)
 	case OpenAI:
 		reply, err = c.openai(ctx, req)
+	case CursorAgent:
+		reply, err = c.cursorAgent(ctx, req)
 	default:
 		return Reply{}, fmt.Errorf("unknown analysis provider %q", c.Provider)
 	}
@@ -168,7 +184,7 @@ func (c *Client) openai(ctx context.Context, req Request) (Reply, error) {
 	if err != nil {
 		return Reply{}, err
 	}
-	system := req.System + "\n\nAnswer with one JSON object and nothing else. It must match this JSON schema:\n" + string(schema)
+	system := req.System + jsonInstruction + string(schema)
 	body := map[string]any{
 		"model": c.Model,
 		"messages": []map[string]any{
@@ -193,14 +209,20 @@ func (c *Client) openai(ctx context.Context, req Request) (Reply, error) {
 	if len(resp.Choices) == 0 {
 		return Reply{}, errors.New("the analysis model returned no choices")
 	}
-	text := strings.TrimSpace(resp.Choices[0].Message.Content)
-	// Some gateways wrap the object in a Markdown fence even in JSON mode.
-	text = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(text, "```json"), "```"), "```")
-	text = strings.TrimSpace(text)
+	text := unfence(resp.Choices[0].Message.Content)
 	if !json.Valid([]byte(text)) {
 		return Reply{}, &InvalidOutputError{Reason: "the reply is not JSON (finish reason " + strconv.Quote(resp.Choices[0].FinishReason) + ")"}
 	}
 	return Reply{JSON: json.RawMessage(text), Model: resp.Model}, nil
+}
+
+const jsonInstruction = "\n\nAnswer with one JSON object and nothing else. It must match this JSON schema:\n"
+
+// unfence removes the Markdown fence some models put around a JSON object even when told not to.
+func unfence(text string) string {
+	text = strings.TrimSpace(text)
+	text = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(text, "```json"), "```"), "```")
+	return strings.TrimSpace(text)
 }
 
 // InvalidOutputError is a reply the model gave that is not the JSON object asked for.

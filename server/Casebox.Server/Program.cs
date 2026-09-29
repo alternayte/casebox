@@ -179,6 +179,7 @@ builder.Services.AddSingleton<RunFailureSweeper>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RunFailureSweeper>());
 builder.Services.AddScoped<SteeringScan>();
 builder.Services.AddScoped<SteeringReports>();
+builder.Services.AddScoped<Solo>();
 builder.Services.AddScoped<SteeringWindows>();
 builder.Services.AddSingleton<SteeringDetector>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SteeringDetector>());

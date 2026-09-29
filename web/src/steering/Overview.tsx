@@ -53,6 +53,11 @@ export function Overview({ filters, onFilters }: { filters: Filters; onFilters: 
       {report.isPending && <Loading what="the steering report" />}
       {r && (
         <div className={cn("space-y-10", report.isPlaceholderData && "opacity-60")}>
+          {r.solo && (
+            <p className="border-l-2 border-signal pl-3 text-sm">
+              Only your own sessions. While you are the only person in this organisation, the report shows everything, without the {r.k}-person minimum. When a second person joins, groups with fewer than {r.k} people are hidden again, for good.
+            </p>
+          )}
           <NextSteps r={r} />
           <Headline r={r} />
           <Coverage r={r} />
@@ -98,7 +103,7 @@ function NextSteps({ r }: { r: Report }) {
         No session belongs to a mapped person yet. Connect GitHub or Jira with <Cmd>casebox init</Cmd>: their people map each session to one person.
       </>,
     );
-  } else if (c.people < r.k && c.sessions > 0) {
+  } else if (c.people < r.k && c.sessions > 0 && !r.solo) {
     steps.push(
       <>
         Fewer than {r.k} mapped people are in this period, so most numbers stay hidden. Ask teammates to run <Cmd>casebox join</Cmd>.
@@ -133,6 +138,7 @@ function Headline({ r }: { r: Report }) {
           unit="work items"
           rate={h.correctionFreeRate}
           k={r.k}
+          solo={r.solo}
           lead
         />
         <Cell title="Corrections per work item" what="Median and 75th percentile, by phase.">
@@ -155,7 +161,7 @@ function Headline({ r }: { r: Report }) {
               <N n={h.correctionsPerWorkItem.n} unit="work items" />
             </>
           ) : (
-            <Hidden k={r.k} />
+            <Hidden k={r.k} solo={r.solo} />
           )}
         </Cell>
         <Cell title="Autonomous run" what="Agent turns and tool calls before the first correction.">
@@ -178,11 +184,11 @@ function Headline({ r }: { r: Report }) {
               <N n={h.autonomousRun.n} unit="runs" />
             </>
           ) : (
-            <Hidden k={r.k} />
+            <Hidden k={r.k} solo={r.solo} />
           )}
         </Cell>
-        <RateCell title="After-merge rate" what="Agent pull requests later reverted or fixed." unit="pull requests" rate={h.afterMergeRate} k={r.k} signal />
-        <RateCell title="Abandonment rate" what="Sessions dropped with no commit." unit="sessions" rate={h.abandonmentRate} k={r.k} />
+        <RateCell title="After-merge rate" what="Agent pull requests later reverted or fixed." unit="pull requests" rate={h.afterMergeRate} k={r.k} solo={r.solo} signal />
+        <RateCell title="Abandonment rate" what="Sessions dropped with no commit." unit="sessions" rate={h.abandonmentRate} k={r.k} solo={r.solo} />
       </div>
     </Section>
   );
@@ -198,7 +204,7 @@ function Cell({ title, what, children, lead }: { title: string; what: string; ch
   );
 }
 
-function RateCell({ title, what, unit, rate, k, lead, signal }: { title: string; what: string; unit: string; rate: Rate | null; k: number; lead?: boolean; signal?: boolean }) {
+function RateCell({ title, what, unit, rate, k, solo, lead, signal }: { title: string; what: string; unit: string; rate: Rate | null; k: number; solo: boolean; lead?: boolean; signal?: boolean }) {
   return (
     <Cell title={title} what={what} lead={lead}>
       {rate ? (
@@ -211,7 +217,7 @@ function RateCell({ title, what, unit, rate, k, lead, signal }: { title: string;
           <N n={rate.n} unit={unit} />
         </>
       ) : (
-        <Hidden k={k} />
+        <Hidden k={k} solo={solo} />
       )}
     </Cell>
   );
@@ -314,7 +320,7 @@ function Themes({ r, filters }: { r: Report; filters: Filters }) {
       </ol>
       {hidden > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">
-          {plural(hidden, "more theme")}: <Hidden k={r.k} />
+          {plural(hidden, "more theme")}: <Hidden k={r.k} solo={r.solo} />
         </p>
       )}
     </Section>
@@ -410,7 +416,7 @@ function PreventionMix({ r }: { r: Report }) {
     <Section no="3" title="Prevention mix" note="What would have prevented each correction, as the classifier or a person labelled it.">
       {r.preventionMix.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No prevention shares to show. {(r.hidden.preventionMix ?? 0) > 0 && <Hidden k={r.k} />}
+          No prevention shares to show. {(r.hidden.preventionMix ?? 0) > 0 && <Hidden k={r.k} solo={r.solo} />}
         </p>
       ) : (
         <>
@@ -431,7 +437,7 @@ function PreventionMix({ r }: { r: Report }) {
             .filter(([key, count]) => key.startsWith("prevention") && count > 0)
             .map(([key, count]) => (
               <p key={key} className="mt-2 text-xs text-muted-foreground">
-                {plural(count, "more share")}: <Hidden k={r.k} />
+                {plural(count, "more share")}: <Hidden k={r.k} solo={r.solo} />
               </p>
             ))}
         </>
@@ -482,7 +488,7 @@ function AfterMerge({ r }: { r: Report }) {
           <span className="text-muted-foreground">{plural(r.afterMerge.people, "person", "people")} behind them</span>
         </div>
       ) : (
-        <Hidden k={r.k} />
+        <Hidden k={r.k} solo={r.solo} />
       )}
     </div>
   );
@@ -524,9 +530,9 @@ function Groups({ r, groupBy }: { r: Report; groupBy: string }) {
                 <td className={cn("py-1.5 pr-4", groupBy === "harness" && "font-mono text-xs")}>{groupKeyName(groupBy, g.key)}</td>
                 <td className="py-1.5 pr-4 text-right font-mono tabular-nums">{num(g.people)}</td>
                 <td className="py-1.5 pr-4 text-right font-mono tabular-nums">{num(g.sessions)}</td>
-                <RateTd rate={g.correctionFreeRate} k={r.k} />
-                <RateTd rate={g.abandonmentRate} k={r.k} />
-                <RateTd rate={g.afterMergeRate} k={r.k} />
+                <RateTd rate={g.correctionFreeRate} k={r.k} solo={r.solo} />
+                <RateTd rate={g.abandonmentRate} k={r.k} solo={r.solo} />
+                <RateTd rate={g.afterMergeRate} k={r.k} solo={r.solo} />
                 <td className="py-1.5 text-right font-mono tabular-nums">{num(g.corrections)}</td>
               </tr>
             ))}
@@ -535,14 +541,14 @@ function Groups({ r, groupBy }: { r: Report; groupBy: string }) {
       </div>
       {hidden > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">
-          {plural(hidden, "more group")}: <Hidden k={r.k} />
+          {plural(hidden, "more group")}: <Hidden k={r.k} solo={r.solo} />
         </p>
       )}
     </Section>
   );
 }
 
-function RateTd({ rate, k }: { rate: Rate | null; k: number }) {
+function RateTd({ rate, k, solo }: { rate: Rate | null; k: number; solo: boolean }) {
   return (
     <td className="py-1.5 pr-4">
       {rate ? (
@@ -555,7 +561,7 @@ function RateTd({ rate, k }: { rate: Rate | null; k: number }) {
           <span className="font-mono text-2xs text-muted-foreground">n = {num(rate.n)}</span>
         </div>
       ) : (
-        <Hidden k={k} />
+        <Hidden k={k} solo={solo} />
       )}
     </td>
   );

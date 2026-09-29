@@ -2,6 +2,7 @@ using System.Text.Json;
 using Casebox.Server.Features.Evaluations;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Orgs;
+using Casebox.Server.Features.Privacy;
 using Dapper;
 using Deedbox;
 
@@ -38,6 +39,7 @@ public sealed class ClusterResultHandler : IJobResultHandler
             c.Ref
         );
         var (org, _) = await result.Store.Load<Organisation>(Organisation.StreamId, ct);
+        var k = await result.Services.GetRequiredService<Solo>().ViewAsync(org, ct);
 
         var open = (
             await connection.QueryAsync<(string Id, string Refs)>(
@@ -69,7 +71,7 @@ public sealed class ClusterResultHandler : IJobResultHandler
             var refs = (part.Refs ?? [])
                 .Where(r => asked.Contains(r) && facts.ContainsKey(r) && used.Add(r))
                 .ToList();
-            if (!PatternScan.Ready(refs.Select(r => facts[r]), org.Settings.K))
+            if (!PatternScan.Ready(refs.Select(r => facts[r]), k))
                 continue;
             var match = open.Select(p => (p.Id, Shared: p.Refs.Count(refs.Contains)))
                 .Where(p => p.Shared > 0)

@@ -7,6 +7,8 @@ export type Quantiles = { median: number; p75: number };
 export type Report = {
   period: { from: string; to: string };
   k: number;
+  // Only one person's data exists, so it shows without k (the solo trial).
+  solo: boolean;
   coverage: {
     sessions: number;
     people: number;

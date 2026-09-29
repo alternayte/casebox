@@ -44,6 +44,7 @@ This page lists every event Casebox records, by stream. Casebox stores each busi
 | `org.member_role_changed v1` | `{ accountId: string, role: enum{Viewer=0, Member=1, Admin=2, Owner=3} }` |
 | `org.period_retired v1` | `{ period: string, subjects: int32 }` |
 | `org.settings_changed v1` | `{ settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, proposerShare: decimal?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }` |
+| `org.solo_ended v1` | `{ accounts: int32, people: int32 }` |
 | `org.token_issued v1` | `{ kind: string, name: string, tokenId: string }` |
 | `org.token_revoked v1` | `{ tokenId: string }` |
 

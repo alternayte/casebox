@@ -56,7 +56,9 @@ export function Section({ no, title, note, children }: { no?: string; title: str
   );
 }
 
-export function Hidden({ k, what }: { k?: number; what?: string }) {
+// In a solo organisation nothing is hidden, so an empty number has no data behind it yet.
+export function Hidden({ k, what, solo }: { k?: number; what?: string; solo?: boolean }) {
+  if (solo) return <span className="inline-block rounded-sm bg-hidden px-1.5 py-0.5 text-2xs text-muted-foreground">no data yet{what ? ` (${what})` : ""}</span>;
   return (
     <span className="inline-block rounded-sm bg-hidden px-1.5 py-0.5 text-2xs text-muted-foreground" title={`Casebox shows a number only when at least ${k ?? "k"} people are behind it.`}>
       hidden: fewer than {k ?? "k"} people{what ? ` (${what})` : ""}

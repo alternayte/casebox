@@ -87,10 +87,10 @@ public static class PatternEndpoints
 
         patterns.MapGet(
             "/",
-            async (string? workspace, HttpContext http, NpgsqlDataSource db, IEventStore store) =>
+            async (string? workspace, HttpContext http, NpgsqlDataSource db, Solo solo) =>
             {
                 var ct = http.RequestAborted;
-                var k = await KAsync(store, ct);
+                var k = await solo.ViewAsync(ct);
                 await using var connection = await db.OpenConnectionAsync(ct);
                 var rows = await RowsAsync(connection, http.User.OrgId(), null, workspace, ct);
                 var views = new List<PatternView>();
@@ -104,19 +104,19 @@ public static class PatternEndpoints
                         continue;
                     }
                     var proposals = await ProposalsAsync(connection, http.User.OrgId(), row.Id, ct);
-                    views.Add(View(row, facts, proposals.FirstOrDefault()));
+                    views.Add(View(row, facts, proposals.FirstOrDefault(), k));
                 }
-                return Results.Ok(new PatternList(views, hidden, k));
+                return Results.Ok(new PatternList(views, hidden, k.K));
             }
         );
 
         patterns.MapGet(
             "/{id}",
-            async (string id, HttpContext http, NpgsqlDataSource db, IEventStore store) =>
+            async (string id, HttpContext http, NpgsqlDataSource db, Solo solo) =>
             {
                 var ct = http.RequestAborted;
                 var org = http.User.OrgId();
-                var k = await KAsync(store, ct);
+                var k = await solo.ViewAsync(ct);
                 await using var connection = await db.OpenConnectionAsync(ct);
                 var row = (await RowsAsync(connection, org, id, null, ct)).SingleOrDefault();
                 if (row is null)
@@ -126,7 +126,7 @@ public static class PatternEndpoints
                     return Cbx.Problem(
                         StatusCodes.Status403Forbidden,
                         Cbx.BelowK,
-                        $"Fewer than {k} people are behind this pattern, so it is not shown."
+                        $"Fewer than {k.K} people are behind this pattern, so it is not shown."
                     );
                 var refs = JsonSerializer.Deserialize<string[]>(row.Refs)!;
                 var cases = (
@@ -145,7 +145,7 @@ public static class PatternEndpoints
                 var proposals = await ProposalsAsync(connection, org, row.Id, ct);
                 return Results.Ok(
                     new PatternDetail(
-                        View(row, facts, proposals.FirstOrDefault()),
+                        View(row, facts, proposals.FirstOrDefault(), k),
                         Quotes(facts),
                         cases,
                         proposals
@@ -200,7 +200,7 @@ public static class PatternEndpoints
         System.Data.Common.DbConnection connection,
         string org,
         string id,
-        int k,
+        KView k,
         CancellationToken ct
     )
     {
@@ -224,7 +224,7 @@ public static class PatternEndpoints
             row.Summary,
             meets ? facts.Count : 0,
             meets
-                ? KRule.People(facts.Select(f => new Person(f.Person, f.PersonMapped, f.Period)))
+                ? KRule.People(facts.Select(f => new Person(f.Person, f.PersonMapped, f.Period)), k)
                 : 0,
             meets,
             meets ? Quotes(facts) : [],
@@ -232,10 +232,7 @@ public static class PatternEndpoints
         );
     }
 
-    private static async Task<int> KAsync(IEventStore store, CancellationToken ct) =>
-        (await store.Load<Organisation>(Organisation.StreamId, ct)).State.Settings.K;
-
-    private static bool Meets(IReadOnlyList<Fact> facts, int k) =>
+    private static bool Meets(IReadOnlyList<Fact> facts, KView k) =>
         KRule.Meets(facts.Select(f => new Person(f.Person, f.PersonMapped, f.Period)), k);
 
     private static async Task<List<Row>> RowsAsync(
@@ -301,7 +298,12 @@ public static class PatternEndpoints
             )
         ).ToList();
 
-    private static PatternView View(Row r, IReadOnlyList<Fact> facts, ProposalRef? latest) =>
+    private static PatternView View(
+        Row r,
+        IReadOnlyList<Fact> facts,
+        ProposalRef? latest,
+        KView k
+    ) =>
         new(
             r.Id,
             r.Workspace,
@@ -315,7 +317,7 @@ public static class PatternEndpoints
             r.Status,
             r.Reason,
             facts.Count,
-            KRule.People(facts.Select(f => new Person(f.Person, f.PersonMapped, f.Period))),
+            KRule.People(facts.Select(f => new Person(f.Person, f.PersonMapped, f.Period)), k),
             new Phases(
                 facts.Count(f => f.Phase == "in_session"),
                 facts.Count(f => f.Phase == "before_merge"),

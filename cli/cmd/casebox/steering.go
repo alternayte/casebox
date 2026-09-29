@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -198,7 +199,7 @@ func steeringAfterImport(ctx context.Context, out io.Writer, repo string, days i
 	}
 	switch {
 	case st.Pending > 0 && st.AnalysisWorkers == 0:
-		fmt.Fprintf(out, "%d interventions wait for a worker with an analysis model; start one with CASEBOX_WORKER_TOKEN=<token> CASEBOX_ANALYSIS_PROVIDER=anthropic CASEBOX_ANALYSIS_MODEL=<model> casebox worker.\n", st.Pending)
+		fmt.Fprintf(out, "%d interventions wait for a worker with an analysis model; start one with CASEBOX_WORKER_TOKEN=<token> CASEBOX_ANALYSIS_PROVIDER=<openai, anthropic or cursor-agent> CASEBOX_ANALYSIS_MODEL=<model> casebox worker.\n", st.Pending)
 	case st.Pending > 0 && wait > 0:
 		fmt.Fprintf(out, "Classifying %d interventions (waiting up to %s)…\n", st.Pending, wait)
 		deadline := time.Now().Add(wait)
@@ -221,6 +222,7 @@ func steeringAfterImport(ctx context.Context, out io.Writer, repo string, days i
 	}
 
 	var report steeringReport
+	days = min(days, 365) // a report covers at most 400 days
 	from := time.Now().AddDate(0, 0, -days).UTC().Format(time.DateOnly)
 	path := "/api/v1/steering/report?repo=" + url.QueryEscape(repo) + "&from=" + from
 	if err := client.Do(ctx, http.MethodGet, path, nil, &report); err != nil {
@@ -243,7 +245,21 @@ type spread struct {
 }
 
 type steeringReport struct {
-	K        int `json:"k"`
+	K      int  `json:"k"`
+	Solo   bool `json:"solo"`
+	Themes []struct {
+		WentWrong      string `json:"wentWrong"`
+		Label          string `json:"label"`
+		Corrections    int    `json:"corrections"`
+		People         int    `json:"people"`
+		HarnessFixable bool   `json:"harnessFixable"`
+		Quotes         []struct {
+			Text string `json:"text"`
+		} `json:"quotes"`
+	} `json:"themes"`
+	Hidden struct {
+		Themes int `json:"themes"`
+	} `json:"hidden"`
 	Coverage struct {
 		Sessions      int    `json:"sessions"`
 		People        int    `json:"people"`
@@ -274,7 +290,11 @@ func (r steeringReport) print(out io.Writer, repo string, days int) {
 	c := r.Coverage
 	fmt.Fprintf(out, "Steering in %s, last %d days: %d sessions, %d people, %d interventions (%d unclassified, %d pending), prompt mode %s.\n",
 		repo, days, c.Sessions, c.People, c.Interventions, c.Unclassified, c.Pending, c.PromptMode)
-	hidden := fmt.Sprintf("hidden: fewer than %d people", r.K)
+	hidden := fmt.Sprintf("none, or hidden because fewer than %d people are behind it", r.K)
+	if r.Solo {
+		fmt.Fprintf(out, "Only your own sessions: while you are the only person here, nothing is hidden. A second person turns on the %d-person minimum for good.\n", r.K)
+		hidden = "none yet"
+	}
 	h := r.Headline
 	fmt.Fprintf(out, "Correction-free work items: %s\n", rateText(h.CorrectionFreeRate, hidden))
 	if p := h.CorrectionsPerWorkItem; p != nil {
@@ -283,13 +303,41 @@ func (r steeringReport) print(out io.Writer, repo string, days int) {
 	} else {
 		fmt.Fprintf(out, "Corrections per work item: %s\n", hidden)
 	}
-	if a := h.AutonomousRun; a != nil {
+	if a := h.AutonomousRun; a != nil && a.N > 0 {
 		fmt.Fprintf(out, "Autonomous run before the first correction: %s turns, %s tool calls (n=%d)\n", spreadText(a.Turns), spreadText(a.ToolCalls), a.N)
 	} else {
-		fmt.Fprintf(out, "Autonomous run: %s\n", hidden)
+		fmt.Fprintf(out, "Autonomous run before the first correction: %s\n", hidden)
 	}
 	fmt.Fprintf(out, "After-merge rate: %s\n", rateText(h.AfterMergeRate, hidden))
 	fmt.Fprintf(out, "Abandonment rate: %s\n", rateText(h.AbandonmentRate, hidden))
+	if len(r.Themes) > 0 {
+		fmt.Fprintln(out, "Top correction themes:")
+	}
+	for i, t := range r.Themes {
+		if i == 5 {
+			fmt.Fprintf(out, "  …and %d more in the web report.\n", len(r.Themes)-5)
+			break
+		}
+		name := t.WentWrong
+		if t.Label != "" {
+			name += ": " + t.Label
+		}
+		fix := ""
+		if t.HarnessFixable {
+			fix = ", a harness rule can prevent it"
+		}
+		fmt.Fprintf(out, "  %d. %s (%d corrections, %d people%s)\n", i+1, name, t.Corrections, t.People, fix)
+		if len(t.Quotes) > 0 {
+			q := strings.Join(strings.Fields(t.Quotes[0].Text), " ")
+			if len(q) > 160 {
+				q = q[:160] + "…"
+			}
+			fmt.Fprintf(out, "     \"%s\"\n", q)
+		}
+	}
+	if r.Hidden.Themes > 0 {
+		fmt.Fprintf(out, "%d more themes are hidden: fewer than %d people are behind each.\n", r.Hidden.Themes, r.K)
+	}
 }
 
 func rateText(r *rate, hidden string) string {

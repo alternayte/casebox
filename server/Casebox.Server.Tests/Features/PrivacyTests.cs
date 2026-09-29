@@ -60,6 +60,88 @@ public sealed partial class PrivacyTests(StackFixture stack)
     [GeneratedRegex("person:[a-z2-7]{26}")]
     private static partial Regex Token();
 
+    // The solo trial: the only person sees their own data without k. A second person in the data,
+    // or a second account, ends it for good, even after the second person's data is gone.
+    [Theory]
+    [InlineData("person")]
+    [InlineData("account")]
+    public async Task Solo_shows_the_only_person_their_own_data_until_a_second_person_or_account_arrives(
+        string second
+    )
+    {
+        var org = $"org-solo-{Guid.NewGuid():N}"[..20];
+        await using var scope = stack.ServerA.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<DeedboxContext>().TenantId = org;
+        var store = scope.ServiceProvider.GetRequiredService<IEventStore>();
+        var solo = scope.ServiceProvider.GetRequiredService<Solo>();
+        await store.Execute<Organisation>(
+            Organisation.StreamId,
+            state => OrgDecider.Create(state, "Solo"),
+            Ct
+        );
+        await using var db = new NpgsqlConnection(stack.ConnectionString);
+        var now = DateTimeOffset.UtcNow;
+        async Task SessionAsync(string id, string person, string period) =>
+            await db.ExecuteAsync(
+                """
+                INSERT INTO casebox.sessions (org_id, id, agent, person, source, started_at, created_at, updated_at, period)
+                VALUES (@Org, @Id, 'cursor-cli', @Person, 'import', @Now, @Now, @Now, @Period)
+                """,
+                new
+                {
+                    Org = org,
+                    Id = id,
+                    Person = person,
+                    Now = now,
+                    Period = period,
+                }
+            );
+        async Task AccountAsync(string id) =>
+            await db.ExecuteAsync(
+                """
+                INSERT INTO casebox.accounts (id, org_id, issuer, subject, display_name, role, created_at, last_login_at)
+                VALUES (@Id, @Org, 'local', @Id, 'someone', 'owner', @Now, @Now)
+                """,
+                new
+                {
+                    Id = $"{org}-{id}",
+                    Org = org,
+                    Now = now,
+                }
+            );
+
+        await AccountAsync("me");
+        await SessionAsync("s1", "person:me-q3", "2026-Q3");
+        // A new period gives the same person a new token; that is still one person.
+        await SessionAsync("s2", "person:me-q4", "2026-Q4");
+        var view = await solo.ViewAsync(Ct);
+        Assert.True(view.Solo);
+        var mine = new[] { new Person("person:me-q3", Mapped: false, "2026-Q3") };
+        Assert.True(KRule.Meets(mine, view));
+        Assert.Equal(1, KRule.People(mine, view));
+
+        if (second == "person")
+            await SessionAsync("s3", "person:other-q4", "2026-Q4");
+        else
+            await AccountAsync("teammate");
+        view = await solo.ViewAsync(Ct);
+        Assert.False(view.Solo);
+        Assert.False(KRule.Meets(mine, view));
+
+        await db.ExecuteAsync(
+            "DELETE FROM casebox.sessions WHERE org_id = @Org AND id = 's3'; DELETE FROM casebox.accounts WHERE org_id = @Org AND id <> @Me",
+            new { Org = org, Me = $"{org}-me" }
+        );
+        Assert.False((await solo.ViewAsync(Ct)).Solo);
+        Assert.Equal(
+            1,
+            await db.ExecuteScalarAsync<int>(
+                "SELECT count(*)::int FROM deedbox.events WHERE tenant_id = @Org AND event_type = 'org.solo_ended'",
+                new { Org = org }
+            )
+        );
+    }
+
     [Fact]
     public async Task The_roster_gives_one_person_one_mapped_token_and_leaves_strangers_unmapped()
     {

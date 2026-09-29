@@ -8,6 +8,14 @@ public readonly record struct Person(string Token, bool Mapped, string Period = 
 // data points it holds. It never carries a token.
 public sealed record KGroup<TKey>(TKey Key, int People, int Count);
 
+// The k an organisation's views use now. While the organisation is solo (one account and one
+// person in its data), its only person sees their own data in full: every token counts, mapped
+// or not, and one person is enough. The first second person ends solo for good (Solo.cs).
+public sealed record KView(int K, bool Solo)
+{
+    public static KView Of(int k) => new(k, false);
+}
+
 // SDD section 11: a theme, quote or count is shown only when at least k distinct mapped people
 // are behind it. Unmapped tokens never count toward k, because one person split into two tokens
 // would let a group of two pass as three. Every report route builds its groups through this rule.
@@ -42,6 +50,14 @@ public static class KRule
         RequireK(k);
         return People(people) >= k;
     }
+
+    public static int People(IEnumerable<Person> people, KView view) =>
+        view.Solo
+            ? people.Select(p => p.Token).Distinct(StringComparer.Ordinal).Count()
+            : People(people);
+
+    public static bool Meets(IEnumerable<Person> people, KView view) =>
+        view.Solo ? people.Any() : Meets(people, view.K);
 
     private static void RequireK(int k)
     {

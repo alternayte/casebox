@@ -35,9 +35,10 @@ func newWorkerCommand() *cobra.Command {
 			"Sandboxes come from CASEBOX_SANDBOX (docker, kiln or daytona; default docker), at most CASEBOX_SANDBOX_CONCURRENCY\n" +
 			"at once (default 2); environments, case validation and evaluation runs need one.\n" +
 			"Evaluation runs also need a model key for the agents they run (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY).\n" +
-			"Steering classification and case instructions need an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic or openai, any\n" +
-			"OpenAI-compatible API), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and CASEBOX_ANALYSIS_API_KEY\n" +
-			"(default ANTHROPIC_API_KEY or OPENAI_API_KEY).",
+			"Steering classification and case instructions need an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic, openai for\n" +
+			"any OpenAI-compatible API, or cursor-agent), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and\n" +
+			"CASEBOX_ANALYSIS_API_KEY (default ANTHROPIC_API_KEY or OPENAI_API_KEY). cursor-agent uses this machine's Cursor CLI\n" +
+			"login and needs no key; its model defaults to auto.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			token := os.Getenv("CASEBOX_WORKER_TOKEN")

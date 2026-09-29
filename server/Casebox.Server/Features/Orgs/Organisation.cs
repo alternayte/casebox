@@ -81,11 +81,18 @@ public static class OrgEvents
 
     // A pseudonym period left the retention window: its subjects are erased and its secret destroyed.
     public sealed record PeriodRetired(string Period, int Subjects);
+
+    // A second account or a second person arrived: k applies from now on, for good.
+    public sealed record SoloEnded(int Accounts, int People);
 }
 
 // One organisation is one Deedbox tenant, and each tenant holds exactly one org stream.
-public sealed record Organisation(bool Exists, string Name, OrgSettings Settings)
-    : IState<Organisation>
+public sealed record Organisation(
+    bool Exists,
+    string Name,
+    OrgSettings Settings,
+    bool SoloEnded = false
+) : IState<Organisation>
 {
     public const string StreamId = "org";
 
@@ -101,6 +108,7 @@ public sealed record Organisation(bool Exists, string Name, OrgSettings Settings
                 Settings = e.Settings,
             },
             OrgEvents.SettingsChanged e => state with { Settings = e.Settings },
+            OrgEvents.SoloEnded => state with { SoloEnded = true },
             _ => state,
         };
 }
@@ -115,6 +123,9 @@ public static class OrgDecider
             throw new DomainException("An organisation needs a name.");
         return [new OrgEvents.Created(name.Trim(), OrgSettings.Defaults)];
     }
+
+    public static IEnumerable<object> EndSolo(Organisation org, int accounts, int people) =>
+        org.SoloEnded ? [] : [new OrgEvents.SoloEnded(accounts, people)];
 
     public static IEnumerable<object> ChangeSettings(Organisation org, OrgSettings settings)
     {

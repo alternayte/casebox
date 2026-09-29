@@ -1,5 +1,5 @@
 # The server and worker images (docs/specs/operations.md, Images): every push to main is `edge`,
-# every v* tag is its version and `latest`. Both architectures. Step 16 adds signing.
+# every v* tag is its version, and a release tag without a hyphen is also `latest`. Both architectures. Step 17 adds signing.
 name: Images
 
 on:
@@ -37,7 +37,7 @@ jobs:
           tags: |
             type=edge,branch=main
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-') }}
       - uses: docker/build-push-action@v6
         with:
           context: .

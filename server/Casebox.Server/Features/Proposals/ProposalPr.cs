@@ -7,6 +7,7 @@ using Casebox.Server.Features.Evaluations;
 using Casebox.Server.Features.Integrations;
 using Casebox.Server.Features.Orgs;
 using Casebox.Server.Features.Patterns;
+using Casebox.Server.Features.Privacy;
 using Deedbox;
 using Npgsql;
 
@@ -115,7 +116,7 @@ public sealed class ProposalPrEffect(
                     connection,
                     org,
                     draft.Pattern,
-                    org_.Settings.K,
+                    KView.Of(org_.Settings.K),
                     ct
                 );
             var gate = await GateAsync(connection, org, p.GateEvaluation!, ct);

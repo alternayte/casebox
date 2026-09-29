@@ -40,7 +40,7 @@ services:
       retries: 10
 
   server:
-    image: ${CASEBOX_SERVER_IMAGE:-ghcr.io/alternayte/casebox-server:${CASEBOX_VERSION:-dev}}
+    image: ${CASEBOX_SERVER_IMAGE:-ghcr.io/alternayte/casebox-server:${CASEBOX_VERSION:-edge}}
     build:
       context: ..
       dockerfile: server/Dockerfile

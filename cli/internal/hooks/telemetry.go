@@ -150,3 +150,47 @@ func snake(s string) string {
 	}
 	return b.String()
 }
+
+// RemoveClaudeTelemetry removes the telemetry variables casebox init wrote into the env block of
+// ~/.claude/settings.json. It removes them only when the exporter header carries a Casebox token,
+// so telemetry the person set up for another backend stays.
+func RemoveClaudeTelemetry(path string) (bool, error) {
+	doc, err := load(path)
+	if err != nil {
+		return false, err
+	}
+	env := newObject()
+	if ok, err := doc.get("env", env); err != nil || !ok {
+		return false, err
+	}
+	var header string
+	if _, err := env.get("OTEL_EXPORTER_OTLP_HEADERS", &header); err != nil || !strings.HasPrefix(header, "Authorization=Bearer cbx_") {
+		return false, nil
+	}
+	for k := range (Telemetry{}).ClaudeEnv() {
+		env.remove(k)
+	}
+	if err := doc.set("env", env); err != nil {
+		return false, err
+	}
+	return true, save(path, doc)
+}
+
+// RemoveCodexTelemetry removes the block casebox init appended to ~/.codex/config.toml.
+func RemoveCodexTelemetry(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !codexOwnBlock.Match(data) {
+		return false, nil
+	}
+	text := strings.TrimRight(codexOwnBlock.ReplaceAllString(string(data), "\n"), "\n")
+	if text != "" {
+		text += "\n"
+	}
+	return true, os.WriteFile(path, []byte(text), 0o600)
+}

@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"errors"
@@ -25,8 +26,16 @@ import (
 //go:embed assets/compose.yaml assets/queuebox.yml
 var assets embed.FS
 
-// Project is the compose project name.
-const Project = "casebox"
+// Project is the compose project name: casebox for the default home, and a name of its own for a
+// home that CASEBOX_HOME points elsewhere, so a scratch home never reuses the real stack's volumes.
+func Project() string {
+	home := os.Getenv("CASEBOX_HOME")
+	if home == "" {
+		return "casebox"
+	}
+	sum := sha256.Sum256([]byte(home))
+	return "casebox-" + hex.EncodeToString(sum[:])[:8]
+}
 
 // Options configure casebox up.
 type Options struct {
@@ -35,6 +44,17 @@ type Options struct {
 	Version string
 	// Demo loads a synthetic team into the organisation when it has no session yet.
 	Demo bool
+}
+
+// ImageTag is the server image tag that matches a CLI version. A release CLI (0.1.0, or a
+// pre-release such as 0.1.0-trial.1) runs the image of its own version; a development build runs
+// edge, the image of the newest commit on main.
+func ImageTag(version string) string {
+	v := strings.TrimPrefix(strings.TrimSpace(version), "v")
+	if v == "" || strings.HasSuffix(v, "-dev") {
+		return "edge"
+	}
+	return v
 }
 
 // Env holds the stack's settings and generated secrets, kept in ~/.casebox/stack/.env so a
@@ -58,7 +78,7 @@ func Up(ctx context.Context, opts Options, out io.Writer) (Env, error) {
 		}
 	}
 	env["CASEBOX_PORT"] = fmt.Sprint(opts.Port)
-	env["CASEBOX_VERSION"] = opts.Version
+	env["CASEBOX_VERSION"] = ImageTag(opts.Version)
 	env["CASEBOX_DEMO"] = fmt.Sprint(opts.Demo)
 	if opts.Image != "" {
 		env["CASEBOX_SERVER_IMAGE"] = opts.Image
@@ -91,7 +111,7 @@ func waitForServer(ctx context.Context, url string) error {
 			}
 		}
 		if time.Now().After(deadline) {
-			return errors.New("the server did not answer within 3 minutes; docker compose -p casebox logs server shows why")
+			return fmt.Errorf("the server did not answer within 3 minutes; docker compose -p %s logs server shows why", Project())
 		}
 		select {
 		case <-ctx.Done():
@@ -138,7 +158,7 @@ func compose(ctx context.Context, dir string, out io.Writer, args ...string) err
 	if _, err := exec.LookPath("docker"); err != nil {
 		return errors.New("docker is not installed or not on PATH; casebox up needs Docker with the compose plugin")
 	}
-	base := []string{"compose", "--project-name", Project, "--env-file", filepath.Join(dir, ".env"), "--file", filepath.Join(dir, "compose.yaml")}
+	base := []string{"compose", "--project-name", Project(), "--env-file", filepath.Join(dir, ".env"), "--file", filepath.Join(dir, "compose.yaml")}
 	cmd := exec.CommandContext(ctx, "docker", append(base, args...)...)
 	cmd.Dir = dir
 	cmd.Stdout = out

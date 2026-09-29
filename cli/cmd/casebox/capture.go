@@ -139,7 +139,7 @@ func newImportCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import past sessions from the session logs on this machine",
-		Long: "Import the Claude Code and Codex sessions of the last days that ran in this repository, and upload them.\n" +
+		Long: "Import the Claude Code, Codex and Cursor CLI sessions of the last days that ran in this repository, and upload them.\n" +
 			"Then run steering detection, wait while a worker classifies the interventions, and print the report's headline.\n" +
 			"Running it again imports only what is new.",
 		Args: cobra.NoArgs,
@@ -180,7 +180,10 @@ func newImportCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "Found %d Claude Code and %d Codex sessions, %d events.\n", sum.Sessions["claude-code"], sum.Sessions["codex"], sum.Events)
+			fmt.Fprintf(out, "Found %d Claude Code, %d Codex and %d Cursor CLI sessions, %d events.\n", sum.Sessions["claude-code"], sum.Sessions["codex"], sum.Sessions["cursor-cli"], sum.Events)
+			if sum.Failed > 0 {
+				fmt.Fprintf(out, "Could not read %d session files; their format is not one this version knows.\n", sum.Failed)
+			}
 			if sum.Unsupported > 0 {
 				fmt.Fprintf(out, "Skipped %d Codex sessions in the pre-2025 format.\n", sum.Unsupported)
 			}

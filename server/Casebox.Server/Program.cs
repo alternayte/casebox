@@ -80,6 +80,7 @@ builder.Services.AddSingleton<IJobResultHandler, EntireFetchResult>();
 builder.Services.AddSingleton<IJobResultHandler, GitAiFetchResult>();
 builder.Services.AddSingleton<IJobResultHandler, ClassifyResultHandler>();
 builder.Services.AddSingleton<IJobResultHandler, PullRequestResultHandler>();
+builder.Services.AddSingleton<IJobResultHandler, EnvBuild>();
 builder.Services.AddScoped<SteeringScan>();
 builder.Services.AddScoped<SteeringReports>();
 builder.Services.AddScoped<SteeringWindows>();

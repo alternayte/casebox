@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -107,6 +108,11 @@ func newInitCommand() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "  Wrote %s. Commit it, so teammates can run casebox join.\n", repo.ConfigPath)
+
+			step(out, "Environment")
+			if err := proposeEnvironment(ctx, client, root, workspace, out); err != nil {
+				return err
+			}
 
 			if err := connectIntegrations(ctx, client, cmd, in, out, jiraURL, jiraProjects, githubIssues); err != nil {
 				return err
@@ -455,4 +461,49 @@ func openBrowser(url string) {
 		cmd = exec.Command("xdg-open", url)
 	}
 	_ = cmd.Start()
+}
+
+// proposeEnvironment drafts the environment block when casebox.yml has none, appends it, and
+// proposes the recipe to the server. casebox env check builds it.
+func proposeEnvironment(ctx context.Context, client *api.Client, root, workspace string, out io.Writer) error {
+	_, cfg, err := repo.LoadConfig(ctx, root)
+	if err != nil {
+		return err
+	}
+	if cfg.Environment == nil {
+		d, err := draftHere(ctx)
+		if err != nil {
+			return err
+		}
+		text, err := d.YAML()
+		if err != nil {
+			return err
+		}
+		f, err := os.OpenFile(filepath.Join(root, repo.ConfigPath), os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return err
+		}
+		_, werr := f.WriteString("\n" + text)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return werr
+		}
+		if err := d.Recipe.Validate(); err != nil {
+			fmt.Fprintf(out, "  Drafted an environment in %s, but it is incomplete (%v). Fix it, then run casebox env check.\n", repo.ConfigPath, err)
+			return nil
+		}
+		cfg.Environment = &d.Recipe
+		fmt.Fprintf(out, "  Drafted the environment (image %s) in %s from this repository's files.\n", d.Recipe.Image, repo.ConfigPath)
+	}
+	if err := cfg.Environment.Validate(); err != nil {
+		fmt.Fprintf(out, "  The environment in %s is incomplete (%v). Fix it, then run casebox env check.\n", repo.ConfigPath, err)
+		return nil
+	}
+	if err := client.Do(ctx, http.MethodPut, "/api/v1/workspaces/"+workspace+"/recipe", map[string]json.RawMessage{"recipe": cfg.Environment.JSON()}, nil); err != nil {
+		return fmt.Errorf("propose the environment: %w", err)
+	}
+	fmt.Fprintln(out, "  Proposed it to the server. Run casebox env check to build it and run the tests, then casebox env confirm.")
+	return nil
 }

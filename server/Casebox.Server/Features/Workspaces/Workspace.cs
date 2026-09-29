@@ -27,7 +27,8 @@ public sealed record Workspace(
     string Name,
     ImmutableSortedSet<string> Repos,
     string? RecipeHash,
-    RecipeStatus RecipeStatus) : IState<Workspace>
+    RecipeStatus RecipeStatus,
+    string? Recipe = null) : IState<Workspace>
 {
     public static Workspace Initial { get; } = new(false, "", ImmutableSortedSet<string>.Empty, null, RecipeStatus.None);
 
@@ -36,7 +37,7 @@ public sealed record Workspace(
         WorkspaceEvents.Created e => state with { Exists = true, Name = e.Name },
         WorkspaceEvents.RepoAdded e => state with { Repos = state.Repos.Add(e.Repo) },
         WorkspaceEvents.RepoRemoved e => state with { Repos = state.Repos.Remove(e.Repo) },
-        WorkspaceEvents.RecipeProposed e => state with { RecipeHash = e.Hash, RecipeStatus = RecipeStatus.Proposed },
+        WorkspaceEvents.RecipeProposed e => state with { RecipeHash = e.Hash, Recipe = e.Recipe, RecipeStatus = RecipeStatus.Proposed },
         WorkspaceEvents.RecipeValidated e => state with { RecipeStatus = e.Passed ? RecipeStatus.Validated : RecipeStatus.ValidationFailed },
         WorkspaceEvents.RecipeConfirmed => state with { RecipeStatus = RecipeStatus.Confirmed },
         _ => state,

@@ -4,6 +4,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -87,4 +89,29 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 		return json.Unmarshal(data, out)
 	}
 	return nil
+}
+
+// PutBlob uploads content-addressed bytes (worker and ingest tokens) and returns their hash.
+func (c *Client) PutBlob(ctx context.Context, contentType string, data []byte) (string, error) {
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.Server+"/worker/v1/blobs/"+hash, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("reach %s: %w", c.Server, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		var problem struct {
+			Title string `json:"title"`
+		}
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&problem)
+		return "", &Error{Status: resp.StatusCode, Title: problem.Title}
+	}
+	return hash, nil
 }

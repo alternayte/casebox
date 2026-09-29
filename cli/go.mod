@@ -1,8 +1,9 @@
 module github.com/alternayte/casebox/cli
 
-go 1.26.0
+go 1.26.2
 
 require (
+	github.com/alternayte/kiln v0.7.0
 	github.com/spf13/cobra v1.10.2
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/term v0.46.0

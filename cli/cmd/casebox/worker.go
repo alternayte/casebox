@@ -13,6 +13,7 @@ import (
 	"github.com/alternayte/casebox/cli/internal/api"
 	"github.com/alternayte/casebox/cli/internal/buildinfo"
 	"github.com/alternayte/casebox/cli/internal/config"
+	"github.com/alternayte/casebox/cli/internal/sandbox/providers"
 	"github.com/alternayte/casebox/cli/internal/worker"
 )
 
@@ -24,6 +25,8 @@ func newWorkerCommand() *cobra.Command {
 		Long: "Run a worker: it leases jobs from the server and runs them on this host.\n" +
 			"It reads its worker token from CASEBOX_WORKER_TOKEN, and a GitHub token for cloning from GITHUB_TOKEN.\n" +
 			"Model API keys stay in this host's environment; the server never sees them.\n" +
+			"Sandboxes come from CASEBOX_SANDBOX (docker, kiln or daytona; default docker), at most CASEBOX_SANDBOX_CONCURRENCY\n" +
+			"at once (default 2).\n" +
 			"Steering classification needs an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic or openai, any\n" +
 			"OpenAI-compatible API), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and CASEBOX_ANALYSIS_API_KEY\n" +
 			"(default ANTHROPIC_API_KEY or OPENAI_API_KEY).",
@@ -72,6 +75,14 @@ func newWorkerCommand() *cobra.Command {
 				fmt.Fprintln(out, "Analysis model: not configured, so this worker does not classify steering. Set CASEBOX_ANALYSIS_PROVIDER and CASEBOX_ANALYSIS_MODEL to enable it.")
 			default:
 				fmt.Fprintf(out, "Analysis model: %v. This worker does not classify steering.\n", err)
+			}
+			// Only a worker whose sandbox provider answers prepares environments.
+			if provider, name, err := providers.Available(cmd.Context()); err == nil {
+				env := worker.Environments{Provider: provider, Name: name, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
+				handlers["env.build"] = env.Build
+				fmt.Fprintf(out, "Sandboxes: %s; this worker prepares environments.\n", name)
+			} else {
+				fmt.Fprintf(out, "Sandboxes: %v. This worker does not prepare environments.\n", err)
 			}
 			w := &worker.Worker{
 				Client:   client,

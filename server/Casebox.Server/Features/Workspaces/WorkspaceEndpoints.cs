@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Casebox.Server.Features.Auth;
+using Casebox.Server.Features.Jobs;
 using Dapper;
 using Deedbox;
 using Npgsql;
@@ -68,8 +69,19 @@ public static class WorkspaceEndpoints
         workspaces.MapPost("/{name}/recipe/validation", (string name, RecipeValidation body, IEventStore store) =>
             Execute(store, name, w => WorkspaceDecider.RecordValidation(w, body.Hash, body.Passed, body.ReportBlob))).RequireAuthorization(Policies.Member);
 
-        workspaces.MapPost("/{name}/recipe/confirmation", (string name, RecipeConfirmation body, IEventStore store) =>
-            Execute(store, name, w => WorkspaceDecider.ConfirmRecipe(w, body.Hash))).RequireAuthorization(Policies.Admin);
+        // A confirmed recipe gets its environment prepared on the workers, once per repository.
+        workspaces.MapPost("/{name}/recipe/confirmation", async (string name, RecipeConfirmation body, HttpContext http, IEventStore store, NpgsqlDataSource db, JobQueue jobs) =>
+        {
+            await using var connection = await db.OpenConnectionAsync(http.RequestAborted);
+            await using var transaction = await connection.BeginTransactionAsync(http.RequestAborted);
+            var result = await store.UseTransaction(transaction).Execute<Workspace>(Workspace.StreamIdFor(name), w => WorkspaceDecider.ConfirmRecipe(w, body.Hash), http.RequestAborted);
+            var w = result.State;
+            foreach (var repo in w.Repos)
+                await jobs.EnqueueAsync(transaction, http.User.OrgId(), EnvBuild.Kind, $"{EnvBuild.Kind}:{w.Name}:{repo}:{w.RecipeHash}",
+                    new { workspace = w.Name, repo, recipe = JsonDocument.Parse(w.Recipe!).RootElement, hash = w.RecipeHash }, 3, http.RequestAborted);
+            await transaction.CommitAsync(http.RequestAborted);
+            return Results.Ok(View(w));
+        }).RequireAuthorization(Policies.Admin);
     }
 
     private static async Task<IResult> Execute(IEventStore store, string name, Func<Workspace, IEnumerable<object>> decide)
@@ -79,4 +91,15 @@ public static class WorkspaceEndpoints
     }
 
     private static WorkspaceView View(Workspace w) => new(w.Name, w.Repos.ToList(), w.RecipeStatus, w.RecipeHash, w.CanMine);
+}
+
+// env.build: a worker prepares a confirmed recipe's environment in its own cache, so case runs start
+// from it (docs/specs/sandboxes.md). The job's result is all the server keeps.
+public sealed class EnvBuild : IJobResultHandler
+{
+    public const string Kind = "env.build";
+
+    string IJobResultHandler.Kind => Kind;
+
+    public Task HandleAsync(JobResult result, CancellationToken ct) => Task.CompletedTask;
 }

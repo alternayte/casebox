@@ -22,7 +22,12 @@ public sealed record CapturedSession(
     DateTimeOffset? EndedAt,
     string Source,
     string? WorkItem,
-    string Person);
+    string Person,
+    CapturedHarness? Harness = null,
+    int? Commits = null);
+
+// The harness files of a session's commit: the hash of their sorted "<path> <blob sha>" lines.
+public sealed record CapturedHarness(string Hash, IReadOnlyList<string> Files);
 
 public sealed record CapturedTool(string? Name, string? Status, IReadOnlyList<string>? Files);
 
@@ -100,8 +105,10 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
         var now = clock.GetUtcNow();
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO casebox.sessions (org_id, id, agent, agent_version, model, repo, branch, head_start, head_end, person, person_mapped, period, work_item, source, started_at, ended_at, created_at, updated_at)
-            VALUES (@Org, @Id, @Agent, @AgentVersion, @Model, @Repo, @Branch, @HeadStart, @HeadEnd, @Person, @Mapped, @Period, @WorkItem, @Source, @StartedAt, @EndedAt, @Now, @Now)
+            INSERT INTO casebox.sessions (org_id, id, agent, agent_version, model, repo, branch, head_start, head_end, person, person_mapped, period, work_item, source, started_at, ended_at,
+                harness_hash, commits, created_at, updated_at)
+            VALUES (@Org, @Id, @Agent, @AgentVersion, @Model, @Repo, @Branch, @HeadStart, @HeadEnd, @Person, @Mapped, @Period, @WorkItem, @Source, @StartedAt, @EndedAt,
+                @HarnessHash, @Commits, @Now, @Now)
             ON CONFLICT (org_id, id) DO UPDATE SET
                 agent_version = COALESCE(EXCLUDED.agent_version, sessions.agent_version),
                 model = COALESCE(EXCLUDED.model, sessions.model),
@@ -114,12 +121,15 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
                 person_mapped = sessions.person_mapped OR EXCLUDED.person_mapped,
                 started_at = LEAST(sessions.started_at, EXCLUDED.started_at),
                 ended_at = GREATEST(sessions.ended_at, EXCLUDED.ended_at),
+                harness_hash = COALESCE(sessions.harness_hash, EXCLUDED.harness_hash),
+                commits = GREATEST(sessions.commits, EXCLUDED.commits),
                 updated_at = EXCLUDED.updated_at
             """,
             new
             {
                 Org = orgId, session.Id, session.Agent, session.AgentVersion, session.Model, Repo = session.Repo?.ToLowerInvariant(), session.Branch,
-                session.HeadStart, session.HeadEnd, Person = person, Mapped = mapped, Period = sessionPeriod, session.WorkItem, session.Source, session.StartedAt, session.EndedAt, Now = now,
+                session.HeadStart, session.HeadEnd, Person = person, Mapped = mapped, Period = sessionPeriod, session.WorkItem, session.Source, session.StartedAt, session.EndedAt,
+                HarnessHash = session.Harness?.Hash, Commits = session.Source == "entire" ? Math.Max(session.Commits ?? 1, 1) : session.Commits, Now = now,
             },
             transaction, cancellationToken: ct));
 
@@ -133,8 +143,32 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
         await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE casebox.sessions SET event_count = event_count + @Inserted WHERE org_id = @Org AND id = @Id",
             new { Inserted = inserted, Org = orgId, session.Id }, transaction, cancellationToken: ct));
+        await HarnessVersionAsync(connection, transaction, orgId, session, now, ct);
         await transaction.CommitAsync(ct);
         return inserted;
+    }
+
+    // A harness version is the hash of the harness files plus the agent and the model (SDD section
+    // 3). The model can arrive in a later batch than the files, so the version follows the session.
+    private static async Task HarnessVersionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string orgId, CapturedSession session, DateTimeOffset now, CancellationToken ct)
+    {
+        var row = await connection.QuerySingleAsync<(string Agent, string? Model, string? HarnessHash)>(new CommandDefinition(
+            "SELECT agent, model, harness_hash FROM casebox.sessions WHERE org_id = @Org AND id = @Id", new { Org = orgId, session.Id }, transaction, cancellationToken: ct));
+        if (row.HarnessHash is null) return;
+        var model = row.Model ?? "unknown";
+        var version = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{row.HarnessHash}\n{row.Agent}\n{model}")));
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO casebox.harness_versions (org_id, hash, files_hash, files, agent, model, created_at)
+            VALUES (@Org, @Version, @Hash, @Files::jsonb, @Agent, @Model, @Now) ON CONFLICT DO NOTHING;
+            UPDATE casebox.sessions SET harness_version = @Version WHERE org_id = @Org AND id = @Id AND harness_version IS DISTINCT FROM @Version;
+            """,
+            new
+            {
+                Org = orgId, Version = version, Hash = row.HarnessHash, row.Agent, Model = model, session.Id, Now = now,
+                Files = JsonSerializer.Serialize(session.Harness is { } h && h.Hash == row.HarnessHash ? h.Files.Select(Redaction.Redact).ToList() : []),
+            },
+            transaction, cancellationToken: ct));
     }
 
     // Prompt mode off keeps structure only; redacted keeps prompts and responses but not tool
@@ -159,6 +193,10 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
             if (!Kinds.Contains(e.Kind)) throw new DomainException($"Unknown event kind '{e.Kind}'.");
             if (e.Seq < 0) throw new DomainException("An event sequence number is never negative.");
         }
+
+        if (s.Harness is { } h && (h.Hash.Length != 64 || !h.Hash.All(char.IsAsciiHexDigitLower) || h.Files.Count > 500))
+            throw new DomainException("A harness hash is 64 lower-case hex digits, over at most 500 files.");
+        if (s.Commits is < 0) throw new DomainException("A commit count is never negative.");
     }
 
     private static Task EnsurePartitionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, DateTime month, CancellationToken ct)

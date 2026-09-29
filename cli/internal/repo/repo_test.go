@@ -1,6 +1,18 @@
 package repo
 
-import "testing"
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/alternayte/casebox/cli/internal/capture"
+)
 
 func TestRemotesNormalizeToHostOwnerName(t *testing.T) {
 	for in, want := range map[string]string{
@@ -12,5 +24,95 @@ func TestRemotesNormalizeToHostOwnerName(t *testing.T) {
 		if got := NormalizeRemote(in); got != want {
 			t.Errorf("NormalizeRemote(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestHarnessGlobsMatchWholePaths(t *testing.T) {
+	for _, c := range []struct {
+		pattern, file string
+		want          bool
+	}{
+		{"AGENTS.md", "AGENTS.md", true},
+		{"AGENTS.md", "docs/AGENTS.md", false},
+		{"**/AGENTS.md", "docs/AGENTS.md", true},
+		{"**/AGENTS.md", "AGENTS.md", true},
+		{".claude/skills/**", ".claude/skills/review/SKILL.md", true},
+		{".claude/skills/**", ".claude/skills", false},
+		{".claude/skills/**", ".claude/settings.json", false},
+		{".cursor/rules/*.mdc", ".cursor/rules/go.mdc", true},
+		{".cursor/rules/*.mdc", ".cursor/rules/sub/go.mdc", false},
+		{"docs/**/*.md", "docs/a/b/c.md", true},
+	} {
+		if got := MatchGlob(c.pattern, c.file); got != c.want {
+			t.Errorf("MatchGlob(%q, %q) = %v, want %v", c.pattern, c.file, got, c.want)
+		}
+	}
+}
+
+// The harness hash depends only on the matched files' paths and contents, so two commits with the
+// same harness share a version and an unrelated change does not create a new one.
+func TestTheHarnessHashChangesOnlyWithTheHarnessFiles(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=d@example.com", "-c", "user.name=D", "-c", "commit.gpgsign=false"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	write := func(name, body string) {
+		t.Helper()
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run("add", name)
+	}
+	run("init", "-q")
+	write("AGENTS.md", "rules")
+	write(".claude/skills/review/SKILL.md", "review")
+	write("main.go", "package main")
+	run("commit", "-q", "-m", "one")
+	first := run("rev-parse", "HEAD")
+	write("main.go", "package main // changed")
+	run("commit", "-q", "-m", "two")
+	second := run("rev-parse", "HEAD")
+	write("AGENTS.md", "rules, changed")
+	run("commit", "-q", "-m", "three")
+	third := run("rev-parse", "HEAD")
+
+	harness := func(commit string) *capture.Harness {
+		t.Helper()
+		h, err := Harness(ctx, dir, commit, DefaultHarnessGlobs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	a, b, c := harness(first), harness(second), harness(third)
+	if want := []string{".claude/skills/review/SKILL.md", "AGENTS.md"}; strings.Join(a.Files, ",") != strings.Join(want, ",") {
+		t.Fatalf("files = %v, want %v", a.Files, want)
+	}
+	blobs := run("ls-tree", "-r", first, "--", ".claude/skills/review/SKILL.md", "AGENTS.md")
+	var lines []string
+	for _, l := range strings.Split(blobs, "\n") {
+		meta, path, _ := strings.Cut(l, "\t")
+		lines = append(lines, path+" "+strings.Fields(meta)[2]+"\n")
+	}
+	sort.Strings(lines)
+	sum := sha256.Sum256([]byte(strings.Join(lines, "")))
+	if a.Hash != hex.EncodeToString(sum[:]) {
+		t.Fatalf("hash = %s, want the SHA-256 of the sorted path and blob lines", a.Hash)
+	}
+	if a.Hash != b.Hash {
+		t.Fatal("a change outside the harness changed the hash")
+	}
+	if b.Hash == c.Hash {
+		t.Fatal("a change to AGENTS.md kept the hash")
 	}
 }

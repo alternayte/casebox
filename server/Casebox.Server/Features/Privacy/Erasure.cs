@@ -25,7 +25,8 @@ public sealed class Erasure(IPseudonyms pseudonyms, IEventStoreAdmin admin, Rost
 
         await using var connection = await db.OpenConnectionAsync(ct);
         var periods = (await connection.QueryAsync<string>(new CommandDefinition(
-            "SELECT DISTINCT period FROM casebox.sessions WHERE org_id = @Org", new { Org = orgId }, cancellationToken: ct))).ToList();
+            "SELECT period FROM casebox.sessions WHERE org_id = @Org UNION SELECT period FROM casebox.steering_facts WHERE org_id = @Org",
+            new { Org = orgId }, cancellationToken: ct))).ToList();
 
         var subjects = new HashSet<string>(StringComparer.Ordinal);
         foreach (var period in periods)
@@ -50,8 +51,9 @@ public sealed class Erasure(IPseudonyms pseudonyms, IEventStoreAdmin admin, Rost
             DELETE FROM casebox.session_events WHERE org_id = @Org AND session_id = ANY(@Ids);
             DELETE FROM casebox.session_metrics WHERE org_id = @Org AND agent || ':' || session_id = ANY(@Ids);
             DELETE FROM casebox.sessions WHERE org_id = @Org AND id = ANY(@Ids);
+            DELETE FROM casebox.steering_facts WHERE org_id = @Org AND (person = ANY(@Subjects) OR session_id = ANY(@Ids));
             """,
-            new { Org = orgId, Ids = sessionIds }, transaction, cancellationToken: ct));
+            new { Org = orgId, Ids = sessionIds, Subjects = subjects.ToArray() }, transaction, cancellationToken: ct));
         var result = new ErasureResult(subjects.Count, sessionIds.Length);
         await store.UseTransaction(transaction).Append(Organisation.StreamId, ExpectedVersion.Any, [new OrgEvents.ErasurePerformed(result.Subjects, result.Sessions)]);
         await transaction.CommitAsync(ct);

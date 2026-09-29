@@ -14,6 +14,9 @@ public sealed partial class GitHubReader(Identities identities)
     // Blame is expensive; a fix is judged on at most this many files.
     private const int MaxBlameFiles = 20;
 
+    // Check runs are read for the last commits of a pull request only.
+    private const int MaxCheckedCommits = 5;
+
     [GeneratedRegex(@"(?im)^co-authored-by:\s*(claude|codex|cursor|openai|anthropic)\b")]
     private static partial Regex AgentTrailer();
 
@@ -68,14 +71,19 @@ public sealed partial class GitHubReader(Identities identities)
             comments.Add(new PrReviewComment(
                 c.GetProperty("id").GetInt64(), Long(c, "pull_request_review_id"), Long(c, "in_reply_to_id"), c.GetProperty("path").GetString()!,
                 Int(c, "line"), Int(c, "original_line"), Text(c, "commit_id"), await PersonAsync(c, "user", period, ct),
-                c.GetProperty("created_at").GetDateTimeOffset(), await identities.TokenizeExternalAsync(Text(c, "body"), period, ct)));
+                c.GetProperty("created_at").GetDateTimeOffset(), await identities.TokenizeExternalAsync(Text(c, "body"), period, ct), Text(c, "original_commit_id")));
 
+        // The checks of the head and of the commits before it: a CI fix is a failure on one commit
+        // and a pass on a later one (docs/specs/steering.md).
         var headSha = pr.GetProperty("head").GetProperty("sha").GetString()!;
         var checks = new List<PrCheck>();
-        var runs = await client.GetAsync($"repos/{owner}/{name}/commits/{headSha}/check-runs?per_page=100", ct);
-        foreach (var run in runs.GetProperty("check_runs").EnumerateArray())
-            checks.Add(new PrCheck(run.GetProperty("name").GetString()!, Text(run, "conclusion"), headSha,
-                run.TryGetProperty("completed_at", out var done) && done.ValueKind == JsonValueKind.String ? done.GetDateTimeOffset() : null));
+        foreach (var sha in commits.Select(c => c.Sha).Append(headSha).Distinct().TakeLast(MaxCheckedCommits))
+        {
+            var runs = await client.GetAsync($"repos/{owner}/{name}/commits/{sha}/check-runs?per_page=100", ct);
+            foreach (var run in runs.GetProperty("check_runs").EnumerateArray())
+                checks.Add(new PrCheck(run.GetProperty("name").GetString()!, Text(run, "conclusion"), sha,
+                    run.TryGetProperty("completed_at", out var done) && done.ValueKind == JsonValueKind.String ? done.GetDateTimeOffset() : null));
+        }
 
         var title = Text(pr, "title");
         var body = Text(pr, "body");
@@ -112,7 +120,7 @@ public sealed partial class GitHubReader(Identities identities)
     }
 
     // A commit that says "This reverts commit <sha>", with the pull request that merged the reverted commit.
-    public async Task<RevertCommit?> RevertAsync(GitHubClient client, string repo, JsonElement commit, CancellationToken ct)
+    public async Task<RevertCommit?> RevertAsync(GitHubClient client, string repo, JsonElement commit, OrgSettings settings, CancellationToken ct)
     {
         var message = commit.GetProperty("commit").GetProperty("message").GetString();
         if (message is null || RevertsCommit().Match(message) is not { Success: true } m) return null;
@@ -120,7 +128,10 @@ public sealed partial class GitHubReader(Identities identities)
         var reverted = m.Groups["sha"].Value;
         var pulls = await client.GetAsync($"repos/{owner}/{name}/commits/{reverted}/pulls", ct);
         int? pr = pulls.ValueKind == JsonValueKind.Array && pulls.GetArrayLength() > 0 ? pulls[0].GetProperty("number").GetInt32() : null;
-        return new RevertCommit(repo, commit.GetProperty("sha").GetString()!, reverted, pr, commit.GetProperty("commit").GetProperty("committer").GetProperty("date").GetDateTimeOffset());
+        var at = commit.GetProperty("commit").GetProperty("committer").GetProperty("date").GetDateTimeOffset();
+        var period = Identities.PeriodOf(settings.PseudonymPeriod, at);
+        return new RevertCommit(repo, commit.GetProperty("sha").GetString()!, reverted, pr, at,
+            await CommitAuthorAsync(commit, period, ct), await identities.TokenizeExternalAsync(message, period, ct));
     }
 
     // Blames the lines a merged pull request changed, at its base commit: each line blames to the

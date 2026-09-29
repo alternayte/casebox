@@ -93,7 +93,7 @@ public static class RepoJobEndpoints
                 rows, transaction, cancellationToken: http.RequestAborted));
             foreach (var commit in body.Commits)
                 await connection.ExecuteAsync(new CommandDefinition(
-                    "UPDATE casebox.pull_requests SET is_agent = true WHERE org_id = @Org AND repo = @Repo AND snapshot->'commits' @> @Commit::jsonb",
+                    "UPDATE casebox.pull_requests SET is_agent = true, changed_at = now() WHERE org_id = @Org AND repo = @Repo AND NOT is_agent AND snapshot->'commits' @> @Commit::jsonb",
                     new { Org = http.User.OrgId(), Repo = repo, Commit = JsonSerializer.Serialize(new[] { new { sha = commit.Sha } }) }, transaction, cancellationToken: http.RequestAborted));
             await transaction.CommitAsync(http.RequestAborted);
             return Results.Ok(new { stored = rows.Count });

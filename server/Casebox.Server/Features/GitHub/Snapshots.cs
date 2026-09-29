@@ -11,7 +11,8 @@ public sealed record PrCommit(string Sha, string? Message, PersonRef? Author, Da
 
 public sealed record PrReview(long Id, string State, PersonRef? Author, DateTimeOffset? At, string? Body);
 
-public sealed record PrReviewComment(long Id, long? ReviewId, long? InReplyTo, string Path, int? Line, int? OriginalLine, string? CommitSha, PersonRef? Author, DateTimeOffset At, string? Body);
+public sealed record PrReviewComment(long Id, long? ReviewId, long? InReplyTo, string Path, int? Line, int? OriginalLine, string? CommitSha, PersonRef? Author, DateTimeOffset At, string? Body,
+    string? OriginalCommitSha = null);
 
 public sealed record PrCheck(string Name, string? Conclusion, string HeadSha, DateTimeOffset? CompletedAt);
 
@@ -46,4 +47,4 @@ public sealed record PullRequestSnapshot(
 public sealed record IssueSnapshot(string Repo, int Number, string? Title, string? Body, string State, IReadOnlyList<string> Labels, PersonRef? Assignee, DateTimeOffset CreatedAt, DateTimeOffset? ClosedAt, DateTimeOffset UpdatedAt);
 
 // A commit on the default branch that reverts another commit, pushed without a pull request.
-public sealed record RevertCommit(string Repo, string Sha, string RevertedSha, int? RevertedPr, DateTimeOffset At);
+public sealed record RevertCommit(string Repo, string Sha, string RevertedSha, int? RevertedPr, DateTimeOffset At, PersonRef? Author = null, string? Message = null);

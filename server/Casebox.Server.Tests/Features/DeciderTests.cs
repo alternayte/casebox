@@ -94,5 +94,5 @@ public sealed class EventContractTests
 {
     [Fact]
     public void Event_contracts_are_stable() =>
-        EventContracts.Verify(es => CaseboxStreams.Register(es), "events.lock");
+        EventContracts.Verify(es => CaseboxStreams.Register(es.Keys(keys => keys.StoreInDatabase())), "events.lock");
 }

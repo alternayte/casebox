@@ -1,56 +1,90 @@
+/* Direction: a printed statistical abstract (the US Statistical Abstract, a Tufte table): paper ground, black ink, hairline rules, tabular figures in a mono face, one vermilion accent that marks corrections. */
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 
+/* Colour: paper, ink, graphite for secondary text, hairline rules, vermilion for corrections, a slate blue for links. */
 :root {
-  --radius: 0.5rem;
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(0 0% 3.9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(0 0% 3.9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(0 0% 3.9%);
-  --primary: hsl(0 0% 9%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(0 0% 96.1%);
-  --secondary-foreground: hsl(0 0% 9%);
-  --muted: hsl(0 0% 96.1%);
-  --muted-foreground: hsl(0 0% 45.1%);
-  --accent: hsl(0 0% 96.1%);
-  --accent-foreground: hsl(0 0% 9%);
-  --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 89.8%);
-  --input: hsl(0 0% 89.8%);
-  --ring: hsl(0 0% 3.9%);
+  --radius: 0.125rem;
+  --background: hsl(40 20% 97%);
+  --foreground: hsl(30 8% 10%);
+  --card: hsl(40 25% 99%);
+  --card-foreground: hsl(30 8% 10%);
+  --popover: hsl(40 25% 99%);
+  --popover-foreground: hsl(30 8% 10%);
+  --primary: hsl(30 8% 10%);
+  --primary-foreground: hsl(40 20% 97%);
+  --secondary: hsl(40 14% 92%);
+  --secondary-foreground: hsl(30 8% 10%);
+  --muted: hsl(40 14% 92%);
+  --muted-foreground: hsl(30 5% 38%);
+  --accent: hsl(40 14% 92%);
+  --accent-foreground: hsl(30 8% 10%);
+  --destructive: hsl(8 72% 44%);
+  --destructive-foreground: hsl(40 20% 97%);
+  --border: hsl(35 10% 82%);
+  --input: hsl(35 10% 70%);
+  --ring: hsl(212 45% 38%);
+  --signal: hsl(8 72% 46%);
+  --signal-soft: hsl(8 60% 90%);
+  --link: hsl(212 45% 34%);
+  --ok: hsl(150 30% 32%);
+  --hidden: hsl(40 10% 88%);
 }
 
 .dark {
-  --background: hsl(0 0% 3.9%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(0 0% 3.9%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(0 0% 3.9%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(0 0% 9%);
-  --secondary: hsl(0 0% 14.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(0 0% 14.9%);
-  --muted-foreground: hsl(0 0% 63.9%);
-  --accent: hsl(0 0% 14.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 14.9%);
-  --input: hsl(0 0% 14.9%);
-  --ring: hsl(0 0% 83.1%);
+  --background: hsl(30 6% 9%);
+  --foreground: hsl(40 15% 88%);
+  --card: hsl(30 6% 11%);
+  --card-foreground: hsl(40 15% 88%);
+  --popover: hsl(30 6% 11%);
+  --popover-foreground: hsl(40 15% 88%);
+  --primary: hsl(40 15% 88%);
+  --primary-foreground: hsl(30 6% 9%);
+  --secondary: hsl(30 5% 16%);
+  --secondary-foreground: hsl(40 15% 88%);
+  --muted: hsl(30 5% 16%);
+  --muted-foreground: hsl(35 6% 60%);
+  --accent: hsl(30 5% 16%);
+  --accent-foreground: hsl(40 15% 88%);
+  --destructive: hsl(8 70% 58%);
+  --destructive-foreground: hsl(30 6% 9%);
+  --border: hsl(30 5% 22%);
+  --input: hsl(30 5% 32%);
+  --ring: hsl(212 50% 66%);
+  --signal: hsl(8 75% 60%);
+  --signal-soft: hsl(8 35% 22%);
+  --link: hsl(212 55% 72%);
+  --ok: hsl(150 30% 58%);
+  --hidden: hsl(30 5% 18%);
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  /* Type: one sans for prose, one mono for every figure, a serif italic for quoted human words. Scale ratio 1.2 from 13px. */
+  --font-sans: "IBM Plex Sans", "Source Sans 3", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "IBM Plex Serif", Charter, Georgia, serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.975rem;
+  --text-base--line-height: 1.45rem;
+  --text-lg: 1.17rem;
+  --text-lg--line-height: 1.6rem;
+  --text-xl: 1.404rem;
+  --text-xl--line-height: 1.8rem;
+  --text-2xl: 1.685rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 2.022rem;
+  --text-3xl--line-height: 2.25rem;
+  --tracking-label: 0.08em;
+
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 2);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -70,6 +104,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-link: var(--link);
+  --color-ok: var(--ok);
+  --color-hidden: var(--hidden);
 }
 
 @layer base {
@@ -79,5 +118,13 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
   }
 }

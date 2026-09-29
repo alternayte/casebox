@@ -49,14 +49,21 @@ public sealed class Retention(IServiceScopeFactory scopes, NpgsqlDataSource db, 
 
         await using var connection = await db.OpenConnectionAsync(ct);
         var periods = await connection.QueryAsync<string>(new CommandDefinition(
-            "SELECT DISTINCT period FROM casebox.sessions WHERE org_id = @Org AND period_retired_at IS NULL",
+            """
+            SELECT period FROM casebox.sessions WHERE org_id = @Org AND period_retired_at IS NULL
+            UNION SELECT period FROM casebox.steering_facts WHERE org_id = @Org
+            """,
             new { Org = orgId }, cancellationToken: ct));
         foreach (var period in periods)
         {
             if (Periods.EndOf(period) is not { } end || end.AddMonths(org.Settings.Retention) > now) continue;
 
+            // Session people and everyone else who intervened: reviewers, committers, reverters.
             var subjects = (await connection.QueryAsync<string>(new CommandDefinition(
-                "SELECT DISTINCT person FROM casebox.sessions WHERE org_id = @Org AND period = @Period",
+                """
+                SELECT person FROM casebox.sessions WHERE org_id = @Org AND period = @Period
+                UNION SELECT person FROM casebox.steering_facts WHERE org_id = @Org AND period = @Period
+                """,
                 new { Org = orgId, Period = period }, cancellationToken: ct))).ToList();
             foreach (var subject in subjects)
                 await admin.EraseSubjectAsync(subject, orgId, ct);
@@ -64,7 +71,10 @@ public sealed class Retention(IServiceScopeFactory scopes, NpgsqlDataSource db, 
 
             await using var transaction = await connection.BeginTransactionAsync(ct);
             await connection.ExecuteAsync(new CommandDefinition(
-                "UPDATE casebox.sessions SET period_retired_at = @Now WHERE org_id = @Org AND period = @Period",
+                """
+                UPDATE casebox.sessions SET period_retired_at = @Now WHERE org_id = @Org AND period = @Period;
+                DELETE FROM casebox.steering_facts WHERE org_id = @Org AND period = @Period;
+                """,
                 new { Org = orgId, Period = period, Now = now }, transaction, cancellationToken: ct));
             await store.UseTransaction(transaction).Append(Organisation.StreamId, ExpectedVersion.Any, [new OrgEvents.PeriodRetired(period, subjects.Count)]);
             await transaction.CommitAsync(ct);

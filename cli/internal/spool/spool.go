@@ -137,8 +137,8 @@ func (s *Spool) upsertSession(ctx context.Context, tx *sql.Tx, session capture.S
 	return err
 }
 
-// merge keeps the earliest start, the first HEAD, the latest end and HEAD, and every field
-// only one side knows.
+// merge keeps the earliest start, the first HEAD and harness, the latest end and HEAD, the
+// largest commit count, and every field only one side knows.
 func merge(old, s capture.Session) capture.Session {
 	pick := func(a, b string) string {
 		if b != "" {
@@ -163,6 +163,13 @@ func merge(old, s capture.Session) capture.Session {
 	}
 	if s.EndedAt != nil && (out.EndedAt == nil || s.EndedAt.After(*out.EndedAt)) {
 		out.EndedAt = s.EndedAt
+	}
+	// The first harness seen is the one at the start; a later count of commits sees more of them.
+	if out.Harness == nil {
+		out.Harness = s.Harness
+	}
+	if s.Commits != nil && (out.Commits == nil || *s.Commits > *out.Commits) {
+		out.Commits = s.Commits
 	}
 	return out
 }

@@ -170,8 +170,9 @@ func Parse(r io.Reader) (Result, error) {
 			case "function_call_output", "custom_tool_call_output":
 				output := outputText(p.Output)
 				e := capture.Event{At: at, Kind: capture.KindToolResult, Tool: &capture.Tool{Name: calls[p.CallID], Status: "ok"}, Text: output}
-				if denied(output) {
+				if kind := denial(output); kind != "" {
 					e.Kind, e.Tool.Status, e.Text = capture.KindDenial, "denied", ""
+					e.Attrs = map[string]string{"denial": kind}
 				}
 				emit(e)
 			}
@@ -224,13 +225,17 @@ func toUsage(u *usage) *capture.Usage {
 	return &capture.Usage{InputTokens: u.InputTokens, OutputTokens: u.OutputTokens, CacheReadTokens: u.CachedInputTokens, CacheWriteTokens: u.CacheWriteInputTokens}
 }
 
-func denied(output string) bool {
-	for _, marker := range []string{"rejected by user", "automatic approval review denied"} {
-		if strings.Contains(output, marker) {
-			return true
-		}
+// denial names who denied a tool call, as the Claude Code parser does: a person, or Codex's
+// automatic approval review, which steering does not count.
+func denial(output string) string {
+	switch {
+	case strings.Contains(output, "rejected by user"):
+		return "user-rejected"
+	case strings.Contains(output, "automatic approval review denied"):
+		return "auto-review"
+	default:
+		return ""
 	}
-	return false
 }
 
 func contentText(raw json.RawMessage) string {

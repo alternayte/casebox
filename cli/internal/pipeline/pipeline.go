@@ -30,6 +30,7 @@ type Repo struct {
 	Config   repo.Config
 	State    repo.State
 	Person   string // the identity mark of the developer
+	email    string // the developer's git user.email, to count their commits; never sent
 	redactor *capture.Redactor
 	marker   *capture.Marker
 }
@@ -53,7 +54,12 @@ func Open(ctx context.Context, dir string) (*Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return New(root, cfg, repo.Current(ctx, root), capture.Mark("email", email), authorNames(ctx, root))
+	r, err := New(root, cfg, repo.Current(ctx, root), capture.Mark("email", email), authorNames(ctx, root))
+	if err != nil {
+		return nil, err
+	}
+	r.email = email
+	return r, nil
 }
 
 // New builds a pipeline from parts, for the worker, which reads a mirror instead of a checkout.
@@ -65,8 +71,9 @@ func New(root string, cfg repo.Config, state repo.State, person string, names []
 	return &Repo{Root: root, Config: cfg, State: state, Person: person, redactor: redactor, marker: capture.NewMarker(names)}, nil
 }
 
-// Session fills in what the repository knows about a session.
-func (r *Repo) Session(s capture.Session) capture.Session {
+// Session fills in what the repository knows about a session: its harness at the start and, once
+// it has ended, how many commits the developer made.
+func (r *Repo) Session(ctx context.Context, s capture.Session) capture.Session {
 	s.Person = r.Person
 	if s.Repo == "" {
 		s.Repo = r.State.Repo
@@ -77,7 +84,61 @@ func (r *Repo) Session(s capture.Session) capture.Session {
 	if s.WorkItem == "" {
 		s.WorkItem = config.CurrentLink(r.Root)
 	}
+	if s.Harness == nil {
+		s.Harness = r.harness(ctx, s)
+	}
+	if s.Commits == nil {
+		s.Commits = r.Commits(ctx, s)
+	}
 	return s
+}
+
+// Commits counts the developer's commits in the repository from the session's start to 30
+// minutes after its end, or returns nil while the end is unknown.
+func (r *Repo) Commits(ctx context.Context, s capture.Session) *int {
+	if s.EndedAt == nil || r.email == "" || r.Root == "" {
+		return nil
+	}
+	n, err := repo.CommitsBetween(ctx, r.Root, r.email, s.StartedAt, s.EndedAt.Add(30*time.Minute))
+	if err != nil {
+		return nil
+	}
+	return &n
+}
+
+// The harness is read at the session's first commit, HEAD at start when the hooks saw it, else
+// the last commit on its branch before it started. It is cached per commit and glob list, since
+// many sessions start from the same commit and listing a large tree is slow.
+func (r *Repo) harness(ctx context.Context, s capture.Session) *capture.Harness {
+	if r.Root == "" {
+		return nil
+	}
+	commit := s.HeadStart
+	if commit == "" {
+		var err error
+		if commit, err = repo.CommitBefore(ctx, r.Root, s.Branch, s.StartedAt); err != nil {
+			return nil
+		}
+	}
+	globs := r.Config.HarnessGlobs()
+	path, err := config.Path("cache", "harness", hash(strings.Join(globs, "\n"))+"-"+commit+".json")
+	if err == nil {
+		var h capture.Harness
+		if data, err := os.ReadFile(path); err == nil && json.Unmarshal(data, &h) == nil {
+			return &h
+		}
+	}
+	h, err := repo.Harness(ctx, r.Root, commit, globs)
+	if err != nil {
+		return nil
+	}
+	if path != "" {
+		_ = os.MkdirAll(filepath.Dir(path), 0o700)
+		if data, err := json.Marshal(h); err == nil {
+			_ = os.WriteFile(path, data, 0o600)
+		}
+	}
+	return h
 }
 
 // Events redacts and marks every event, makes file paths relative to the repository, and keeps

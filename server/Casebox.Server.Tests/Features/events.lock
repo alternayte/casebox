@@ -10,6 +10,12 @@ stream org (Organisation)
   org.token_issued v1 { kind: string, name: string, tokenId: string }
   org.token_revoked v1 { tokenId: string }
 
+stream steering (SteeringState)
+  steering.classified v1 { confidence: float64, intent: enum{Correction=0, Direction=1, Clarification=2, Routine=3}, interventionId: string, model: string, prevention: enum{Instruction=0, Skill=1, ToolAccess=2, Verification=3, ClearerTicket=4, StrongerModel=5, Nothing=6}?, promptVersion: string, wentWrong: enum{MissedRequirement=0, BrokeConvention=1, WrongApproach=2, UnverifiedDone=3, WrongArea=4, OverEngineered=5, LackedDomainKnowledge=6, Environment=7, Other=8}?, wentWrongLabel: string? }
+  steering.observed v1 { at: date-time, interventionId: string, number: int32?, period: string, person: string, personMapped: bool, phase: enum{InSession=0, BeforeMerge=1, AfterMerge=2}, refs: { commentId: int64?, commits: [string]?, restartedBy: string?, seqs: [int64]? }, repo: string, ruleIntent: enum{Correction=0, Direction=1, Clarification=2, Routine=3}?, sessionId: string?, signal: enum{FollowUp=0, Interruption=1, Denial=2, Rewind=3, HumanEdit=4, Abandoned=5, Restarted=6, HumanRewrite=7, ReviewChange=8, CiFix=9, Revert=10, Fix=11}, text: string? pd(person) }
+  steering.relabeled v1 { by: string, intent: enum{Correction=0, Direction=1, Clarification=2, Routine=3}, interventionId: string, person: string, prevention: enum{Instruction=0, Skill=1, ToolAccess=2, Verification=3, ClearerTicket=4, StrongerModel=5, Nothing=6}?, wentWrong: enum{MissedRequirement=0, BrokeConvention=1, WrongApproach=2, UnverifiedDone=3, WrongArea=4, OverEngineered=5, LackedDomainKnowledge=6, Environment=7, Other=8}?, wentWrongLabel: string? }
+  steering.unclassified v1 { confidence: float64?, interventionId: string, model: string?, promptVersion: string?, reason: enum{NoText=0, LowConfidence=1, InvalidOutput=2, ModelError=3} }
+
 stream work_item (WorkItem)
   work_item.ci_observed v1 { at: date-time, check: string, conclusion: string, number: int32, repo: string, sha: string }
   work_item.fix_observed v1 { at: date-time, fixedBy: string, lines: int32, number: int32, repo: string, source: enum{Explicit=0, Branch=1, PullRequest=2, SameBranch=3, SameWorkItem=4} }

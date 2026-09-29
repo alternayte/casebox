@@ -101,7 +101,7 @@ func importTranscript(ctx context.Context, agent, path, cwd string) error {
 		return err
 	}
 	defer s.Close()
-	if err := s.Add(ctx, r.Session(parsed.Session), r.Events(parsed.Events, pipeline.Mode())); err != nil {
+	if err := s.Add(ctx, r.Session(ctx, parsed.Session), r.Events(parsed.Events, pipeline.Mode())); err != nil {
 		return err
 	}
 	return detach.Start("capture", "upload")
@@ -135,10 +135,12 @@ func backgroundUpload(ctx context.Context) error {
 
 func newImportCommand() *cobra.Command {
 	var days int
+	var wait time.Duration
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import past sessions from the session logs on this machine",
 		Long: "Import the Claude Code and Codex sessions of the last days that ran in this repository, and upload them.\n" +
+			"Then run steering detection, wait while a worker classifies the interventions, and print the report's headline.\n" +
 			"Running it again imports only what is new.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -191,10 +193,18 @@ func newImportCommand() *cobra.Command {
 			if res.Rejected > 0 {
 				fmt.Fprintf(out, "The server refused %d events; casebox doctor shows why.\n", res.Rejected)
 			}
-			return err
+			if err != nil {
+				return err
+			}
+			// The upload is done; a steering report that cannot be read yet is reported, not failed.
+			if err := steeringAfterImport(ctx, out, r.State.Repo, days, wait); err != nil {
+				fmt.Fprintf(out, "No steering report yet: %v\n", err)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().IntVar(&days, "days", 30, "how many days of history to import")
+	cmd.Flags().DurationVar(&wait, "wait", 10*time.Minute, "how long to wait for steering classification (0 skips waiting)")
 	return cmd
 }
 

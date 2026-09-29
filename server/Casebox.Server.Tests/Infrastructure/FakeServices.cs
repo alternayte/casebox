@@ -69,7 +69,7 @@ public sealed class FakeServices : IAsyncDisposable
         app.MapGet("/github/repos/{owner}/{name}/pulls/{n:int}/reviews", (string owner, string name, int n) => Results.Json(Repo($"{owner}/{name}").Pulls[n].Reviews));
         app.MapGet("/github/repos/{owner}/{name}/pulls/{n:int}/comments", (string owner, string name, int n) => Results.Json(Repo($"{owner}/{name}").Pulls[n].Comments));
         app.MapGet("/github/repos/{owner}/{name}/commits/{sha}/check-runs", (string owner, string name, string sha) =>
-            Results.Json(new { check_runs = Repo($"{owner}/{name}").Pulls.Values.Where(p => p.HeadSha == sha).SelectMany(p => p.Checks) }));
+            Results.Json(new { check_runs = Repo($"{owner}/{name}").Pulls.Values.SelectMany(p => p.Checks.Where(c => ((string?)c["head_sha"] ?? p.HeadSha) == sha)) }));
         app.MapGet("/github/repos/{owner}/{name}/commits/{sha}/pulls", (string owner, string name, string sha) =>
             Results.Json(Repo($"{owner}/{name}").Pulls.Values.Where(p => p.Commits.Any(c => (string)c["sha"]! == sha)).Select(p => new { number = p.Number })));
         app.MapGet("/github/repos/{owner}/{name}/commits", (string owner, string name) => Results.Json(Repo($"{owner}/{name}").DefaultBranchCommits));

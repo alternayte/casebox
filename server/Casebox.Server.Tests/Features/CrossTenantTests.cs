@@ -122,6 +122,14 @@ public sealed class CrossTenantTests(StackFixture stack)
         new("GET", "/api/v1/work-items/timeline?id=wi:jira:PAY-1", null, Caller.Admin),
         new("PUT", $"/api/v1/sessions/{a.SessionId}/work-item", new { workItem = "wi:jira:PAY-1" }, Caller.Admin),
         new("POST", "/api/v1/privacy/erasures", new { identity = "email:alpha-owner@example.com" }, Caller.Admin),
+        new("GET", $"/api/v1/steering/report?repo={Resources.Repo}&groupBy=agent", null, Caller.Admin),
+        new("GET", $"/api/v1/steering/interventions?wentWrong=broke_convention&repo={Resources.Repo}", null, Caller.Admin),
+        new("POST", "/api/v1/steering/relabel", new { @ref = "000000000000000000000000", intent = "direction" }, Caller.Admin),
+        new("GET", $"/api/v1/steering/status?repo={Resources.Repo}", null, Caller.Admin),
+        new("POST", "/api/v1/steering/refresh", new { repo = Resources.Repo }, Caller.Admin),
+        new("GET", "/api/v1/steering/agreement", null, Caller.Admin),
+        new("POST", "/worker/v1/steering/windows", new { stream = $"steering:session:{a.SessionId}", interventionIds = new[] { "e:1" }, taskFor = a.SessionId }, Caller.Worker),
+        new("GET", "/worker/v1/steering/examples", null, Caller.Worker),
         new("POST", "/v1/logs", new { resourceLogs = Array.Empty<object>() }, Caller.Ingest),
         new("POST", "/v1/metrics", new { resourceMetrics = Array.Empty<object>() }, Caller.Ingest),
     ];
@@ -140,7 +148,8 @@ public sealed class CrossTenantTests(StackFixture stack)
         var known = new[] { "api", "v1", "worker", "auth", "local", "oidc", "login", "logout", "csrf", "me", "methods", "device", "code", "approve", "token", "devices", "accounts", "role", "org", "settings",
             "workspaces", "repos", "recipe", "validation", "confirmation", "tokens", "jobs", "lease", "heartbeat", "complete", "fail", "blobs",
             "ingest", "config", "sessions", "logs", "metrics", "privacy", "erasures",
-            "integrations", "github", "jira", "work-items", "timeline", "work-item", "attributions" };
+            "integrations", "github", "jira", "work-items", "timeline", "work-item", "attributions",
+            "steering", "report", "interventions", "relabel", "status", "refresh", "agreement", "windows", "examples" };
         var normalized = new List<string>();
         foreach (var s in segments)
         {

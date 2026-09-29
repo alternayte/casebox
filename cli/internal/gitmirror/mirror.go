@@ -1,6 +1,6 @@
 // Package gitmirror keeps bare mirrors of repositories for the worker, with the extra refs Casebox
-// reads: Entire checkpoints and git-ai notes. The token comes from the worker's environment and
-// is passed per command, never written into the mirror's config.
+// reads: pull request heads, Entire checkpoints and git-ai notes. The token comes from the
+// worker's environment and is passed per command, never written into the mirror's config.
 package gitmirror
 
 import (
@@ -18,6 +18,7 @@ import (
 var Refspecs = []string{
 	"+refs/heads/*:refs/heads/*",
 	"+refs/tags/*:refs/tags/*",
+	"+refs/pull/*/head:refs/pull/*/head",
 	"+refs/entire/checkpoints/*:refs/entire/checkpoints/*",
 	"+refs/notes/ai:refs/notes/ai",
 }
@@ -43,7 +44,8 @@ func Open(ctx context.Context, root, repo, token string) (*Mirror, error) {
 	}
 	args := append([]string{"fetch", "--quiet", "--prune", m.URL}, Refspecs...)
 	if _, err := m.Git(ctx, args...); err != nil {
-		// A repository without Entire refs or notes still fetches; only the missing refs fail.
+		// A repository without pull request refs, Entire refs or notes still fetches; only the
+		// missing refs fail.
 		if _, err2 := m.Git(ctx, "fetch", "--quiet", "--prune", m.URL, Refspecs[0], Refspecs[1]); err2 != nil {
 			return nil, fmt.Errorf("fetch %s: %w", repo, err)
 		}
@@ -52,6 +54,12 @@ func Open(ctx context.Context, root, repo, token string) (*Mirror, error) {
 		}
 	}
 	return m, nil
+}
+
+// Fetch fetches refspecs from the repository's remote into the mirror.
+func (m *Mirror) Fetch(ctx context.Context, refspecs ...string) error {
+	_, err := m.Git(ctx, append([]string{"fetch", "--quiet", m.URL}, refspecs...)...)
+	return err
 }
 
 // Git runs a git command in the mirror and returns its standard output.

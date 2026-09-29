@@ -52,10 +52,10 @@ public sealed class JobQueue(NpgsqlDataSource dataSource, TimeProvider clock, IE
 
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO casebox.workers (org_id, worker_id, version, last_seen_at) VALUES (@Org, @Worker, @Version, @Now)
-            ON CONFLICT (org_id, worker_id) DO UPDATE SET version = EXCLUDED.version, last_seen_at = EXCLUDED.last_seen_at
+            INSERT INTO casebox.workers (org_id, worker_id, version, last_seen_at, kinds) VALUES (@Org, @Worker, @Version, @Now, @Kinds)
+            ON CONFLICT (org_id, worker_id) DO UPDATE SET version = EXCLUDED.version, last_seen_at = EXCLUDED.last_seen_at, kinds = EXCLUDED.kinds
             """,
-            new { Org = orgId, Worker = workerId, Version = version, Now = now }, transaction, cancellationToken: ct));
+            new { Org = orgId, Worker = workerId, Version = version, Now = now, Kinds = kinds.ToArray() }, transaction, cancellationToken: ct));
 
         await connection.ExecuteAsync(new CommandDefinition(
             """

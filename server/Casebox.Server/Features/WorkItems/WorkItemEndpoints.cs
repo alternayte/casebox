@@ -39,8 +39,21 @@ public static class WorkItemEndpoints
             var exists = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
                 "SELECT EXISTS (SELECT 1 FROM casebox.work_items WHERE org_id = @Org AND id = @Id)", new { Org = http.User.OrgId(), Id = workItem }, cancellationToken: http.RequestAborted));
             if (!exists) return Results.NotFound();
+            // The item's interventions join its timeline at their day, without text (docs/specs/steering.md).
             var rows = await connection.QueryAsync<(DateTime At, string Kind, string Detail)>(new CommandDefinition(
-                "SELECT at, kind, detail::text FROM casebox.work_item_timeline WHERE org_id = @Org AND work_item_id = @Id ORDER BY at, event_id",
+                """
+                SELECT at, kind, detail::text FROM (
+                    SELECT at, kind, detail, event_id::text AS tie FROM casebox.work_item_timeline WHERE org_id = @Org AND work_item_id = @Id
+                    UNION ALL
+                    SELECT date_trunc('day', f.at, 'UTC'), 'steering',
+                           jsonb_build_object('signal', f.signal, 'phase', f.phase, 'intent', f.intent, 'wentWrong', f.went_wrong, 'prevention', f.prevention, 'labelSource', f.label_source),
+                           f.ref
+                    FROM casebox.steering_facts f
+                    LEFT JOIN casebox.sessions s ON s.org_id = f.org_id AND s.id = f.session_id
+                    LEFT JOIN casebox.pull_requests p ON f.session_id IS NULL AND p.org_id = f.org_id AND p.repo = f.repo AND p.number = f.number
+                    WHERE f.org_id = @Org AND coalesce(s.work_item_id, p.work_item_id) = @Id) t
+                ORDER BY at, tie
+                """,
                 new { Org = http.User.OrgId(), Id = workItem }, cancellationToken: http.RequestAborted));
             return Results.Ok(rows.Select(r => new TimelineEntry(new DateTimeOffset(DateTime.SpecifyKind(r.At, DateTimeKind.Utc)), r.Kind, JsonDocument.Parse(r.Detail).RootElement.Clone())).ToList());
         });

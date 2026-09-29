@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/alternayte/casebox/cli/internal/analysis"
 	"github.com/alternayte/casebox/cli/internal/api"
 	"github.com/alternayte/casebox/cli/internal/buildinfo"
 	"github.com/alternayte/casebox/cli/internal/config"
@@ -22,7 +23,10 @@ func newWorkerCommand() *cobra.Command {
 		Short: "Run a worker",
 		Long: "Run a worker: it leases jobs from the server and runs them on this host.\n" +
 			"It reads its worker token from CASEBOX_WORKER_TOKEN, and a GitHub token for cloning from GITHUB_TOKEN.\n" +
-			"Model API keys stay in this host's environment; the server never sees them.",
+			"Model API keys stay in this host's environment; the server never sees them.\n" +
+			"Steering classification needs an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic or openai, any\n" +
+			"OpenAI-compatible API), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and CASEBOX_ANALYSIS_API_KEY\n" +
+			"(default ANTHROPIC_API_KEY or OPENAI_API_KEY).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			token := os.Getenv("CASEBOX_WORKER_TOKEN")
@@ -50,19 +54,35 @@ func newWorkerCommand() *cobra.Command {
 			}
 			client := api.New(server, token)
 			jobs := worker.RepoJobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
+			steer := worker.Steering{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Concurrency: 4}
+			handlers := map[string]worker.Handler{
+				"entire.fetch": jobs.Entire,
+				"gitai.fetch":  jobs.GitAI,
+				"steering.pr":  steer.PR,
+			}
+			// Only a worker with an analysis model leases classification jobs.
+			out := cmd.OutOrStdout()
+			model, err := analysis.FromEnv()
+			switch {
+			case err == nil:
+				steer.Model = analysis.New(model)
+				handlers["steering.classify"] = steer.Classify
+				fmt.Fprintf(out, "Analysis model: %s at %s; this worker classifies steering.\n", model, model.BaseURL)
+			case errors.Is(err, analysis.ErrNotConfigured):
+				fmt.Fprintln(out, "Analysis model: not configured, so this worker does not classify steering. Set CASEBOX_ANALYSIS_PROVIDER and CASEBOX_ANALYSIS_MODEL to enable it.")
+			default:
+				fmt.Fprintf(out, "Analysis model: %v. This worker does not classify steering.\n", err)
+			}
 			w := &worker.Worker{
-				Client:  client,
-				ID:      id,
-				Version: buildinfo.Version,
-				Log:     cmd.ErrOrStderr(),
-				Handlers: map[string]worker.Handler{
-					"entire.fetch": jobs.Entire,
-					"gitai.fetch":  jobs.GitAI,
-				},
+				Client:   client,
+				ID:       id,
+				Version:  buildinfo.Version,
+				Log:      cmd.ErrOrStderr(),
+				Handlers: handlers,
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			fmt.Fprintf(cmd.OutOrStdout(), "Worker %s is running against %s. Ctrl-C stops it.\n", id, server)
+			fmt.Fprintf(out, "Worker %s is running against %s. Ctrl-C stops it.\n", id, server)
 			if err := w.Run(ctx); err != nil && !errors.Is(err, ctx.Err()) {
 				return err
 			}

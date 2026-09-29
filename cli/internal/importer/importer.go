@@ -41,7 +41,7 @@ func Import(ctx context.Context, r *pipeline.Repo, s *spool.Spool, opts Options)
 		if !inside(r.Root, cwd) || session.StartedAt.Before(opts.Since) {
 			return nil
 		}
-		if err := s.Add(ctx, r.Session(session), r.Events(events, opts.Mode)); err != nil {
+		if err := s.Add(ctx, r.Session(ctx, session), r.Events(events, opts.Mode)); err != nil {
 			return err
 		}
 		sum.Sessions[session.Agent]++

@@ -142,7 +142,7 @@ public sealed class GitHubPoller(IServiceScopeFactory scopes, IntegrationStore i
         {
             var at = commit.GetProperty("commit").GetProperty("committer").GetProperty("date").GetDateTimeOffset();
             latestCommit = Max(latestCommit, at);
-            if (await reader.RevertAsync(client, repo, commit, ct) is not { } revert) continue;
+            if (await reader.RevertAsync(client, repo, commit, settings, ct) is not { } revert) continue;
             await publisher.PublishAsync(new PollMessage($"github:revert:{repo}@{revert.Sha}", GitHubMessages.Revert, orgId, revert), ct);
             reverts++;
         }

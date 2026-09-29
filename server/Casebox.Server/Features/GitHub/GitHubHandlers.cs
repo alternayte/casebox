@@ -41,8 +41,13 @@ public sealed class PullRequestHandler(Linker linker, Jobs.JobQueue jobs) : IInb
             VALUES (@Org, @Repo, @Number, @State, @Head, @Base, @Author, @Agent, @MergedAt, @MergeSha, @Updated, @Snapshot::jsonb)
             ON CONFLICT (org_id, repo, number) DO UPDATE SET state = EXCLUDED.state, head_ref = EXCLUDED.head_ref, base_ref = EXCLUDED.base_ref,
                 is_agent = pull_requests.is_agent OR EXCLUDED.is_agent, merged_at = EXCLUDED.merged_at, merge_sha = EXCLUDED.merge_sha,
-                updated_at = EXCLUDED.updated_at, snapshot = EXCLUDED.snapshot
-            WHERE pull_requests.updated_at <= EXCLUDED.updated_at
+                updated_at = EXCLUDED.updated_at, snapshot = EXCLUDED.snapshot, changed_at = now()
+            WHERE pull_requests.updated_at <= EXCLUDED.updated_at;
+            INSERT INTO casebox.pr_checks (org_id, repo, number, sha, name, conclusion, completed_at)
+            SELECT @Org, @Repo, @Number, c->>'headSha', c->>'name', c->>'conclusion', (c->>'completedAt')::timestamptz
+            FROM jsonb_array_elements(@Snapshot::jsonb->'checks') c
+            WHERE c->>'conclusion' IS NOT NULL AND c->>'completedAt' IS NOT NULL
+            ON CONFLICT DO NOTHING;
             """,
             new
             {
@@ -174,8 +179,20 @@ public sealed class RevertCommitHandler : IInboxHandler
         var revert = message.Payload.GetProperty("payload").Deserialize<RevertCommit>(GitHubJson.Options)!;
         if (revert.RevertedPr is not { } number) return;
         var repo = revert.Repo.ToLowerInvariant();
-        await PullRequestHandler.ObserveOnAsync(transaction.Connection!, transaction, store, message.Payload.GetProperty("org").GetString()!, repo, number, ct,
+        var org = message.Payload.GetProperty("org").GetString()!;
+        await PullRequestHandler.ObserveOnAsync(transaction.Connection!, transaction, store, org, repo, number, ct,
             w => WorkItemDecider.ObserveRevert(w, new WorkItemEvents.RevertObserved(repo, number, revert.Sha, revert.At)));
+
+        // A revert of an agent pull request is an after-merge correction, with or without a work item.
+        var isAgent = await transaction.Connection!.ExecuteScalarAsync<bool>(new CommandDefinition(
+            "SELECT EXISTS (SELECT 1 FROM casebox.pull_requests WHERE org_id = @Org AND repo = @Repo AND number = @Number AND is_agent AND merged_at IS NOT NULL)",
+            new { Org = org, Repo = repo, Number = number }, transaction, cancellationToken: ct));
+        if (!isAgent || revert.Author is not { Bot: false } author) return;
+        var (settings, _) = await store.Load<Orgs.Organisation>(Orgs.Organisation.StreamId, ct);
+        await store.Execute<Steering.SteeringState>(Steering.SteeringState.PullRequestStream(repo, number), s => Steering.SteeringDecider.Observe(s,
+            [new Steering.SteeringEvents.Observed($"revert:commit:{revert.Sha}", Steering.Signal.Revert, Steering.Phase.AfterMerge, revert.At, repo, null, number,
+                author.Token, author.Mapped, Capture.Identities.PeriodOf(settings.Settings.PseudonymPeriod, revert.At), revert.Message, Steering.Intent.Correction,
+                new Steering.SteeringRefs(Commits: [revert.Sha]))]), ct);
     }
 }
 

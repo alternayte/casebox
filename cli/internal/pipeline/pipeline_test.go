@@ -43,7 +43,7 @@ func TestThePromptModeDecidesWhatTextLeavesTheMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session := r.Session(capture.Session{ID: "codex:1", Agent: "codex", Source: "import", StartedAt: time.Now()})
+	session := r.Session(context.Background(), capture.Session{ID: "codex:1", Agent: "codex", Source: "import", StartedAt: time.Now()})
 	if session.Repo != "github.com/acme/app" || session.Person != "⟦cbx:email:dev@example.com⟧" {
 		t.Fatalf("session = %+v", session)
 	}
@@ -69,5 +69,43 @@ func TestThePromptModeDecidesWhatTextLeavesTheMachine(t *testing.T) {
 	}
 	if full := r.Events(events, ModeFull); !strings.Contains(full[1].Text, "file body") {
 		t.Fatalf("mode full dropped tool output")
+	}
+}
+
+// A session's commits are the developer's own, from its start to 30 minutes after its end; the
+// abandonment rate depends on this count.
+func TestASessionCountsTheDevelopersCommitsUntilHalfAnHourAfterItsEnd(t *testing.T) {
+	dir := enrolledRepo(t)
+	start := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	commit := func(email string, at time.Time) {
+		t.Helper()
+		cmd := exec.Command("git", "-C", dir, "-c", "user.email="+email, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "work")
+		date := at.Format(time.RFC3339)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git commit: %v %s", err, out)
+		}
+	}
+	commit("dev@example.com", start.Add(-10*time.Minute))
+	commit("dev@example.com", start.Add(20*time.Minute))
+	commit("other@example.com", start.Add(30*time.Minute))
+	commit("dev@example.com", start.Add(80*time.Minute))
+	commit("dev@example.com", start.Add(2*time.Hour))
+
+	r, err := Open(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := r.Session(context.Background(), capture.Session{ID: "codex:2", Agent: "codex", StartedAt: start})
+	if open.Commits != nil {
+		t.Fatalf("a session without an end has commits = %d, want unknown", *open.Commits)
+	}
+	if open.Harness == nil || len(open.Harness.Files) != 0 {
+		t.Fatalf("harness = %+v, want an empty harness read from the commit before the start", open.Harness)
+	}
+	end := start.Add(time.Hour)
+	ended := r.Session(context.Background(), capture.Session{ID: "codex:2", Agent: "codex", StartedAt: start, EndedAt: &end})
+	if ended.Commits == nil || *ended.Commits != 2 {
+		t.Fatalf("commits = %v, want 2", ended.Commits)
 	}
 }

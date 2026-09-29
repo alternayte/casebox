@@ -111,7 +111,11 @@ func handle(ctx context.Context, agent, event string, at time.Time, data []byte)
 	defer s.Close()
 
 	now := at.UTC()
-	session := r.Session(capture.Session{ID: agent + ":" + sessionID, Agent: agent, Source: "hook", StartedAt: now, Model: p.Model})
+	session := capture.Session{ID: agent + ":" + sessionID, Agent: agent, Source: "hook", StartedAt: now, Model: p.Model}
+	if act == actStart {
+		session.HeadStart = r.State.Head
+	}
+	session = r.Session(ctx, session)
 	mode := pipeline.Mode()
 	key := "hook:" + session.ID
 	var st state
@@ -126,7 +130,6 @@ func handle(ctx context.Context, agent, event string, at time.Time, data []byte)
 
 	switch act {
 	case actStart:
-		session.HeadStart = r.State.Head
 		err = add(capture.Event{Kind: capture.KindSessionStart})
 	case actPrompt:
 		// A file the agent touched that changed between the agent's stop and this prompt was
@@ -146,6 +149,7 @@ func handle(ctx context.Context, agent, event string, at time.Time, data []byte)
 		if act == actEnd {
 			end := now
 			session.EndedAt, session.HeadEnd = &end, repo.Current(ctx, r.Root).Head
+			session.Commits = r.Commits(ctx, session)
 			err = add(capture.Event{Kind: capture.KindSessionEnd, Attrs: map[string]string{"reason": p.Reason}})
 		}
 		// The transcript holds the conversation; importing it is slow, so it runs in the background.

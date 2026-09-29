@@ -19,6 +19,15 @@ type Session struct {
 	Source       string     `json:"source"`
 	WorkItem     string     `json:"workItem,omitempty"`
 	Person       string     `json:"person"`
+	Harness      *Harness   `json:"harness,omitempty"`
+	Commits      *int       `json:"commits,omitempty"` // the developer's commits from start to 30 minutes after the end
+}
+
+// Harness names the harness files at the session's start: Hash is the SHA-256 of the sorted
+// "<path> <blob sha>" lines of the files the harness globs match, Files their paths.
+type Harness struct {
+	Hash  string   `json:"hash"`
+	Files []string `json:"files"`
 }
 
 // Event kinds.

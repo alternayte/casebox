@@ -1,0 +1,3215 @@
+{
+  "version": 1,
+  "examples": [
+    {
+      "id": "follow-up-unverified-tests",
+      "window": {
+        "interventionId": "e:100",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "you didn't run the tests. go test ./payments fails now: TestClientTimeout expects the first retry after 100ms and you changed the base delay to 1s. run them before you say it's done.",
+        "before": {
+          "text": "Done! I added retries with exponential backoff to the payment client. The client now retries up to 5 times on 5xx and timeouts. Everything is in place.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "payments/client.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "payments/retry.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "You're right, I apologize. Running the tests now.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "unverified_done",
+        "prevention": "verification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-renamed-public-api",
+      "window": {
+        "interventionId": "e:101",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "why did you rename GetInvoice to FetchInvoice? I only asked for the currency field. three other services call that endpoint. put the old name back and keep changes to what the task asks.",
+        "before": {
+          "text": "I added the Currency field to Invoice and, while I was there, renamed GetInvoice to FetchInvoice and GetInvoices to ListInvoices for consistency with the rest of the codebase.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "billing/api.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "billing/invoice.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "billing/handlers.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Understood. Reverting the renames and keeping only the Currency field.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "billing/api.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-factory-for-one-currency",
+      "window": {
+        "interventionId": "e:102",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "this is way too much. we only have EUR. a single function formatAmount(cents int64) string is enough, delete the factory and the interface.",
+        "before": {
+          "text": "I've implemented currency formatting with a CurrencyFormatterFactory, an ICurrencyFormatter interface, and EUR, USD and GBP implementations, plus a registry so new currencies can be plugged in via configuration.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "money/formatter.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "money/factory.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "money/registry.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "money/eur.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "money/usd.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "money/gbp.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Simplifying to a single formatAmount function.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "money/format.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "over_engineered",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-answers-archived-question",
+      "window": {
+        "interventionId": "e:103",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "only active ones",
+        "before": {
+          "text": "Before I write the query: should the export include archived projects, or only active ones?",
+          "tools": []
+        },
+        "after": {
+          "text": "Got it, filtering on status = 'active'.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "export/projects.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "clarification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-next-index",
+      "window": {
+        "interventionId": "e:104",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "great. now add an index on orders.customer_id as well, in the same migration",
+        "before": {
+          "text": "The migration adding orders.shipped_at is written and `just test` passes (142 tests).",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "db/migrations/0042_shipped_at.sql"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Adding the index to 0042.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "db/migrations/0042_shipped_at.sql"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "direction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-yes-open-pr",
+      "window": {
+        "interventionId": "e:105",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "yes please",
+        "before": {
+          "text": "I've committed the change on branch fix/refund-rounding. Do you want me to open a pull request?",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Opening the pull request.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "routine",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-println-logging",
+      "window": {
+        "interventionId": "e:106",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "we don't print in this codebase. log with slog through logging.FromContext(ctx) so the request id is attached. fix all three places.",
+        "before": {
+          "text": "Added debug output so we can see why the webhook is rejected: fmt.Println(\"signature mismatch\", got, want) in the verifier and two more in the handler.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "webhooks/verify.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "webhooks/handler.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Switching to logging.FromContext(ctx).Debug.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "webhooks/verify.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "webhooks/handler.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-vat-b2b",
+      "window": {
+        "interventionId": "e:107",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "the ticket should have said this, sorry: for business customers shipping is VAT-exempt in our setup. only apply VAT to the line items when customer.Type == Business.",
+        "before": {
+          "text": "VAT is now calculated on the order total including shipping, at the customer's country rate. Tests updated.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "checkout/tax.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "checkout/tax_test.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Thanks for the context. Excluding shipping from the VAT base for business customers.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "checkout/tax.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "lacked_domain_knowledge",
+        "prevention": "clearer_ticket",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-postgres-not-running",
+      "window": {
+        "interventionId": "e:108",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "no, the pool is fine. postgres simply isn't running in your environment. undo the changes to db/pool.go and run `docker compose up -d db` before the integration tests.",
+        "before": {
+          "text": "The integration tests fail with `dial tcp 127.0.0.1:5432: connect: connection refused`. The pool seems to give up too early, so I rewrote db/pool.go to retry connections 10 times with a 3 second sleep.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error"
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "db/pool.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "after": {
+          "text": "Reverting db/pool.go and starting the database container.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "environment",
+        "prevention": "instruction",
+        "confidence": 1
+      },
+      "note": "The agent's wrong conclusion follows from a database that was not running; the cause is the environment."
+    },
+    {
+      "id": "follow-up-jira-no-access",
+      "window": {
+        "interventionId": "e:109",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "the discount is only for annual plans, PAY-311 says so in the acceptance criteria. you can't read Jira from there, I know - but monthly plans must not get it.",
+        "before": {
+          "text": "I couldn't open the Jira ticket, so I applied the 20% loyalty discount to all plans in the pricing service.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "pricing/discount.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Restricting the discount to annual plans.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "pricing/discount.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "tool_access",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-third-race-attempt",
+      "window": {
+        "interventionId": "e:110",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-haiku-4-5",
+        "human": "this is the third time you add a sleep. the race is between Close() and the flush goroutine; both must hold b.mu. I've explained this twice now.",
+        "before": {
+          "text": "I added a 50ms sleep in Close() before closing the channel so the flush goroutine has time to finish. The race detector run passed locally once.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "telemetry/batcher.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "I see. Guarding Close and flush with b.mu.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "telemetry/batcher.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "stronger_model",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-interval-merge-again",
+      "window": {
+        "interventionId": "e:111",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "codex",
+        "model": "gpt-5-mini",
+        "human": "still wrong. [1,3] and [3,5] must merge into [1,5]; touching ranges merge. same bug as the last two attempts.",
+        "before": {
+          "text": "Fixed the merge: I now sort the intervals and merge when next.Start < cur.End. All existing tests pass.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "schedule/merge.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Changing the comparison to <=.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "schedule/merge.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "stronger_model",
+        "confidence": 1
+      },
+      "note": "Hard: the repeated failure after two explanations points at the model; missed_requirement is a near miss."
+    },
+    {
+      "id": "follow-up-migration-by-hand",
+      "window": {
+        "interventionId": "e:112",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "migrations go through `just migrate new <name>`, which writes the up and down files and bumps the schema version. don't edit schema.sql directly; remove those edits and generate a migration.",
+        "before": {
+          "text": "I added the loyalty_points column directly to db/schema.sql and updated the model.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "db/schema.sql"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "customers/model.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Reverting schema.sql and generating a migration.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "skill",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-release-checklist",
+      "window": {
+        "interventionId": "e:113",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "a release is more than that: changelog entry, version in package.json, src/version.ts and the helm chart, then the tag. follow the release steps we use every time.",
+        "before": {
+          "text": "Bumped the version to 2.8.0 in package.json. Ready to release.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "package.json"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Updating the changelog, version.ts and Chart.yaml.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "CHANGELOG.md"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "src/version.ts"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "deploy/chart/Chart.yaml"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "skill",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-gpl-copy",
+      "window": {
+        "interventionId": "e:114",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "you can't paste code from that GPL library into our proprietary repo, that's a licensing problem. remove it and write the parser yourself.",
+        "before": {
+          "text": "I took the tokenizer from the gpl-licensed `fastcsv` project and adapted it into internal/csv/tokenizer.go, keeping their comments.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "internal/csv/tokenizer.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Removing the copied tokenizer and writing our own.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "internal/csv/tokenizer.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "other",
+        "prevention": "instruction",
+        "confidence": 1,
+        "wentWrongLabel": "copied code with incompatible license"
+      }
+    },
+    {
+      "id": "follow-up-snapshot-question",
+      "window": {
+        "interventionId": "e:115",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "the new output is right, the old snapshot had the trailing comma bug. update it.",
+        "before": {
+          "text": "TestRenderInvoice fails because the snapshot differs: the new output has no trailing comma after the last line item. Should I update the snapshot, or is the new output wrong?",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "after": {
+          "text": "Updating the snapshot.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "clarification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-which-queue",
+      "window": {
+        "interventionId": "e:116",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "cursor-cli",
+        "model": "composer-1",
+        "human": "use the existing emails queue, same as password resets",
+        "before": {
+          "text": "I can send the receipt synchronously in the request, or enqueue it. Which queue should receipts go to?",
+          "tools": []
+        },
+        "after": {
+          "text": "Enqueuing on the emails queue.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "receipts/send.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "clarification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-looks-good-commit",
+      "window": {
+        "interventionId": "e:117",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "looks good, commit it",
+        "before": {
+          "text": "The retry test now passes and golangci-lint is clean. Here is the diff summary: 2 files changed, 34 insertions.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Committed as 'payments: retry idempotent requests'.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "routine",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-continue",
+      "window": {
+        "interventionId": "e:118",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "codex",
+        "model": "gpt-5-codex",
+        "human": "continue",
+        "before": {
+          "text": "I've finished step 2 of 4 of the plan (the repository layer). Next I'll write the HTTP handlers. Shall I continue?",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "orders/repo.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Writing the handlers.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "orders/http.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "routine",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-refunds-too",
+      "window": {
+        "interventionId": "e:119",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "nice. let's handle refunds the same way, in a separate function",
+        "before": {
+          "text": "Partial captures now go through the ledger with an idempotency key; tests pass.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "ledger/capture.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Adding recordRefund with the same idempotency scheme.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "ledger/refund.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "direction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-monthly-not-weekly",
+      "window": {
+        "interventionId": "e:120",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "hmm, not quite what I meant. I wanted the totals per month, not per week. my description was vague, sorry.",
+        "before": {
+          "text": "The report now groups revenue per ISO week and shows a total row.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "reports/revenue.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Switching the grouping to calendar months.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "reports/revenue.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "clearer_ticket",
+        "confidence": 1
+      },
+      "note": "Hard: the person admits the request was vague, so the prevention is the ticket."
+    },
+    {
+      "id": "follow-up-empty-input",
+      "window": {
+        "interventionId": "e:121",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "it panics on an empty file: index out of range in parseHeader. handle empty input and add a test for it.",
+        "before": {
+          "text": "The CSV importer is finished and handles quoted fields and CRLF line endings.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "importer/csv.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Adding an empty-input check and a test.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "importer/csv.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "importer/csv_test.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "unverified_done",
+        "prevention": "verification",
+        "confidence": 1
+      },
+      "note": "Hard: it reads as new scope, but the agent shipped a crash on an obvious input and never ran it."
+    },
+    {
+      "id": "follow-up-docs-no",
+      "window": {
+        "interventionId": "e:122",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "no, not needed, the docs are generated from the openapi file",
+        "before": {
+          "text": "The endpoint is added. Should I also update docs/api.md?",
+          "tools": []
+        },
+        "after": {
+          "text": "Understood, leaving the docs.",
+          "tools": []
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "clarification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "interrupt-wrong-service",
+      "window": {
+        "interventionId": "e:123",
+        "signal": "interruption",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "stop, wrong service. the bug is in billing-worker, not billing-api. my fault, I should have said which one.",
+        "before": {
+          "text": "I found the retry loop in billing-api/internal/jobs/charge.go and I'm refactoring it now.",
+          "tools": [
+            {
+              "name": "Read",
+              "status": "ok",
+              "files": [
+                "billing-api/internal/jobs/charge.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "billing-api/internal/jobs/charge.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Switching to billing-worker.",
+          "tools": [
+            {
+              "name": "Read",
+              "status": "ok",
+              "files": [
+                "billing-worker/charge/loop.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "clearer_ticket",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "interrupt-psycopg-build",
+      "window": {
+        "interventionId": "e:124",
+        "signal": "interruption",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "stop. psycopg2 doesn't build on these arm macs, use psycopg2-binary for local dev like the README says",
+        "before": {
+          "text": "The build of psycopg2 failed again with `pg_config executable not found`. I'll install PostgreSQL from source into /usr/local and retry.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error"
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "after": {
+          "text": "Switching requirements-dev.txt to psycopg2-binary.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "requirements-dev.txt"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "environment",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "interrupt-rewrite-parser",
+      "window": {
+        "interventionId": "e:125",
+        "signal": "interruption",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "stop. don't rewrite the parser. the bug is the off-by-one in readToken, that's all",
+        "before": {
+          "text": "The tokenizer is hard to follow, so I'm rewriting the parser as a recursive descent parser with a proper AST. This will also make future changes easier.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "query/parser.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "query/ast.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Reverting and fixing readToken's bounds check.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "query/lexer.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "instruction",
+        "confidence": 1
+      },
+      "note": "Hard: over_engineered is close; the person objects to the approach to a one-line bug."
+    },
+    {
+      "id": "interrupt-add-request-id",
+      "window": {
+        "interventionId": "e:126",
+        "signal": "interruption",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "wait, before you go on: also put the request id in every log line of the new handler",
+        "before": {
+          "text": "Now wiring the new /v2/orders handler into the router.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/router.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Adding the request id to the handler's logger.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/orders_v2.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "direction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "interrupt-no-text-then-prompt",
+      "window": {
+        "interventionId": "e:127",
+        "signal": "interruption",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "codex",
+        "model": "gpt-5-codex",
+        "human": "you're deleting the fixtures other tests use. keep testdata/orders.json, only change your new test.",
+        "before": {
+          "text": "Cleaning up: removing unused test fixtures.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error",
+              "files": [
+                "testdata/orders.json",
+                "testdata/customers.json"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Restoring the fixtures.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "verification",
+        "confidence": 1
+      },
+      "note": "Hard: a test run would have shown the fixtures in use; instruction is a defensible second choice."
+    },
+    {
+      "id": "denial-shared-dev-db",
+      "window": {
+        "interventionId": "e:128",
+        "signal": "denial",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "no. never run migrations against the shared dev database. use the local one from docker compose.",
+        "before": {
+          "text": "Applying the migration to the dev database.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "denied"
+            }
+          ]
+        },
+        "after": {
+          "text": "Understood. Running it against the local database instead.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "denial-new-dependency",
+      "window": {
+        "interventionId": "e:129",
+        "signal": "denial",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "cursor-cli",
+        "model": "composer-1",
+        "human": "we don't add dependencies without asking. we already have date-fns, use that.",
+        "before": {
+          "text": "I'll add moment.js to parse the dates.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "denied"
+            }
+          ]
+        },
+        "after": {
+          "text": "Using date-fns instead.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "web/src/lib/dates.ts"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "denial-prod-tfvars",
+      "window": {
+        "interventionId": "e:130",
+        "signal": "denial",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "don't touch prod infra from a feature branch",
+        "before": {
+          "text": "To enable the flag everywhere I'll also update infra/prod/terraform.tfvars.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "denied",
+              "files": [
+                "infra/prod/terraform.tfvars"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Leaving the prod configuration alone.",
+          "tools": []
+        },
+        "files": [
+          "infra/prod/terraform.tfvars"
+        ],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "rewind-keep-in-handler",
+      "window": {
+        "interventionId": "e:131",
+        "signal": "rewind",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "let's try that again. keep the change inside the handler; the middleware is shared by every route.",
+        "before": {
+          "text": "I added the tenant check to the auth middleware so every request is covered.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/middleware/auth.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Adding the tenant check in the export handler only.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/export.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "rewind-csv-first",
+      "window": {
+        "interventionId": "e:132",
+        "signal": "rewind",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "go back. let's do the CSV export first and leave PDF for later",
+        "before": {
+          "text": "I started with the PDF export: added a template and the renderer.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "export/pdf.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Starting with CSV.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "export/csv.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "direction",
+        "confidence": 1
+      },
+      "note": "Hard: a rewind, yet the person only reorders the work; nothing the agent did was wrong."
+    },
+    {
+      "id": "rewind-mocked-db",
+      "window": {
+        "interventionId": "e:133",
+        "signal": "rewind",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "undo that. we don't mock the database in this repo, integration tests run against the testcontainer postgres. write it that way.",
+        "before": {
+          "text": "I wrote the tests with a mocked repository using gomock.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "orders/repo_mock.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "orders/service_test.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Rewriting the tests against the Postgres test container.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "orders/service_test.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "human-edit-flag-then-banner",
+      "window": {
+        "interventionId": "e:134",
+        "signal": "human_edit",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "I turned the flag on in feature_flags.yaml. now wire the new banner to it",
+        "before": {
+          "text": "The banner component is done and has a story.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "web/src/components/Banner.tsx"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Reading the flag in the layout.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "web/src/app/layout.tsx"
+              ]
+            }
+          ]
+        },
+        "files": [
+          "config/feature_flags.yaml"
+        ],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "direction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "human-edit-money-rounding",
+      "window": {
+        "interventionId": "e:135",
+        "signal": "human_edit",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "I fixed the rounding in Price.tsx myself. you used Math.round on floats again; use the money helpers in lib/money for anything with cents.",
+        "before": {
+          "text": "Prices now show with two decimals using Math.round(price * 100) / 100.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "web/src/components/Price.tsx"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Switching the other components to lib/money as well.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "web/src/components/Cart.tsx"
+              ]
+            }
+          ]
+        },
+        "files": [
+          "web/src/components/Price.tsx"
+        ],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "human-edit-generated-client",
+      "window": {
+        "interventionId": "e:136",
+        "signal": "human_edit",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "I reverted your edits in api/gen. that code is generated; change openapi.yaml and run `just gen`.",
+        "before": {
+          "text": "Added the discount field to the generated client in api/gen/client.go and api/gen/models.go.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/gen/client.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/gen/models.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Editing openapi.yaml and regenerating.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/openapi.yaml"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [
+          "api/gen/client.go",
+          "api/gen/models.go"
+        ],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "restarted-stronger-model",
+      "window": {
+        "interventionId": "e:137",
+        "signal": "restarted",
+        "phase": "in_session",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-haiku-4-5",
+        "human": null,
+        "before": {
+          "text": "I'm unable to resolve the type error: `cannot use T (type parameter) as comparable`. I've tried four different constraint definitions; each fails differently.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "pkg/cache/lru.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "pkg/cache/lru.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "stronger_model",
+        "confidence": 1
+      },
+      "note": "The person dropped the session and restarted with a larger model."
+    },
+    {
+      "id": "restarted-structure-only-build",
+      "window": {
+        "interventionId": "e:138",
+        "signal": "restarted",
+        "phase": "in_session",
+        "ruleIntent": "correction",
+        "agent": "codex",
+        "model": "gpt-5-codex",
+        "human": null,
+        "before": {
+          "text": "",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error"
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            },
+            {
+              "name": "Read",
+              "status": "ok",
+              "files": [
+                "Makefile"
+              ]
+            },
+            {
+              "name": "Read",
+              "status": "ok",
+              "files": [
+                "docker-compose.yml"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            },
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "environment",
+        "prevention": "nothing",
+        "confidence": 1
+      },
+      "note": "Prompt mode off: structure only. Hard: repeated failing commands around the build setup suggest the environment."
+    },
+    {
+      "id": "restarted-structure-only-sprawl",
+      "window": {
+        "interventionId": "e:139",
+        "signal": "restarted",
+        "phase": "in_session",
+        "ruleIntent": "correction",
+        "agent": "cursor-cli",
+        "model": "composer-1",
+        "human": null,
+        "before": {
+          "text": "",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/orders.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/customers.go"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "web/src/app/page.tsx"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "infra/k8s/deploy.yaml"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "db/schema.sql"
+              ]
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "README.md"
+              ]
+            }
+          ]
+        },
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "clearer_ticket",
+        "confidence": 1
+      },
+      "note": "Prompt mode off: structure only. Hard: edits across unrelated layers in one turn, then a restart."
+    },
+    {
+      "id": "rewrite-plugin-registry",
+      "window": {
+        "interventionId": "c:9a1bd377439d",
+        "signal": "human_rewrite",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "9a1bd377439dc582ccd4c29bf259b197ec90b7f8"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "9a1bd377439dc582ccd4c29bf259b197ec90b7f8",
+          "message": "simplify export: replace the plugin registry with a switch\n\nWe have two formats. The registry, the interface and the init-time registration are not needed.",
+          "diff": "diff --git a/export/registry.go b/export/registry.go\ndeleted file mode 100644\n--- a/export/registry.go\n+++ /dev/null\n@@ -1,24 +0,0 @@\n-package export\n-\n-// Exporter writes one format.\n-type Exporter interface {\n-\tName() string\n-\tWrite(w io.Writer, rows []Row) error\n-}\n-\n-var registry = map[string]Exporter{}\n-\n-// Register adds an exporter; formats call it from init.\n-func Register(e Exporter) {\n-\tif _, dup := registry[e.Name()]; dup {\n-\t\tpanic(\"duplicate exporter \" + e.Name())\n-\t}\n-\tregistry[e.Name()] = e\n-}\ndiff --git a/export/export.go b/export/export.go\n--- a/export/export.go\n+++ b/export/export.go\n@@ -8,9 +8,12 @@ func Export(w io.Writer, format string, rows []Row) error {\n-\te, ok := registry[format]\n-\tif !ok {\n-\t\treturn fmt.Errorf(\"unknown format %q\", format)\n-\t}\n-\treturn e.Write(w, rows)\n+\tswitch format {\n+\tcase \"csv\":\n+\t\treturn writeCSV(w, rows)\n+\tcase \"json\":\n+\t\treturn writeJSON(w, rows)\n+\t}\n+\treturn fmt.Errorf(\"unknown format %q\", format)\n }\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "over_engineered",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "rewrite-error-wrapping",
+      "window": {
+        "interventionId": "c:2e8790bc495a",
+        "signal": "human_rewrite",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "2e8790bc495ac3f68003b10e068bf18bebcd0083"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "2e8790bc495ac3f68003b10e068bf18bebcd0083",
+          "message": "orders: wrap errors with %w like the rest of the service",
+          "diff": "diff --git a/orders/service.go b/orders/service.go\n--- a/orders/service.go\n+++ b/orders/service.go\n@@ -41,7 +41,7 @@ func (s *Service) Place(ctx context.Context, o Order) error {\n \tif err := s.repo.Insert(ctx, o); err != nil {\n-\t\treturn errors.New(\"insert failed: \" + err.Error())\n+\t\treturn fmt.Errorf(\"place order %s: %w\", o.ID, err)\n \t}\n@@ -58,7 +58,7 @@ func (s *Service) Cancel(ctx context.Context, id string) error {\n \tif err := s.repo.SetStatus(ctx, id, StatusCancelled); err != nil {\n-\t\treturn errors.New(\"cancel failed: \" + err.Error())\n+\t\treturn fmt.Errorf(\"cancel order %s: %w\", id, err)\n \t}\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "rewrite-bankers-rounding",
+      "window": {
+        "interventionId": "c:a0176e604564",
+        "signal": "human_rewrite",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "a0176e604564853d0539fd77efcacedb6f33fa8a"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "a0176e604564853d0539fd77efcacedb6f33fa8a",
+          "message": "tax: round half to even per line, as the tax office requires",
+          "diff": "diff --git a/checkout/tax.go b/checkout/tax.go\n--- a/checkout/tax.go\n+++ b/checkout/tax.go\n@@ -12,10 +12,12 @@ func Tax(lines []Line, rate decimal.Decimal) decimal.Decimal {\n-\tvar net decimal.Decimal\n-\tfor _, l := range lines {\n-\t\tnet = net.Add(l.Net)\n-\t}\n-\treturn net.Mul(rate).Round(2)\n+\t// Tax is rounded per line, half to even, and then summed (tax office rule since 2024).\n+\tvar tax decimal.Decimal\n+\tfor _, l := range lines {\n+\t\ttax = tax.Add(l.Net.Mul(rate).RoundBank(2))\n+\t}\n+\treturn tax\n }\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "lacked_domain_knowledge",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "rewrite-n-plus-one",
+      "window": {
+        "interventionId": "c:b05bfdf33612",
+        "signal": "human_rewrite",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "b05bfdf3361275c7de43fc2f20703aa16f42a88b"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "b05bfdf3361275c7de43fc2f20703aa16f42a88b",
+          "message": "customers: load orders with one join instead of a query per customer",
+          "diff": "diff --git a/customers/list.go b/customers/list.go\n--- a/customers/list.go\n+++ b/customers/list.go\n@@ -20,16 +20,11 @@ func (r *Repo) ListWithOrders(ctx context.Context) ([]Customer, error) {\n-\tcustomers, err := r.list(ctx)\n-\tif err != nil {\n-\t\treturn nil, err\n-\t}\n-\tfor i := range customers {\n-\t\torders, err := r.ordersFor(ctx, customers[i].ID)\n-\t\tif err != nil {\n-\t\t\treturn nil, err\n-\t\t}\n-\t\tcustomers[i].Orders = orders\n-\t}\n-\treturn customers, nil\n+\trows, err := r.db.QueryContext(ctx, `\n+\t\tSELECT c.id, c.name, o.id, o.total\n+\t\tFROM customers c LEFT JOIN orders o ON o.customer_id = c.id\n+\t\tORDER BY c.id`)\n+\tif err != nil {\n+\t\treturn nil, err\n+\t}\n+\treturn scanCustomersWithOrders(rows)\n }\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "stronger_model",
+        "confidence": 1
+      },
+      "note": "Hard: a query per customer is a classic approach error; the fix needs no rule, only better judgement."
+    },
+    {
+      "id": "rewrite-structure-only-clock",
+      "window": {
+        "interventionId": "c:506ce45cd697",
+        "signal": "human_rewrite",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "506ce45cd697f32343b10dbbeb2901c7766ac61e"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "506ce45cd697f32343b10dbbeb2901c7766ac61e",
+          "message": "wip",
+          "diff": "diff --git a/subscriptions/renew.go b/subscriptions/renew.go\n--- a/subscriptions/renew.go\n+++ b/subscriptions/renew.go\n@@ -15,7 +15,7 @@ func (s *Service) DueForRenewal(ctx context.Context) ([]Subscription, error) {\n-\tnow := time.Now()\n+\tnow := s.clock.Now()\n \treturn s.repo.EndingBefore(ctx, now.Add(72*time.Hour))\n }\ndiff --git a/subscriptions/renew_test.go b/subscriptions/renew_test.go\n--- a/subscriptions/renew_test.go\n+++ b/subscriptions/renew_test.go\n@@ -9,8 +9,8 @@ func TestDueForRenewal(t *testing.T) {\n-\t// flaky around midnight\n-\ttime.Sleep(10 * time.Millisecond)\n-\tsvc := NewService(repo)\n+\tclock := clocktest.At(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))\n+\tsvc := NewService(repo, clock)\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "instruction",
+        "confidence": 1
+      },
+      "note": "Prompt mode off: the diff alone. The service already takes an injected clock; the agent called time.Now()."
+    },
+    {
+      "id": "review-integration-test-name",
+      "window": {
+        "interventionId": "c:c0541bb17e85",
+        "signal": "review_change",
+        "phase": "before_merge",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "Tests that need the database go in *_integration_test.go with the integration build tag, otherwise `go test ./...` fails on machines without Docker.",
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "c0541bb17e8516535337336b74572bfe4fa9a767"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "c0541bb17e8516535337336b74572bfe4fa9a767",
+          "message": "rename db tests to *_integration_test.go",
+          "diff": "diff --git a/orders/repo_test.go b/orders/repo_integration_test.go\nsimilarity index 96%\nrename from orders/repo_test.go\nrename to orders/repo_integration_test.go\n--- a/orders/repo_test.go\n+++ b/orders/repo_integration_test.go\n@@ -1,3 +1,5 @@\n+//go:build integration\n+\n package orders\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "review-invoice-gaps",
+      "window": {
+        "interventionId": "c:e23c949a9558",
+        "signal": "review_change",
+        "phase": "before_merge",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "Invoice numbers must not have gaps; a sequence skips values on rollback. This rule should really be written down for the agents.",
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "e23c949a9558946fb118b6101bb46f8c2978dd35"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "e23c949a9558946fb118b6101bb46f8c2978dd35",
+          "message": "invoices: allocate numbers from the counter table inside the transaction",
+          "diff": "diff --git a/invoices/number.go b/invoices/number.go\n--- a/invoices/number.go\n+++ b/invoices/number.go\n@@ -9,6 +9,12 @@ func (r *Repo) NextNumber(ctx context.Context, tx *sql.Tx) (int64, error) {\n-\tvar n int64\n-\terr := tx.QueryRowContext(ctx, `SELECT nextval('invoice_numbers')`).Scan(&n)\n-\treturn n, err\n+\t// Invoice numbers must have no gaps (German GoBD). A sequence skips numbers on rollback,\n+\t// so the counter row is locked and incremented inside the invoice's transaction.\n+\tvar n int64\n+\terr := tx.QueryRowContext(ctx,\n+\t\t`UPDATE invoice_counter SET last = last + 1 WHERE year = $1 RETURNING last`, time.Now().Year()).Scan(&n)\n+\treturn n, err\n }\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "lacked_domain_knowledge",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "review-missing-header-row",
+      "window": {
+        "interventionId": "c:a77c414587da",
+        "signal": "review_change",
+        "phase": "before_merge",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "The acceptance criteria say the file starts with a header row, and it doesn't. A test that opens the output in the import tool would have caught this.",
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "a77c414587da7474b6504d63e36f8cac85738be0"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "a77c414587da7474b6504d63e36f8cac85738be0",
+          "message": "export: write the header row",
+          "diff": "diff --git a/export/csv.go b/export/csv.go\n--- a/export/csv.go\n+++ b/export/csv.go\n@@ -11,6 +11,9 @@ func writeCSV(w io.Writer, rows []Row) error {\n \tcw := csv.NewWriter(w)\n+\tif err := cw.Write([]string{\"date\", \"customer\", \"amount\", \"currency\"}); err != nil {\n+\t\treturn err\n+\t}\n \tfor _, r := range rows {\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "verification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "review-add-metric",
+      "window": {
+        "interventionId": "c:66c1050b673e",
+        "signal": "review_change",
+        "phase": "before_merge",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "Looks good. Could you also add a counter for skipped records? Would be nice on the dashboard.",
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "66c1050b673e7b10ed0bbed032f9719f7252e36e"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "66c1050b673e7b10ed0bbed032f9719f7252e36e",
+          "message": "sync: count skipped records",
+          "diff": "diff --git a/sync/run.go b/sync/run.go\n--- a/sync/run.go\n+++ b/sync/run.go\n@@ -30,6 +30,7 @@ func (s *Syncer) Run(ctx context.Context) error {\n \t\tif rec.Deleted {\n+\t\t\tskipped.Inc()\n \t\t\tcontinue\n \t\t}\n"
+        }
+      ],
+      "gold": {
+        "intent": "direction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "review-typo-in-copy",
+      "window": {
+        "interventionId": "c:6130447792f2",
+        "signal": "review_change",
+        "phase": "before_merge",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "typo: recieved, havent",
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "6130447792f2552f233589e06521fdb05a93c7d3"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "6130447792f2552f233589e06521fdb05a93c7d3",
+          "message": "fix typo in the empty state",
+          "diff": "diff --git a/web/src/pages/Orders.tsx b/web/src/pages/Orders.tsx\n--- a/web/src/pages/Orders.tsx\n+++ b/web/src/pages/Orders.tsx\n@@ -44,7 +44,7 @@ export function Orders() {\n-      <p>You havent recieved any orders yet.</p>\n+      <p>You haven't received any orders yet.</p>\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "other",
+        "prevention": "verification",
+        "confidence": 1,
+        "wentWrongLabel": "typos in user-facing text"
+      },
+      "note": "Hard: a spell check in CI is the natural prevention; other with a short label."
+    },
+    {
+      "id": "review-rename-for-question",
+      "window": {
+        "interventionId": "c:04339a83afd7",
+        "signal": "review_change",
+        "phase": "before_merge",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "Why 30 seconds?",
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "04339a83afd746807e445210d97af38d545fe355"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "04339a83afd746807e445210d97af38d545fe355",
+          "message": "billing: name the constant after its purpose",
+          "diff": "diff --git a/billing/retry.go b/billing/retry.go\n--- a/billing/retry.go\n+++ b/billing/retry.go\n@@ -5,7 +5,8 @@ package billing\n-const timeout = 30 * time.Second\n+// The card network gives up after 30 seconds; waiting longer only holds the connection.\n+const cardNetworkTimeout = 30 * time.Second\n"
+        }
+      ],
+      "gold": {
+        "intent": "clarification",
+        "confidence": 1
+      },
+      "note": "Hard: the reviewer asked a question and the answer landed as a comment; nothing was wrong."
+    },
+    {
+      "id": "ci-fix-snapshot-not-run",
+      "window": {
+        "interventionId": "c:0e5a3e4fd845",
+        "signal": "ci_fix",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "0e5a3e4fd84562423abe02c4bc5d7e844999ca8b"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "0e5a3e4fd84562423abe02c4bc5d7e844999ca8b",
+          "message": "fix: update the invoice snapshot the change broke\n\nThe PR was pushed without running the tests.",
+          "diff": "diff --git a/invoices/testdata/invoice.golden b/invoices/testdata/invoice.golden\n--- a/invoices/testdata/invoice.golden\n+++ b/invoices/testdata/invoice.golden\n@@ -12,3 +12,3 @@\n-Total:        119.00 EUR\n+Total (gross): 119.00 EUR\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "unverified_done",
+        "prevention": "verification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ci-fix-linter-upgrade",
+      "window": {
+        "interventionId": "c:0ab073fe70a3",
+        "signal": "ci_fix",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "0ab073fe70a326aa23f150c7f038ef721ef2dea8"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "0ab073fe70a326aa23f150c7f038ef721ef2dea8",
+          "message": "ci: pin golangci-lint to v1.61\n\nThe runner image upgraded the linter overnight and a new default check fails on code that has not changed. Nothing in this PR is wrong.",
+          "diff": "diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml\n--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n@@ -30,7 +30,7 @@ jobs:\n       - uses: golangci/golangci-lint-action@v6\n         with:\n-          version: latest\n+          version: v1.61.0\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "environment",
+        "prevention": "nothing",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "ci-fix-gofmt",
+      "window": {
+        "interventionId": "c:2a5f9879d6ca",
+        "signal": "ci_fix",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "2a5f9879d6cab13bcaa56fa27dedb5132faf62ff"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "2a5f9879d6cab13bcaa56fa27dedb5132faf62ff",
+          "message": "gofmt",
+          "diff": "diff --git a/orders/http.go b/orders/http.go\n--- a/orders/http.go\n+++ b/orders/http.go\n@@ -18,8 +18,8 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {\n-    id := r.PathValue(\"id\")\n-    order, err := h.svc.Get(r.Context(), id)\n+\tid := r.PathValue(\"id\")\n+\torder, err := h.svc.Get(r.Context(), id)\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "verification",
+        "confidence": 1
+      },
+      "note": "Prompt mode off style: a one-word message and a formatting diff; running the formatter would have caught it."
+    },
+    {
+      "id": "ci-fix-missing-migration",
+      "window": {
+        "interventionId": "c:30d49efb9f0d",
+        "signal": "ci_fix",
+        "phase": "before_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "30d49efb9f0d1029780e7c10001e50941f089f7a"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "30d49efb9f0d1029780e7c10001e50941f089f7a",
+          "message": "add the missing migration for loyalty_points",
+          "diff": "diff --git a/db/migrations/0043_loyalty_points.up.sql b/db/migrations/0043_loyalty_points.up.sql\nnew file mode 100644\n--- /dev/null\n+++ b/db/migrations/0043_loyalty_points.up.sql\n@@ -0,0 +1 @@\n+ALTER TABLE customers ADD COLUMN loyalty_points integer NOT NULL DEFAULT 0;\ndiff --git a/db/migrations/0043_loyalty_points.down.sql b/db/migrations/0043_loyalty_points.down.sql\nnew file mode 100644\n--- /dev/null\n+++ b/db/migrations/0043_loyalty_points.down.sql\n@@ -0,0 +1 @@\n+ALTER TABLE customers DROP COLUMN loyalty_points;\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "skill",
+        "confidence": 1
+      },
+      "note": "Hard: the agent changed the model without the migration the repo's procedure requires."
+    },
+    {
+      "id": "revert-launch-delayed",
+      "window": {
+        "interventionId": "c:a90337e049fd",
+        "signal": "revert",
+        "phase": "after_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "a90337e049fd2d1fd1d335e6cc95d1bd32c969dd"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "a90337e049fd2d1fd1d335e6cc95d1bd32c969dd",
+          "message": "Revert \"Enable the new checkout flow for all customers\"\n\nThis reverts commit 4f1c2d9. Marketing moved the launch to Monday; the code is fine and will be re-applied then.",
+          "diff": "diff --git a/config/flags.yaml b/config/flags.yaml\n--- a/config/flags.yaml\n+++ b/config/flags.yaml\n@@ -3,1 +3,1 @@\n-new_checkout: 100\n+new_checkout: 0\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "other",
+        "prevention": "nothing",
+        "confidence": 1,
+        "wentWrongLabel": "launch date moved"
+      }
+    },
+    {
+      "id": "revert-cache-nil-map",
+      "window": {
+        "interventionId": "c:1833a9ec6670",
+        "signal": "revert",
+        "phase": "after_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "1833a9ec667029753effe329433354625eec381d"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "1833a9ec667029753effe329433354625eec381d",
+          "message": "Revert \"Add a price cache to the cart service\"\n\nThis reverts commit 9b0e7a1. Staging panics on an empty cart: assignment to entry in nil map in cart/cache.go:31. There was no test for the empty cart and the PR was merged green because none exercised the path.",
+          "diff": "diff --git a/cart/cache.go b/cart/cache.go\ndeleted file mode 100644\n--- a/cart/cache.go\n+++ /dev/null\n@@ -1,40 +0,0 @@\n-package cart\n-\n-type priceCache struct {\n-\tprices map[string]int64\n-}\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "unverified_done",
+        "prevention": "verification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "revert-parallel-import-deadlock",
+      "window": {
+        "interventionId": "c:f8c2c62911ad",
+        "signal": "revert",
+        "phase": "after_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "f8c2c62911add6b812740b0fbd952e69ce8c99b3"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "f8c2c62911add6b812740b0fbd952e69ce8c99b3",
+          "message": "Revert \"Parallelize the nightly import\"\n\nThis reverts commit c7aa310. The workers take the account and ledger locks in opposite orders and deadlock under production load. A sequential import is fine for now.",
+          "diff": "diff --git a/importer/nightly.go b/importer/nightly.go\n--- a/importer/nightly.go\n+++ b/importer/nightly.go\n@@ -22,14 +22,6 @@ func (j *Job) Run(ctx context.Context) error {\n-\tg, ctx := errgroup.WithContext(ctx)\n-\tg.SetLimit(8)\n-\tfor _, batch := range batches {\n-\t\tg.Go(func() error { return j.importBatch(ctx, batch) })\n-\t}\n-\treturn g.Wait()\n+\tfor _, batch := range batches {\n+\t\tif err := j.importBatch(ctx, batch); err != nil {\n+\t\t\treturn err\n+\t\t}\n+\t}\n+\treturn nil\n }\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "stronger_model",
+        "confidence": 1
+      },
+      "note": "Hard: lock ordering under load is a reasoning failure; verification by a load test is a close second."
+    },
+    {
+      "id": "fix-business-days-timezone",
+      "window": {
+        "interventionId": "c:c9953a3d1c56",
+        "signal": "fix",
+        "phase": "after_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "c9953a3d1c561381a3877b2cfe92418a170b3b44"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "c9953a3d1c561381a3877b2cfe92418a170b3b44",
+          "message": "fix: business days are counted in Europe/Berlin, not UTC\n\nPayment terms end at midnight local time. An invoice sent at 00:30 Berlin time was dated the previous day. The agents keep getting this wrong; it belongs in AGENTS.md.",
+          "diff": "diff --git a/invoices/terms.go b/invoices/terms.go\n--- a/invoices/terms.go\n+++ b/invoices/terms.go\n@@ -8,7 +8,8 @@ func DueDate(sent time.Time, days int) time.Time {\n-\td := sent.UTC().Truncate(24 * time.Hour)\n+\tberlin, _ := time.LoadLocation(\"Europe/Berlin\")\n+\td := sent.In(berlin)\n+\td = time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, berlin)\n \treturn addBusinessDays(d, days)\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "lacked_domain_knowledge",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "fix-pgx-upstream-bug",
+      "window": {
+        "interventionId": "c:9e3edef322b7",
+        "signal": "fix",
+        "phase": "after_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "9e3edef322b72eefa4c192746f86eec0c65e1fc2"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "9e3edef322b72eefa4c192746f86eec0c65e1fc2",
+          "message": "fix: work around pgx v5.7.1 dropping the timezone of timestamptz arrays\n\nUpstream bug jackc/pgx#2201. Our code was correct; pin to v5.7.0 until the release with the fix.",
+          "diff": "diff --git a/go.mod b/go.mod\n--- a/go.mod\n+++ b/go.mod\n@@ -7,7 +7,7 @@ require (\n-\tgithub.com/jackc/pgx/v5 v5.7.1\n+\tgithub.com/jackc/pgx/v5 v5.7.0\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "environment",
+        "prevention": "nothing",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "fix-tenant-filter",
+      "window": {
+        "interventionId": "c:53ba33840c0d",
+        "signal": "fix",
+        "phase": "after_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "53ba33840c0da01edbd0e00d7e948033cfc5fee3"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "53ba33840c0da01edbd0e00d7e948033cfc5fee3",
+          "message": "fix: the export must respect the tenant filter\n\nAcceptance criterion 3 of PAY-412. Missed in #812, and no test covered a second tenant.",
+          "diff": "diff --git a/export/query.go b/export/query.go\n--- a/export/query.go\n+++ b/export/query.go\n@@ -14,7 +14,7 @@ func (r *Repo) Rows(ctx context.Context, tenant string, from, to time.Time) ([]Row, error) {\n-\trows, err := r.db.QueryContext(ctx, `SELECT * FROM ledger WHERE at BETWEEN $1 AND $2`, from, to)\n+\trows, err := r.db.QueryContext(ctx, `SELECT * FROM ledger WHERE tenant_id = $1 AND at BETWEEN $2 AND $3`, tenant, from, to)\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "verification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "fix-follow-up-pr-same-item",
+      "window": {
+        "interventionId": "c:96d8b45cd832",
+        "signal": "fix",
+        "phase": "after_merge",
+        "ruleIntent": "correction",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": null,
+        "before": null,
+        "after": null,
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": [
+          "96d8b45cd8326226fb80c0ec4762c26a5a13eeb3"
+        ]
+      },
+      "commits": [
+        {
+          "sha": "96d8b45cd8326226fb80c0ec4762c26a5a13eeb3",
+          "message": "PAY-518: add the endpoint to openapi.yaml and regenerate the client\n\nThe endpoint from #830 was not in the spec, so the web client could not call it. New endpoints follow the add-endpoint checklist: spec, `just gen`, client test.",
+          "diff": "diff --git a/api/openapi.yaml b/api/openapi.yaml\n--- a/api/openapi.yaml\n+++ b/api/openapi.yaml\n@@ -210,6 +210,18 @@ paths:\n+  /v1/refunds/{id}:\n+    get:\n+      operationId: getRefund\n+      parameters:\n+        - name: id\n+          in: path\n+          required: true\n+          schema: { type: string }\n+      responses:\n+        \"200\":\n+          content:\n+            application/json: { schema: { $ref: \"#/components/schemas/Refund\" } }\n"
+        }
+      ],
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "skill",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-ok-plan",
+      "window": {
+        "interventionId": "e:162",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "ok, go ahead with the plan",
+        "before": {
+          "text": "Plan:\n1. Add a `refunds` table and repository.\n2. Add POST /v1/refunds.\n3. Emit refund.created to the outbox.\nShall I proceed?",
+          "tools": []
+        },
+        "after": {
+          "text": "Starting with the migration.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "routine",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-thanks-push",
+      "window": {
+        "interventionId": "e:163",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "codex",
+        "model": "gpt-5-codex",
+        "human": "thanks, push it",
+        "before": {
+          "text": "All 58 tests pass and the lint is clean.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Pushed to origin/feature/refunds.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "routine",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-second-endpoint",
+      "window": {
+        "interventionId": "e:164",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "good. next: the same endpoint for credit notes",
+        "before": {
+          "text": "GET /v1/invoices/{id}/pdf is done with a test.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/invoices.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Adding GET /v1/credit-notes/{id}/pdf.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "api/credit_notes.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "direction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-helper-extraction",
+      "window": {
+        "interventionId": "e:165",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "why is there a new internal/utils package with one function? put parseAmount next to where it's used in checkout. we don't do utils packages.",
+        "before": {
+          "text": "I extracted parseAmount into a new internal/utils package so it can be reused, and added a README for the package.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "internal/utils/amount.go"
+              ]
+            },
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "internal/utils/README.md"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Moving parseAmount into checkout.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            },
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "checkout/amount.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "over_engineered",
+        "prevention": "instruction",
+        "confidence": 1
+      },
+      "note": "Hard: broke_convention is close; the objection is to a needless abstraction."
+    },
+    {
+      "id": "follow-up-flaky-claim",
+      "window": {
+        "interventionId": "e:166",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "you said the flaky test is fixed but you ran it once. run it with -count=200 before you say that.",
+        "before": {
+          "text": "The flaky TestScheduler is fixed: I increased the timeout from 1s to 2s and the test passes.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "scheduler/scheduler_test.go"
+              ]
+            },
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Running it 200 times.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "unverified_done",
+        "prevention": "verification",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-feature-flag-domain",
+      "window": {
+        "interventionId": "e:167",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "pro accounts in the EU can't use the US region at all, that's a data residency rule, not a preference. remove the region picker for them.",
+        "before": {
+          "text": "I added a region picker to the settings page so pro accounts can choose between EU and US storage.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "web/src/pages/Settings.tsx"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Hiding the picker for EU accounts.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "web/src/pages/Settings.tsx"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "lacked_domain_knowledge",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-sandbox-network",
+      "window": {
+        "interventionId": "e:168",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "codex",
+        "model": "gpt-5-codex",
+        "human": "the sandbox has no network, that's why npm install hangs. the packages are vendored in .yarn/cache, use `yarn install --offline`.",
+        "before": {
+          "text": "npm install has been running for 6 minutes without output. I'll delete the lockfile and try again with --legacy-peer-deps.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "error"
+            }
+          ]
+        },
+        "after": {
+          "text": "Using the offline cache.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "environment",
+        "prevention": "instruction",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-staging-logs",
+      "window": {
+        "interventionId": "e:169",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "that's not it. the staging logs show a 403 from the auth service, not a serialization error. you can't see those logs, I know. revert the serializer change.",
+        "before": {
+          "text": "I don't have access to the staging logs, so based on the stack trace I guessed the error is in the order serializer and changed the date format.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "orders/serialize.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Reverting the serializer change.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "tool_access",
+        "confidence": 1
+      },
+      "note": "Hard: the agent guessed because it could not read the logs."
+    },
+    {
+      "id": "follow-up-ticket-was-wrong-field",
+      "window": {
+        "interventionId": "e:170",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "my ticket said email but I meant the billing email, not the login email. sorry, change it to billing_email.",
+        "before": {
+          "text": "The invoice is now sent to the customer's email address (users.email).",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "invoices/send.go"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Switching to customers.billing_email.",
+          "tools": [
+            {
+              "name": "Edit",
+              "status": "ok",
+              "files": [
+                "invoices/send.go"
+              ]
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "missed_requirement",
+        "prevention": "clearer_ticket",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-skill-deploy",
+      "window": {
+        "interventionId": "e:171",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "that's not how we deploy. there's a procedure: build the image with `just image`, push with the release tag, then bump the tag in the gitops repo. never kubectl apply to prod by hand.",
+        "before": {
+          "text": "I deployed the fix by running kubectl apply -f deploy/k8s/ against the production context.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Following the release procedure.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "broke_convention",
+        "prevention": "skill",
+        "confidence": 1
+      }
+    },
+    {
+      "id": "follow-up-grafana-access",
+      "window": {
+        "interventionId": "e:172",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "the p99 is on the grafana dashboard, you could have checked it if you had access to it. the slow part is the pdf render, not the query. drop the index.",
+        "before": {
+          "text": "The endpoint is slow, so I added an index on invoices(customer_id, created_at). I couldn't see any latency numbers.",
+          "tools": [
+            {
+              "name": "Write",
+              "status": "ok",
+              "files": [
+                "db/migrations/0044_invoice_index.sql"
+              ]
+            }
+          ]
+        },
+        "after": {
+          "text": "Removing the index; looking at the PDF renderer.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_area",
+        "prevention": "tool_access",
+        "confidence": 1
+      },
+      "note": "Hard: wrong_approach is close; the person names missing access to the dashboard."
+    },
+    {
+      "id": "follow-up-leftover-scope-other",
+      "window": {
+        "interventionId": "e:173",
+        "signal": "follow_up",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-5",
+        "human": "the commit message has my full name and the customer's name in it. we never put customer names in git history. amend it.",
+        "before": {
+          "text": "Committed: 'Fix refund for customer Jane Doe (ticket from Tom Smith)'.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "after": {
+          "text": "Amending the commit message.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "other",
+        "prevention": "instruction",
+        "confidence": 1,
+        "wentWrongLabel": "personal data in commit message"
+      }
+    },
+    {
+      "id": "denial-git-push-force",
+      "window": {
+        "interventionId": "e:174",
+        "signal": "denial",
+        "phase": "in_session",
+        "ruleIntent": null,
+        "agent": "codex",
+        "model": "gpt-5-codex",
+        "human": "don't force push a shared branch",
+        "before": {
+          "text": "The branch diverged; I'll run git push --force to update it.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "denied"
+            }
+          ]
+        },
+        "after": {
+          "text": "Rebasing and pushing without force.",
+          "tools": [
+            {
+              "name": "Bash",
+              "status": "ok"
+            }
+          ]
+        },
+        "files": [],
+        "repo": "github.com/acme/shop",
+        "commits": []
+      },
+      "gold": {
+        "intent": "correction",
+        "wentWrong": "wrong_approach",
+        "prevention": "instruction",
+        "confidence": 1
+      },
+      "note": "Hard: a denial with a short reason; broke_convention is a defensible second choice."
+    }
+  ]
+}

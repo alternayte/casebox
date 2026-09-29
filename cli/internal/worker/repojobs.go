@@ -55,7 +55,11 @@ func (r RepoJobs) Entire(ctx context.Context, job Job) (any, error) {
 		if err != nil {
 			return nil, Permanent{err}
 		}
-		session := pipe.Session(s.Session)
+		session := pipe.Session(ctx, s.Session)
+		// A checkpoint exists because the session was committed, so it has at least one commit.
+		one := 1
+		session.Commits = &one
+		session.Harness = mirrorHarness(ctx, m, cfg, session, s.CommitSHA)
 		processed := pipe.Events(s.Events, pipeline.ModeFull)
 		for start := 0; start < len(processed); start += batchEvents {
 			end := min(start+batchEvents, len(processed))
@@ -150,6 +154,26 @@ func mirrorConfig(ctx context.Context, m *gitmirror.Mirror) repo.Config {
 		_ = yaml.Unmarshal(data, &cfg)
 	}
 	return cfg
+}
+
+// mirrorHarness reads the harness at the last commit on the session's branch before it started,
+// or at the parent of the commit that kept the checkpoint when the branch is gone.
+func mirrorHarness(ctx context.Context, m *gitmirror.Mirror, cfg repo.Config, s capture.Session, commit string) *capture.Harness {
+	at := s.HeadStart
+	if at == "" && s.Branch != "" {
+		out, err := m.Git(ctx, "rev-list", "-1", "--before="+s.StartedAt.UTC().Format(time.RFC3339), "refs/heads/"+s.Branch, "--")
+		if err == nil {
+			at = strings.TrimSpace(string(out))
+		}
+	}
+	if at == "" {
+		at = commit + "^"
+	}
+	h, err := repo.Harness(ctx, m.Dir, at, cfg.HarnessGlobs())
+	if err != nil {
+		return nil
+	}
+	return h
 }
 
 func authorNames(ctx context.Context, m *gitmirror.Mirror) []string {

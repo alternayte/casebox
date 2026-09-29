@@ -40,3 +40,20 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
 export function resetCsrf() {
   csrf = undefined;
 }
+
+// Builds a query string from the set values only.
+export function qs(params: Record<string, string | number | undefined | null>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") search.set(key, String(value));
+  }
+  const s = search.toString();
+  return s ? `?${s}` : "";
+}
+
+// A 401 from any call sends the browser to the login page, which returns here afterwards.
+export function toLogin() {
+  const here = window.location.pathname + window.location.search;
+  if (window.location.pathname === "/login") return;
+  window.location.assign(`/login?returnUrl=${encodeURIComponent(here)}`);
+}

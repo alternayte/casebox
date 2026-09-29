@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Casebox.Server.Features.CodeHosts;
 using Casebox.Server.Features.Inbox;
 using Casebox.Server.Features.Integrations;
 using Casebox.Server.Features.Orgs;
@@ -15,44 +16,17 @@ public static class GitHubMessages
     public const string Revert = "github.revert_commit";
 }
 
-// Polls every GitHub repository of every workspace, every 5 minutes. Each changed object is
-// tokenized in memory and published to the QueueBox poll source; its key holds the object's
-// updated time, so an unchanged object is stored once.
+// Polls every GitHub repository of every workspace. Each changed object is tokenized in memory
+// and published to the QueueBox poll source; its key holds the object's updated time, so an
+// unchanged object is stored once.
 public sealed class GitHubPoller(
     IServiceScopeFactory scopes,
     IntegrationStore integrations,
-    TimeProvider clock,
-    ILogger<GitHubPoller> logger
-) : BackgroundService
+    NpgsqlDataSource db,
+    TimeProvider clock
+) : ICodeHost
 {
-    public static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
-
-    // The first poll looks back as far as case mining does.
-    public static readonly TimeSpan FirstWindow = TimeSpan.FromDays(183);
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            foreach (var org in await integrations.OrgsWithAsync("github", stoppingToken))
-            {
-                try
-                {
-                    await PollAsync(org, stoppingToken);
-                }
-                catch (Exception e) when (e is not OperationCanceledException)
-                {
-                    logger.LogWarning(
-                        e,
-                        "The GitHub poll of organisation {Org} failed; it runs again in 5 minutes.",
-                        org
-                    );
-                }
-            }
-
-            await Task.Delay(Interval, clock, stoppingToken);
-        }
-    }
+    public string Kind => CodeHostKinds.GitHub;
 
     public async Task<PollResult> PollAsync(string orgId, CancellationToken ct)
     {
@@ -75,7 +49,7 @@ public sealed class GitHubPoller(
         var result = new PollResult(0, 0, 0, null);
         try
         {
-            foreach (var repo in await ReposAsync(services, orgId, ct))
+            foreach (var (repo, _) in await CodeHosts.RepoHosts.ReposAsync(db, orgId, Kind, ct))
                 result = result.Add(
                     await PollRepoAsync(
                         orgId,
@@ -180,7 +154,7 @@ public sealed class GitHubPoller(
     )
     {
         var (owner, name) = GitHubReader.Split(repo);
-        var since = clock.GetUtcNow() - FirstWindow;
+        var since = clock.GetUtcNow() - CodeHostPoller.FirstWindow;
         int pulls = 0,
             issueCount = 0,
             reverts = 0;
@@ -312,28 +286,6 @@ public sealed class GitHubPoller(
             ? DateTimeOffset.Parse(c, System.Globalization.CultureInfo.InvariantCulture)
             : fallback;
 
-    // The workspace repositories GitHub serves: github.com, or the GitHub Enterprise host.
-    private static async Task<IReadOnlyList<string>> ReposAsync(
-        IServiceProvider services,
-        string orgId,
-        CancellationToken ct
-    )
-    {
-        await using var connection = await services
-            .GetRequiredService<NpgsqlDataSource>()
-            .OpenConnectionAsync(ct);
-        var rows = await connection.QueryAsync<string>(
-            new CommandDefinition(
-                "SELECT DISTINCT jsonb_array_elements_text(repos) FROM casebox.workspaces WHERE org_id = @Org",
-                new { Org = orgId },
-                cancellationToken: ct
-            )
-        );
-        return rows.Where(r => r.Count(ch => ch == '/') == 2)
-            .OrderBy(r => r, StringComparer.Ordinal)
-            .ToList();
-    }
-
     private AsyncServiceScope Scope(string orgId)
     {
         var scope = scopes.CreateAsyncScope();
@@ -344,15 +296,4 @@ public sealed class GitHubPoller(
     }
 
     private static DateTimeOffset Max(DateTimeOffset a, DateTimeOffset b) => a > b ? a : b;
-}
-
-public sealed record PollResult(int PullRequests, int Issues, int Reverts, string? Error)
-{
-    public PollResult Add(PollResult other) =>
-        new(
-            PullRequests + other.PullRequests,
-            Issues + other.Issues,
-            Reverts + other.Reverts,
-            Error ?? other.Error
-        );
 }

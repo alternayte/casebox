@@ -96,12 +96,13 @@ casebox init [flags]
 ```
 
 ```text
-      --github-issues          track GitHub Issues as work items
-      --jira-project strings   a Jira project key, such as PAY; repeat for more
-      --jira-url string        the Jira Data Center URL, such as https://jira.example.com
-      --prompt-mode string     off, redacted or full; without it, init asks
-      --server string          the Casebox server (default: casebox.yml, then http://localhost:8080)
-      --workspace string       the workspace name (default: the repository name)
+      --ado-collection string   the Azure DevOps Server collection URL, such as https://ado.example.com/tfs/DefaultCollection (default: from the remote)
+      --github-issues           track GitHub Issues as work items
+      --jira-project strings    a Jira project key, such as PAY; repeat for more
+      --jira-url string         the Jira Data Center URL, such as https://jira.example.com
+      --prompt-mode string      off, redacted or full; without it, init asks
+      --server string           the Casebox server (default: casebox.yml, then http://localhost:8080)
+      --workspace string        the workspace name (default: the repository name)
 ```
 
 ## casebox join
@@ -283,7 +284,8 @@ casebox up [flags]
 ## casebox worker
 
 Run a worker: it leases jobs from the server and runs them on this host.
-It reads its worker token from CASEBOX_WORKER_TOKEN, and a GitHub token for cloning from GITHUB_TOKEN.
+It reads its worker token from CASEBOX_WORKER_TOKEN, and the tokens for cloning from GITHUB_TOKEN and, for Azure DevOps
+Server, AZURE_DEVOPS_TOKEN (a personal access token with Code (Read)).
 Model API keys stay in this host's environment; the server never sees them.
 Steering classification, pattern splits and proposal drafts need an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic, openai for
 any OpenAI-compatible API, or cursor-agent), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and

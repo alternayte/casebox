@@ -2,14 +2,19 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"github.com/alternayte/casebox/cli/internal/cbx"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/alternayte/casebox/cli/internal/api"
 	"github.com/alternayte/casebox/cli/internal/config"
 	"github.com/alternayte/casebox/cli/internal/hooks"
 	"github.com/alternayte/casebox/cli/internal/pipeline"
@@ -50,6 +55,9 @@ func newDoctorCommand() *cobra.Command {
 			if cwd, err := os.Getwd(); err == nil {
 				root, _, err := repo.LoadConfig(ctx, cwd)
 				report(err == nil, "%s", map[bool]string{true: "enrolled: " + root, false: "not enrolled: capture is off here (casebox init)"}[err == nil])
+				if err == nil && creds.CLIToken != "" {
+					codeHost(ctx, api.New(creds.Server, creds.CLIToken), repo.Current(ctx, root).Repo, out, report)
+				}
 			}
 
 			step(out, "Agents")
@@ -113,6 +121,45 @@ func newDoctorCommand() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// codeHost reports whether the server reads the repository's pull requests: its code host, and
+// for Azure DevOps whether the collection answers the stored token.
+func codeHost(ctx context.Context, client *api.Client, name string, out io.Writer, report func(bool, string, ...any)) {
+	var status struct {
+		Host               string  `json:"host"`
+		Collection         *string `json:"collection"`
+		Connected          bool    `json:"connected"`
+		Reachable          *bool   `json:"reachable"`
+		IdentitiesReadable *bool   `json:"identitiesReadable"`
+		Error              *string `json:"error"`
+	}
+	if err := client.Do(ctx, http.MethodGet, "/api/v1/repos/host?repo="+url.QueryEscape(name), nil, &status); err != nil {
+		report(false, "code host unknown: %v", err)
+		return
+	}
+	where := "GitHub"
+	if status.Collection != nil {
+		where = "Azure DevOps collection " + *status.Collection
+	}
+	switch {
+	case !status.Connected:
+		fmt.Fprintf(out, "  -    %s: no token on the server, so no pull requests are read (casebox init adds one)\n", where)
+	case status.Reachable != nil && !*status.Reachable:
+		report(false, "%s is not reachable: %s", where, firstOf(deref(status.Error), "no answer"))
+	default:
+		report(true, "%s is reachable", where)
+		if status.IdentitiesReadable != nil {
+			report(*status.IdentitiesReadable, "%s", firstOf(deref(status.Error), "the token reads identities, so reviewers map to people"))
+		}
+	}
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func errText(err error, fallback string) string {

@@ -27,8 +27,10 @@ public static class Cbx
     public const string Unauthenticated = "CBX010";
     public const string Forbidden = "CBX011";
     public const string NoWorkspace = "CBX040";
+    public const string UnknownCodeHost = "CBX041";
     public const string GitHubRefused = "CBX071";
     public const string JiraRefused = "CBX072";
+    public const string AzureDevOpsRefused = "CBX073";
     public const string BelowK = "CBX080";
     public const string NoPromptMode = "CBX090";
 

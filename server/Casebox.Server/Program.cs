@@ -2,7 +2,9 @@ using System.Threading.RateLimiting;
 using Azure.Identity;
 using Casebox.Server;
 using Casebox.Server.Features.Auth;
+using Casebox.Server.Features.AzureDevOps;
 using Casebox.Server.Features.Capture;
+using Casebox.Server.Features.CodeHosts;
 using Casebox.Server.Features.GitHub;
 using Casebox.Server.Features.Health;
 using Casebox.Server.Features.Inbox;
@@ -162,14 +164,32 @@ builder.Services.AddSingleton<RepoJobScheduler>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RepoJobScheduler>());
 builder.Services.AddScoped<GitHubReader>();
 builder.Services.AddSingleton<GitHubPoller>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<GitHubPoller>());
+builder.Services.AddSingleton<ICodeHost>(sp => sp.GetRequiredService<GitHubPoller>());
+builder.Services.AddScoped<AdoReader>();
+builder.Services.AddSingleton<AdoClients>();
+builder.Services.AddHttpClient(AdoClients.HttpClientName);
+builder.Services.AddSingleton<AdoPoller>();
+builder.Services.AddSingleton<ICodeHost>(sp => sp.GetRequiredService<AdoPoller>());
+builder.Services.AddHostedService<CodeHostPoller>();
 builder.Services.AddSingleton<JiraPoller>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<JiraPoller>());
 builder.Services.AddSingleton<IRosterSource, GitHubRosterSource>();
 builder.Services.AddSingleton<IRosterSource, JiraRosterSource>();
+builder.Services.AddSingleton<IRosterSource, AdoRosterSource>();
 builder.Services.AddScoped<IInboxHandler, PullRequestHandler>();
+builder.Services.AddScoped<IInboxHandler>(sp => new PullRequestHandler(
+    sp.GetRequiredService<Linker>(),
+    sp.GetRequiredService<JobQueue>()
+)
+{
+    EventType = AdoMessages.PullRequest,
+});
 builder.Services.AddScoped<IInboxHandler, IssueHandler>();
 builder.Services.AddScoped<IInboxHandler, RevertCommitHandler>();
+builder.Services.AddScoped<IInboxHandler>(_ => new RevertCommitHandler
+{
+    EventType = AdoMessages.Revert,
+});
 builder.Services.AddScoped<IInboxHandler, JiraIssueHandler>();
 foreach (
     var githubEvent in new[]
@@ -275,6 +295,7 @@ api.MapWorkspaces();
 api.MapTokens();
 api.MapPrivacy();
 api.MapIntegrations();
+api.MapCodeHosts();
 api.MapWorkItems();
 api.MapSteering();
 api.MapPatterns();
@@ -287,6 +308,7 @@ app.MapGitHubWebhooks();
 var worker = app.MapGroup("/worker/v1");
 worker.MapWorkerJobs();
 worker.MapRepoJobs();
+worker.MapCodeHostWorker();
 worker.MapSteeringWorker();
 worker.MapProposalWorker();
 

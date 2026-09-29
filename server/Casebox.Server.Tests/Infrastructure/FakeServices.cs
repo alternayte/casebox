@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Casebox.Server.Tests.Infrastructure;
 
-// A contract fake of the GitHub REST and GraphQL APIs and Jira Data Center: only the endpoints
+// A contract fake of the GitHub REST and GraphQL APIs, Jira Data Center and Azure DevOps Server: only the endpoints
 // Casebox calls, with the fields it reads, from in-memory data a test sets.
 public sealed class FakeServices : IAsyncDisposable
 {
@@ -30,6 +30,10 @@ public sealed class FakeServices : IAsyncDisposable
 
     public Uri JiraUrl => new($"http://127.0.0.1:{Port}/jira/");
 
+    public FakeAzureDevOps Ado { get; } = new();
+
+    public string AdoCollection => $"http://127.0.0.1:{Port}{FakeAzureDevOps.Path}";
+
     public Dictionary<string, FakeRepo> Repos { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public List<JsonObject> JiraIssues { get; } = [];
@@ -50,6 +54,7 @@ public sealed class FakeServices : IAsyncDisposable
                 var auth = http.Request.Headers.Authorization.ToString();
                 var ok =
                     http.Request.Path.StartsWithSegments("/github/app")
+                    || http.Request.Path.StartsWithSegments("/ado")
                     || auth
                         is $"Bearer {GitHubToken}"
                             or $"Bearer {JiraToken}"
@@ -64,6 +69,7 @@ public sealed class FakeServices : IAsyncDisposable
             }
         );
 
+        Ado.Map(app);
         app.MapGet("/github/rate_limit", () => Results.Json(new { resources = new { } }));
         app.MapPost(
             "/github/app/installations/{id}/access_tokens",

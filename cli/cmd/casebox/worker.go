@@ -15,6 +15,7 @@ import (
 	"github.com/alternayte/casebox/cli/internal/api"
 	"github.com/alternayte/casebox/cli/internal/buildinfo"
 	"github.com/alternayte/casebox/cli/internal/config"
+	"github.com/alternayte/casebox/cli/internal/gitmirror"
 	"github.com/alternayte/casebox/cli/internal/propose"
 	"github.com/alternayte/casebox/cli/internal/worker"
 )
@@ -25,7 +26,8 @@ func newWorkerCommand() *cobra.Command {
 		Use:   "worker",
 		Short: "Run a worker",
 		Long: "Run a worker: it leases jobs from the server and runs them on this host.\n" +
-			"It reads its worker token from CASEBOX_WORKER_TOKEN, and a GitHub token for cloning from GITHUB_TOKEN.\n" +
+			"It reads its worker token from CASEBOX_WORKER_TOKEN, and the tokens for cloning from GITHUB_TOKEN and, for Azure DevOps\n" +
+			"Server, AZURE_DEVOPS_TOKEN (a personal access token with Code (Read)).\n" +
 			"Model API keys stay in this host's environment; the server never sees them.\n" +
 			"Steering classification, pattern splits and proposal drafts need an analysis model: CASEBOX_ANALYSIS_PROVIDER (anthropic, openai for\n" +
 			"any OpenAI-compatible API, or cursor-agent), CASEBOX_ANALYSIS_MODEL, and optionally CASEBOX_ANALYSIS_BASE_URL and\n" +
@@ -89,8 +91,9 @@ func workerHandlers(client *api.Client, out io.Writer) (map[string]worker.Handle
 	if err != nil {
 		return nil, err
 	}
-	jobs := worker.RepoJobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
-	steer := worker.Steering{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Concurrency: 4}
+	remotes := &gitmirror.Remotes{Client: client, GitHubToken: os.Getenv("GITHUB_TOKEN"), AzureDevOpsToken: os.Getenv("AZURE_DEVOPS_TOKEN")}
+	jobs := worker.RepoJobs{Client: client, MirrorRoot: mirrors, Remotes: remotes}
+	steer := worker.Steering{Client: client, MirrorRoot: mirrors, Remotes: remotes, Concurrency: 4}
 	handlers := map[string]worker.Handler{
 		"entire.fetch": jobs.Entire,
 		"gitai.fetch":  jobs.GitAI,
@@ -101,7 +104,7 @@ func workerHandlers(client *api.Client, out io.Writer) (map[string]worker.Handle
 	switch {
 	case err == nil:
 		steer.Model = analysis.New(model)
-		drafts := propose.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Model: steer.Model}
+		drafts := propose.Jobs{Client: client, MirrorRoot: mirrors, Remotes: remotes, Model: steer.Model}
 		handlers["steering.classify"] = steer.Classify
 		handlers["pattern.cluster"] = steer.Cluster
 		handlers["proposal.draft"] = drafts.Draft

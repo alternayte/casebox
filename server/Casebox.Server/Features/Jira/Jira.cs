@@ -66,7 +66,7 @@ public sealed class JiraPoller(
                 }
             }
 
-            await Task.Delay(GitHubPoller.Interval, clock, stoppingToken);
+            await Task.Delay(CodeHosts.CodeHostPoller.Interval, clock, stoppingToken);
         }
     }
 
@@ -87,7 +87,7 @@ public sealed class JiraPoller(
 
         var cursor = await integrations.CursorAsync(orgId, "jira:search", ct) is { } c
             ? DateTimeOffset.Parse(c, CultureInfo.InvariantCulture)
-            : clock.GetUtcNow() - GitHubPoller.FirstWindow;
+            : clock.GetUtcNow() - CodeHosts.CodeHostPoller.FirstWindow;
         // Jira compares at minute precision in the server's time zone; a one-minute overlap and the
         // idempotency key keep the edge exact.
         var jql =

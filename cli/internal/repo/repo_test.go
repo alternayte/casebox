@@ -20,10 +20,35 @@ func TestRemotesNormalizeToHostOwnerName(t *testing.T) {
 		"https://github.com/acme/payments-api":             "github.com/acme/payments-api",
 		"https://token@github.com/acme/payments-api.git":   "github.com/acme/payments-api",
 		"ssh://git@github.example.com:2222/acme/tools.git": "github.example.com/acme/tools",
+		// Azure DevOps Server: the collection and project stay, /_git goes, as the server names it.
+		"https://ado.example.com/tfs/DefaultCollection/Payments/_git/payments-api":     "ado.example.com/tfs/defaultcollection/payments/payments-api",
+		"https://nate@ado.example.com:8443/tfs/DefaultCollection/Payments/_git/api":    "ado.example.com/tfs/defaultcollection/payments/api",
+		"ssh://ado.example.com:22/tfs/DefaultCollection/Payments/_git/payments-api":    "ado.example.com/tfs/defaultcollection/payments/payments-api",
+		"http://build01:8080/tfs/DefaultCollection/My%20Project/_git/My%20Project.git": "build01/tfs/defaultcollection/my%20project/my%20project",
 	} {
 		if got := NormalizeRemote(in); got != want {
 			t.Errorf("NormalizeRemote(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// The collection URL init offers must be the one the server's API lives at, or the token check fails.
+func TestAzureDevOpsRemotesNameTheirCollection(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://ado.example.com/tfs/DefaultCollection/Payments/_git/payments-api":  "https://ado.example.com/tfs/DefaultCollection",
+		"https://nate@ado.example.com:8443/tfs/DefaultCollection/Payments/_git/api": "https://ado.example.com:8443/tfs/DefaultCollection",
+		"http://build01:8080/tfs/DefaultCollection/_git/payments":                   "http://build01:8080/tfs/DefaultCollection",
+		"https://ado.example.com/Main/Payments/_git/api":                            "https://ado.example.com/Main",
+		"https://ado.example.com/Main/_git/Payments":                                "https://ado.example.com/Main",
+		"ssh://ado.example.com:22/tfs/DefaultCollection/Payments/_git/payments-api": "https://ado.example.com/tfs/DefaultCollection",
+	} {
+		got, ok := AzureDevOpsCollection(in)
+		if !ok || got != want {
+			t.Errorf("AzureDevOpsCollection(%q) = %q, %v, want %q", in, got, ok, want)
+		}
+	}
+	if _, ok := AzureDevOpsCollection("git@github.com:acme/app.git"); ok {
+		t.Error("a GitHub remote named a collection")
 	}
 }
 

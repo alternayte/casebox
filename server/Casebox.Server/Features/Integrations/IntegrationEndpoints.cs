@@ -18,6 +18,8 @@ public static class IntegrationEndpoints
 
     public sealed record ConnectJira(string Url, string Token, IReadOnlyList<string> Projects);
 
+    public sealed record ConnectAzureDevOps(string Url, string Token);
+
     public static void MapIntegrations(this RouteGroupBuilder api)
     {
         var integrations = api.MapGroup("/integrations")
@@ -145,11 +147,70 @@ public static class IntegrationEndpoints
             }
         );
 
+        // One collection and its personal access token; other collections stay as they are. The token
+        // is checked against the collection before it is stored.
+        integrations.MapPut(
+            "/azure-devops",
+            async (
+                ConnectAzureDevOps body,
+                HttpContext http,
+                IntegrationStore store,
+                AzureDevOps.AdoClients clients,
+                IEventStore events
+            ) =>
+            {
+                var collection =
+                    CodeHosts.RepoHosts.NormalizeCollection(body.Url)
+                    ?? throw new DomainException(
+                        "The collection URL must be an http or https URL with its path, such as https://ado.example.com/tfs/DefaultCollection."
+                    );
+                if (string.IsNullOrWhiteSpace(body.Token))
+                    throw new DomainException("An Azure DevOps personal access token is required.");
+                var token = body.Token.Trim();
+                try
+                {
+                    await clients
+                        .Create(collection, token)
+                        .GetAsync("_apis/projects?$top=1", http.RequestAborted);
+                }
+                catch (HttpRequestException e)
+                {
+                    throw new DomainException(
+                        $"Azure DevOps refused the token: {e.Message}",
+                        Cbx.AzureDevOpsRefused
+                    );
+                }
+
+                var org = http.User.OrgId();
+                var current = await store.GetAsync<AzureDevOpsSettings, AzureDevOpsSecret>(
+                    org,
+                    CodeHosts.CodeHostKinds.AzureDevOps,
+                    http.RequestAborted
+                );
+                var tokens = new Dictionary<string, string>(
+                    current?.Secret.Tokens ?? new Dictionary<string, string>(),
+                    StringComparer.Ordinal
+                )
+                {
+                    [collection] = token,
+                };
+                await store.SaveAsync(
+                    org,
+                    CodeHosts.CodeHostKinds.AzureDevOps,
+                    new AzureDevOpsSettings([.. tokens.Keys.Order(StringComparer.Ordinal)]),
+                    new AzureDevOpsSecret(tokens),
+                    events,
+                    http.RequestAborted
+                );
+                return Results.NoContent();
+            }
+        );
+
         integrations.MapDelete(
             "/{kind}",
             async (string kind, HttpContext http, IntegrationStore store, IEventStore events) =>
             {
-                if (kind is not ("github" or "jira"))
+                if (kind is not ("github" or "jira" or CodeHosts.CodeHostKinds.AzureDevOps))
                     return Results.NotFound();
                 await store.RemoveAsync(http.User.OrgId(), kind, events, http.RequestAborted);
                 return Results.NoContent();

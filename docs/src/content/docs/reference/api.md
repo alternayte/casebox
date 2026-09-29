@@ -50,9 +50,11 @@ This page lists every route of the API under `/api/v1`, grouped as the server gr
 | Method | Path |
 | --- | --- |
 | GET | `/api/v1/integrations` |
+| PUT | `/api/v1/integrations/azure-devops` |
 | PUT | `/api/v1/integrations/github` |
 | PUT | `/api/v1/integrations/jira` |
 | DELETE | `/api/v1/integrations/{kind}` |
+| GET | `/api/v1/repos/host` |
 
 ## Organisation
 
@@ -123,6 +125,7 @@ This page lists every route of the API under `/api/v1`, grouped as the server gr
 | POST | `/worker/v1/jobs/{id}/complete` |
 | POST | `/worker/v1/jobs/{id}/fail` |
 | POST | `/worker/v1/jobs/{id}/heartbeat` |
+| GET | `/worker/v1/repos` |
 | POST | `/worker/v1/sessions` |
 | GET | `/worker/v1/steering/examples` |
 | POST | `/worker/v1/steering/windows` |

@@ -7,7 +7,7 @@ sidebar:
 
 In this tutorial you read a proposal that Casebox drafted from your corrections, approve it, and apply it to your repository without changing anything your team sees.
 
-You need the setup of [your first steering report](/tutorials/first-steering-report/), a worker with an analysis model, and at least 3 similar corrections. Casebox needs the worker to read your repository's current instruction files: for a private GitHub repository, give the worker a `GITHUB_TOKEN` with read access.
+You need the setup of [your first steering report](/tutorials/first-steering-report/), a worker with an analysis model, and at least 3 similar corrections. Casebox needs the worker to read your repository's current instruction files: for a private GitHub repository, give the worker a `GITHUB_TOKEN` with read access, and for Azure DevOps Server an `AZURE_DEVOPS_TOKEN` with Code (Read).
 
 ## 1. Find the proposal
 

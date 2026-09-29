@@ -262,6 +262,14 @@ public sealed class CrossTenantTests(StackFixture stack)
                 },
                 Caller.Admin
             ),
+            new(
+                "PUT",
+                "/api/v1/integrations/azure-devops",
+                new { url = "not a url", token = "" },
+                Caller.Admin
+            ),
+            new("GET", $"/api/v1/repos/host?repo={Resources.Repo}", null, Caller.Admin),
+            new("GET", "/worker/v1/repos", null, Caller.Worker),
             new("DELETE", "/api/v1/integrations/unknown", null, Caller.Admin),
             new("GET", "/api/v1/work-items/", null, Caller.Admin),
             new("GET", "/api/v1/work-items/timeline?id=wi:jira:PAY-1", null, Caller.Admin),
@@ -420,6 +428,8 @@ public sealed class CrossTenantTests(StackFixture stack)
             "integrations",
             "github",
             "jira",
+            "azure-devops",
+            "host",
             "work-items",
             "timeline",
             "work-item",

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alternayte/casebox/cli/internal/cbx"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +76,7 @@ func LoadConfig(ctx context.Context, dir string) (string, Config, error) {
 // State is the repository's position at one moment.
 type State struct {
 	Repo   string // github.com/owner/name, from the origin remote
+	Remote string // the origin remote as git has it
 	Branch string
 	Head   string
 }
@@ -83,7 +85,7 @@ type State struct {
 func Current(ctx context.Context, root string) State {
 	var s State
 	if url, err := git(ctx, root, "remote", "get-url", "origin"); err == nil {
-		s.Repo = NormalizeRemote(url)
+		s.Repo, s.Remote = NormalizeRemote(url), url
 	}
 	s.Branch, _ = git(ctx, root, "rev-parse", "--abbrev-ref", "HEAD")
 	s.Head, _ = git(ctx, root, "rev-parse", "HEAD")
@@ -92,7 +94,9 @@ func Current(ctx context.Context, root string) State {
 
 var scpRemote = regexp.MustCompile(`^[\w.-]+@([\w.-]+):(.+)$`)
 
-// NormalizeRemote turns an https, ssh or scp-style remote into host/owner/name, lower case.
+// NormalizeRemote turns an https, ssh or scp-style remote into host/owner/name, lower case. An
+// Azure DevOps remote keeps its collection and project and loses /_git:
+// ado.example.com/tfs/defaultcollection/payments/api.
 func NormalizeRemote(url string) string {
 	u := strings.TrimSpace(url)
 	if m := scpRemote.FindStringSubmatch(u); m != nil {
@@ -110,7 +114,42 @@ func NormalizeRemote(url string) string {
 		}
 		u = host + "/" + rest
 	}
+	u = strings.Replace(u, "/_git/", "/", 1)
 	return strings.ToLower(strings.TrimSuffix(strings.TrimSuffix(u, "/"), ".git"))
+}
+
+// AzureDevOpsCollection returns the collection URL an Azure DevOps Server remote names, such as
+// https://ado.example.com/tfs/DefaultCollection for
+// https://ado.example.com/tfs/DefaultCollection/Payments/_git/api. An ssh remote gives an https
+// URL on the same host. ok is false for a remote without /_git/.
+func AzureDevOpsCollection(remote string) (collection string, ok bool) {
+	u, err := neturl.Parse(strings.TrimSpace(remote))
+	if err != nil || u.Host == "" {
+		return "", false
+	}
+	before, _, found := strings.Cut(u.EscapedPath(), "/_git/")
+	if !found {
+		return "", false
+	}
+	segments := strings.Split(strings.Trim(before, "/"), "/")
+	// collection/project/_git/repo, or collection/_git/repo for a repository named like its
+	// project. A collection under /tfs has two segments of its own.
+	short := len(segments) == 1 || (len(segments) == 2 && strings.EqualFold(segments[0], "tfs"))
+	if !short {
+		segments = segments[:len(segments)-1]
+	}
+	scheme, host := u.Scheme, u.Host
+	if scheme != "http" && scheme != "https" {
+		scheme, host = "https", u.Hostname()
+	}
+	return scheme + "://" + host + "/" + strings.Join(segments, "/"), true
+}
+
+// IsAzureDevOpsServices says whether a repository name is on Azure DevOps Services, the cloud,
+// which Casebox does not read.
+func IsAzureDevOpsServices(name string) bool {
+	host, _, _ := strings.Cut(name, "/")
+	return host == "dev.azure.com" || host == "ssh.dev.azure.com" || strings.HasSuffix(host, ".visualstudio.com")
 }
 
 // UserEmail is the developer's git user.email, which identifies them as the session's person.

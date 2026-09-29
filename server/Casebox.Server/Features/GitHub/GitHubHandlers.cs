@@ -10,15 +10,16 @@ using QueueBox.Inbox;
 
 namespace Casebox.Server.Features.GitHub;
 
-// Applies tokenized GitHub poll results inside the transaction QueueBox.Inbox opened, so the
-// inbox completion and every event commit together or not at all.
+// Applies tokenized pull request snapshots from GitHub or Azure DevOps inside the transaction
+// QueueBox.Inbox opened, so the inbox completion and every event commit together or not at all.
 public sealed class PullRequestHandler(Linker linker, Jobs.JobQueue jobs) : IInboxHandler
 {
     public static readonly TimeSpan FixWindow = TimeSpan.FromDays(30);
 
     public string Source => InboxSources.Poll;
 
-    public string EventType => GitHubMessages.PullRequest;
+    // Azure DevOps publishes the same snapshot under its own type.
+    public string EventType { get; init; } = GitHubMessages.PullRequest;
 
     public async Task HandleAsync(
         InboxMessage message,
@@ -369,7 +370,7 @@ public sealed class RevertCommitHandler : IInboxHandler
 {
     public string Source => InboxSources.Poll;
 
-    public string EventType => GitHubMessages.Revert;
+    public string EventType { get; init; } = GitHubMessages.Revert;
 
     public async Task HandleAsync(
         InboxMessage message,

@@ -130,6 +130,28 @@
         }
       }
     },
+    "/api/v1/repos/host": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "parameters": [
+          {
+            "name": "repo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v1/sessions/{id}/work-item": {
       "put": {
         "tags": [
@@ -510,6 +532,28 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ConnectJira"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/azure-devops": {
+      "put": {
+        "tags": [
+          "Integrations"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectAzureDevOps"
               }
             }
           },
@@ -1181,6 +1225,18 @@
         }
       }
     },
+    "/worker/v1/repos": {
+      "get": {
+        "tags": [
+          "Worker"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/worker/v1/patterns/{id}/evidence": {
       "get": {
         "tags": [
@@ -1646,6 +1702,21 @@
           }
         }
       },
+      "ConnectAzureDevOps": {
+        "required": [
+          "url",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "ConnectGitHub": {
         "required": [
           "mode",
@@ -1975,6 +2046,12 @@
         "properties": {
           "repo": {
             "type": "string"
+          },
+          "collection": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -2067,6 +2144,9 @@
       "name": "Privacy"
     },
     {
+      "name": "Integrations"
+    },
+    {
       "name": "Work"
     },
     {
@@ -2077,9 +2157,6 @@
     },
     {
       "name": "Workspaces"
-    },
-    {
-      "name": "Integrations"
     },
     {
       "name": "Steering"

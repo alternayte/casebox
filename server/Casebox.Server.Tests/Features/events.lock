@@ -47,5 +47,5 @@ stream work_item (WorkItem)
 
 stream workspace (Workspace)
   workspace.created v1 { name: string }
-  workspace.repo_added v1 { repo: string }
+  workspace.repo_added v1 { collection: string?, host: string?, repo: string }
   workspace.repo_removed v1 { repo: string }

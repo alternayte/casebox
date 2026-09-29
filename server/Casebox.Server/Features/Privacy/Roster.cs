@@ -89,7 +89,8 @@ public sealed class Roster(
     }
 
     // People from different sources who share an identity (a GitHub login and a Jira account with
-    // one email) are one person. The canonical identity prefers GitHub, then Jira, then email.
+    // one email) are one person. The canonical identity prefers GitHub, then Jira, then Azure
+    // DevOps, then email.
     public static Dictionary<string, string> Merge(IEnumerable<RosterPerson> people)
     {
         var parent = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -120,8 +121,9 @@ public sealed class Roster(
         static int Rank(string id) =>
             id.StartsWith("github:", StringComparison.Ordinal) ? 0
             : id.StartsWith("jira:", StringComparison.Ordinal) ? 1
-            : id.StartsWith("email:", StringComparison.Ordinal) ? 2
-            : 3;
+            : id.StartsWith("ado:", StringComparison.Ordinal) ? 2
+            : id.StartsWith("email:", StringComparison.Ordinal) ? 3
+            : 4;
         var canonical = parent
             .Keys.GroupBy(Find)
             .ToDictionary(

@@ -30,6 +30,7 @@ This guide installs Casebox on Kubernetes with the Helm chart in `deploy/helm/ca
    kubectl create secret generic casebox-worker \
      --from-literal=CASEBOX_WORKER_TOKEN=<worker token> \
      --from-literal=GITHUB_TOKEN=<read-only token> \
+     --from-literal=AZURE_DEVOPS_TOKEN=<Code (Read) token, for Azure DevOps Server> \
      --from-literal=CASEBOX_ANALYSIS_PROVIDER=openai --from-literal=CASEBOX_ANALYSIS_MODEL=<model id> \
      --from-literal=OPENAI_API_KEY=<key>
    helm upgrade casebox deploy/helm/casebox --reuse-values \

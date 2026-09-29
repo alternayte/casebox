@@ -1,6 +1,6 @@
 // Package gitmirror keeps bare mirrors of repositories for the worker, with the extra refs Casebox
-// reads: pull request heads, Entire checkpoints and git-ai notes. The token comes from the
-// worker's environment and is passed per command, never written into the mirror's config.
+// reads: pull request refs, Entire checkpoints and git-ai notes. The tokens come from the
+// worker's environment and are passed per command, never written into the mirror's config.
 package gitmirror
 
 import (
@@ -8,32 +8,113 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"github.com/alternayte/casebox/cli/internal/api"
 )
 
-// Refspecs the worker fetches besides branches and tags.
-var Refspecs = []string{
-	"+refs/heads/*:refs/heads/*",
-	"+refs/tags/*:refs/tags/*",
-	"+refs/pull/*/head:refs/pull/*/head",
-	"+refs/entire/checkpoints/*:refs/entire/checkpoints/*",
-	"+refs/notes/ai:refs/notes/ai",
+// Code hosts, as the server names them.
+const (
+	GitHub      = "github"
+	AzureDevOps = "azure-devops"
+)
+
+// Remote is where one repository is fetched from, with the worker's token for its host.
+type Remote struct {
+	URL   string
+	Host  string
+	Token string
+}
+
+// PullRef is the ref that holds a pull request's commits: its head on GitHub, and on Azure DevOps
+// its merge commit, whose second parent is the head.
+func (r Remote) PullRef(number int) string {
+	if r.Host == AzureDevOps {
+		return fmt.Sprintf("refs/pull/%d/merge", number)
+	}
+	return fmt.Sprintf("refs/pull/%d/head", number)
+}
+
+// refspecs the worker fetches: branches and tags, then the refs a repository may lack.
+func (r Remote) refspecs() []string {
+	pulls := "+refs/pull/*/head:refs/pull/*/head"
+	if r.Host == AzureDevOps {
+		pulls = "+refs/pull/*/merge:refs/pull/*/merge"
+	}
+	return []string{
+		"+refs/heads/*:refs/heads/*",
+		"+refs/tags/*:refs/tags/*",
+		pulls,
+		"+refs/entire/checkpoints/*:refs/entire/checkpoints/*",
+		"+refs/notes/ai:refs/notes/ai",
+	}
+}
+
+// Remotes finds each repository's clone URL in the server's list of workspace repositories, and
+// pairs it with the worker's token for that host: GITHUB_TOKEN, or AZURE_DEVOPS_TOKEN, a personal
+// access token with Code (Read).
+type Remotes struct {
+	Client           *api.Client
+	GitHubToken      string
+	AzureDevOpsToken string
+
+	mu    sync.Mutex
+	known map[string]Remote
+}
+
+// Remote returns where repo is fetched from. The list is read again when it lacks repo, so a
+// repository added after the worker started is found; a repository in no workspace is GitHub's.
+func (r *Remotes) Remote(ctx context.Context, repo string) (Remote, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if remote, ok := r.known[repo]; ok {
+		return remote, nil
+	}
+	var listed []struct {
+		Repo     string `json:"repo"`
+		Host     string `json:"host"`
+		CloneURL string `json:"cloneUrl"`
+	}
+	if err := r.Client.Do(ctx, http.MethodGet, "/worker/v1/repos", nil, &listed); err != nil {
+		return Remote{}, fmt.Errorf("list the workspace repositories: %w", err)
+	}
+	r.known = map[string]Remote{}
+	for _, l := range listed {
+		token := r.GitHubToken
+		if l.Host == AzureDevOps {
+			token = r.AzureDevOpsToken
+		}
+		r.known[l.Repo] = Remote{URL: l.CloneURL, Host: l.Host, Token: token}
+	}
+	if remote, ok := r.known[repo]; ok {
+		return remote, nil
+	}
+	return Remote{URL: "https://" + repo + ".git", Host: GitHub, Token: r.GitHubToken}, nil
 }
 
 // Mirror is one bare repository on disk.
 type Mirror struct {
-	Dir   string
-	URL   string
-	token string
+	Dir    string
+	URL    string
+	Remote Remote
 }
 
 // Open returns the mirror of repo (host/owner/name) under root, cloning it on first use and
 // fetching every Casebox ref.
-func Open(ctx context.Context, root, repo, token string) (*Mirror, error) {
-	m := &Mirror{Dir: filepath.Join(root, filepath.FromSlash(repo)+".git"), URL: "https://" + repo + ".git", token: token}
+func Open(ctx context.Context, root, repo string, remotes *Remotes) (*Mirror, error) {
+	remote, err := remotes.Remote(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	if remote.Host == AzureDevOps && remote.Token == "" {
+		return nil, fmt.Errorf("%s is on Azure DevOps Server; set AZURE_DEVOPS_TOKEN to a personal access token with Code (Read) before casebox worker", repo)
+	}
+	m := &Mirror{Dir: filepath.Join(root, filepath.FromSlash(repo)+".git"), URL: remote.URL, Remote: remote}
 	if _, err := os.Stat(filepath.Join(m.Dir, "HEAD")); err != nil {
 		if err := os.MkdirAll(m.Dir, 0o700); err != nil {
 			return nil, err
@@ -42,14 +123,15 @@ func Open(ctx context.Context, root, repo, token string) (*Mirror, error) {
 			return nil, err
 		}
 	}
-	args := append([]string{"fetch", "--quiet", "--prune", m.URL}, Refspecs...)
+	refspecs := remote.refspecs()
+	args := append([]string{"fetch", "--quiet", "--prune", m.URL}, refspecs...)
 	if _, err := m.Git(ctx, args...); err != nil {
 		// A repository without pull request refs, Entire refs or notes still fetches; only the
 		// missing refs fail.
-		if _, err2 := m.Git(ctx, "fetch", "--quiet", "--prune", m.URL, Refspecs[0], Refspecs[1]); err2 != nil {
+		if _, err2 := m.Git(ctx, "fetch", "--quiet", "--prune", m.URL, refspecs[0], refspecs[1]); err2 != nil {
 			return nil, fmt.Errorf("fetch %s: %w", repo, err)
 		}
-		for _, spec := range Refspecs[2:] {
+		for _, spec := range refspecs[2:] {
 			_, _ = m.Git(ctx, "fetch", "--quiet", m.URL, spec)
 		}
 	}
@@ -85,8 +167,9 @@ func (m *Mirror) Fetch(ctx context.Context, refspecs ...string) error {
 // Git runs a git command in the mirror and returns its standard output.
 func (m *Mirror) Git(ctx context.Context, args ...string) ([]byte, error) {
 	full := []string{"-C", m.Dir, "-c", "credential.helper="}
-	if m.token != "" {
-		auth := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + m.token))
+	// GitHub takes any user name with a token, and Azure DevOps with a personal access token.
+	if m.Remote.Token != "" {
+		auth := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + m.Remote.Token))
 		full = append(full, "-c", "http.extraHeader=Authorization: Basic "+auth)
 	}
 	cmd := exec.CommandContext(ctx, "git", append(full, args...)...)

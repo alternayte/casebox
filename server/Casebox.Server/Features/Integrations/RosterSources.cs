@@ -19,17 +19,15 @@ public sealed class GitHubRosterSource(GitHubClients clients, NpgsqlDataSource d
         var client = await clients.ForOrgAsync(orgId, ct);
         if (client is null)
             return [];
-        await using var connection = await db.OpenConnectionAsync(ct);
-        var repos = await connection.QueryAsync<string>(
-            new CommandDefinition(
-                "SELECT DISTINCT jsonb_array_elements_text(repos) FROM casebox.workspaces WHERE org_id = @Org",
-                new { Org = orgId },
-                cancellationToken: ct
-            )
-        );
-
         var people = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var repo in repos)
+        foreach (
+            var (repo, _) in await CodeHosts.RepoHosts.ReposAsync(
+                db,
+                orgId,
+                CodeHosts.CodeHostKinds.GitHub,
+                ct
+            )
+        )
         {
             var (owner, name) = GitHubReader.Split(repo);
             foreach (

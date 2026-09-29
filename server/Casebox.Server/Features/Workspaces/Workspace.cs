@@ -8,7 +8,9 @@ public static class WorkspaceEvents
 {
     public sealed record Created(string Name);
 
-    public sealed record RepoAdded(string Repo);
+    // Host and Collection say which code host serves the repository; events from before
+    // Azure DevOps have neither and are GitHub repositories.
+    public sealed record RepoAdded(string Repo, string? Host = null, string? Collection = null);
 
     public sealed record RepoRemoved(string Repo);
 }
@@ -35,8 +37,9 @@ public static partial class WorkspaceDecider
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,62}$")]
     private static partial Regex NamePattern();
 
-    // github.com/owner/name: the host, the owner and the repository, lower case.
-    [GeneratedRegex("^[a-z0-9.-]+/[a-z0-9_.-]+/[a-z0-9_.-]+$")]
+    // github.com/owner/name, or ado.example.com/tfs/defaultcollection/project/name: the host and
+    // the path of the remote without /_git, lower case.
+    [GeneratedRegex("^[a-z0-9.-]+(/[a-z0-9_.%-]+){2,8}$")]
     private static partial Regex RepoPattern();
 
     public static string NormalizeRepo(string repo)
@@ -47,7 +50,7 @@ public static partial class WorkspaceDecider
                 r = r[prefix.Length..];
         if (r.EndsWith(".git", StringComparison.Ordinal))
             r = r[..^4];
-        r = r.TrimEnd('/');
+        r = r.TrimEnd('/').Replace("/_git/", "/", StringComparison.Ordinal);
         if (!RepoPattern().IsMatch(r))
             throw new DomainException($"'{repo}' is not a repository like github.com/owner/name.");
         return r;
@@ -64,13 +67,25 @@ public static partial class WorkspaceDecider
         return [new WorkspaceEvents.Created(name)];
     }
 
-    public static IEnumerable<object> AddRepo(Workspace workspace, string repo)
+    // collections: the Azure DevOps collection URLs Casebox knows, so the repository's code host is
+    // found from its name and stored with it.
+    public static IEnumerable<object> AddRepo(
+        Workspace workspace,
+        string repo,
+        IReadOnlyCollection<string>? collections = null
+    )
     {
         Require(workspace);
         var normalized = NormalizeRepo(repo);
+        var host =
+            CodeHosts.RepoHosts.Resolve(normalized, collections ?? [])
+            ?? throw new DomainException(
+                $"'{normalized}' is not a GitHub repository and starts with no Azure DevOps collection Casebox knows; name its collection URL, such as https://ado.example.com/tfs/DefaultCollection.",
+                Cbx.UnknownCodeHost
+            );
         return workspace.Repos.Contains(normalized)
             ? []
-            : [new WorkspaceEvents.RepoAdded(normalized)];
+            : [new WorkspaceEvents.RepoAdded(normalized, host.Host, host.Collection)];
     }
 
     public static IEnumerable<object> RemoveRepo(Workspace workspace, string repo)

@@ -41,7 +41,7 @@ flowchart LR
   apply --> capture
 ```
 
-Hooks and the session logs on each machine feed the server. GitHub and Jira add pull requests, reviews, reverts and work items. Workers run the analysis model and hold its key. The server writes nothing to a git host: a change lands through `casebox apply` on your machine, and you commit it as usual.
+Hooks and the session logs on each machine feed the server. GitHub, Azure DevOps Server and Jira add pull requests, reviews, reverts and work items. Workers run the analysis model and hold its key. The server writes nothing to a git host: a change lands through `casebox apply` on your machine, and you commit it as usual.
 
 ## How Casebox differs
 
@@ -58,7 +58,7 @@ Casebox is not a coding agent, a code review tool or a CI system.
 - **Agents:** Claude Code, Codex and the Cursor CLI.
 - **Analysis models:** any OpenAI-compatible API, Anthropic, or the Cursor CLI's own login.
 - **Work items:** Jira Data Center and GitHub Issues.
-- **Code hosts:** GitHub, through a GitHub App or a fine-grained token.
+- **Code hosts:** GitHub, through a GitHub App or a fine-grained token; Azure DevOps Server 2022 or later, through a read-only personal access token.
 
 ## Privacy
 

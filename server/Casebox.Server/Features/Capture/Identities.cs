@@ -58,6 +58,26 @@ public sealed partial class Identities(
         return await TokenizeAsync(marked, period, ct);
     }
 
+    // An Azure DevOps @mention stores the identity's ID: @<6f2c…>.
+    [GeneratedRegex(
+        @"@<(?<id>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})>"
+    )]
+    private static partial Regex AdoMention();
+
+    // A Windows account, DOMAIN\user, as Azure DevOps Server shows people without mail.
+    [GeneratedRegex(@"(?<![\w\\])[A-Z][A-Z0-9-]{1,14}\\[A-Za-z][\w.-]{1,63}\b")]
+    private static partial Regex DomainAccount();
+
+    // Text from Azure DevOps: its @mentions and Windows accounts tokenized, then as other external text.
+    public Task<string?> TokenizeAdoAsync(string? text, string period, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(text))
+            return Task.FromResult(text);
+        var marked = AdoMention().Replace(text, m => $"⟦cbx:ado:{m.Groups["id"].Value}⟧");
+        marked = DomainAccount().Replace(marked, m => $"⟦cbx:account:{m.Value}⟧");
+        return TokenizeExternalAsync(marked, period, ct);
+    }
+
     private Regex? _names;
     private bool _namesLoaded;
 
@@ -187,7 +207,8 @@ public sealed partial class Identities(
     }
 
     public static string? Identity(string kind, string value) =>
-        kind is "email" or "github" or "account" or "name" or "jira" && value.Trim().Length > 0
+        kind is "email" or "github" or "account" or "name" or "jira" or "ado"
+        && value.Trim().Length > 0
             ? Privacy.Roster.Normalize($"{kind}:{value}")
             : null;
 

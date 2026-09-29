@@ -22,10 +22,10 @@ import (
 
 // Jobs runs proposal.draft on a worker with an analysis model.
 type Jobs struct {
-	Client      *api.Client
-	MirrorRoot  string
-	GitHubToken string
-	Model       *analysis.Client
+	Client     *api.Client
+	MirrorRoot string
+	Remotes    *gitmirror.Remotes
+	Model      *analysis.Client
 }
 
 // Preview is a changed file as the draft saw it: Before is nil for a new file.
@@ -248,7 +248,7 @@ func prompt(ev evidence, files map[string]string) string {
 // harness reads the repository's harness files at its default branch from the worker's mirror,
 // and returns a reader for other files at the same commit.
 func (j Jobs) harness(ctx context.Context, name string) (string, map[string]string, func(string) bool, func(string) (string, bool), error) {
-	m, err := gitmirror.Open(ctx, j.MirrorRoot, name, j.GitHubToken)
+	m, err := gitmirror.Open(ctx, j.MirrorRoot, name, j.Remotes)
 	if err != nil {
 		return "", nil, nil, nil, err
 	}

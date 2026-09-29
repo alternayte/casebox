@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Casebox.Server.Features.Auth;
+using Casebox.Server.Features.Integrations;
 using Dapper;
 using Deedbox;
 using Npgsql;
@@ -10,7 +11,9 @@ public static class WorkspaceEndpoints
 {
     public sealed record CreateWorkspace(string Name);
 
-    public sealed record RepoBody(string Repo);
+    // Collection: the Azure DevOps collection URL of the repository, when Casebox has no token for
+    // that collection yet.
+    public sealed record RepoBody(string Repo, string? Collection = null);
 
     public sealed record WorkspaceSummary(string Name, IReadOnlyList<string> Repos);
 
@@ -75,8 +78,50 @@ public static class WorkspaceEndpoints
         workspaces
             .MapPost(
                 "/{name}/repos",
-                (string name, RepoBody body, IEventStore store) =>
-                    Execute(store, name, w => WorkspaceDecider.AddRepo(w, body.Repo ?? ""))
+                async (
+                    string name,
+                    RepoBody body,
+                    HttpContext http,
+                    IEventStore store,
+                    IntegrationStore integrations
+                ) =>
+                {
+                    var collections =
+                        (
+                            await integrations.ConfigAsync<AzureDevOpsSettings>(
+                                http.User.OrgId(),
+                                CodeHosts.CodeHostKinds.AzureDevOps,
+                                http.RequestAborted
+                            )
+                        )?.Collections.ToList() ?? [];
+                    if (body.Collection is not null)
+                    {
+                        var collection =
+                            CodeHosts.RepoHosts.NormalizeCollection(body.Collection)
+                            ?? throw new DomainException(
+                                "The collection must be an http or https URL with its path, such as https://ado.example.com/tfs/DefaultCollection."
+                            );
+                        if (
+                            !WorkspaceDecider
+                                .NormalizeRepo(body.Repo ?? "")
+                                .StartsWith(
+                                    CodeHosts.RepoHosts.Prefix(collection) + "/",
+                                    StringComparison.Ordinal
+                                )
+                        )
+                            throw new DomainException(
+                                $"The repository '{body.Repo}' is not in the collection {collection}.",
+                                Cbx.UnknownCodeHost
+                            );
+                        collections = [collection];
+                    }
+
+                    return await Execute(
+                        store,
+                        name,
+                        w => WorkspaceDecider.AddRepo(w, body.Repo ?? "", collections)
+                    );
+                }
             )
             .RequireAuthorization(Policies.Admin);
 

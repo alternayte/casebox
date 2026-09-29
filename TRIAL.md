@@ -8,15 +8,18 @@ Everything runs on your laptop. Only the classification and drafting calls leave
 
 - Docker Desktop, running.
 - The Cursor CLI, logged in. Run `cursor-agent status` to check.
-- A git repository on GitHub in which you used the Cursor CLI. Its history is in `~/.cursor/projects/<folder>/agent-transcripts/`. A repository on Azure DevOps cannot be enrolled yet: `casebox init` refuses its remote name.
+- A git repository on GitHub or on Azure DevOps Server 2022 or later, in which you used the Cursor CLI. Its history is in `~/.cursor/projects/<folder>/agent-transcripts/`. Azure DevOps Services (dev.azure.com) is not supported.
+- A Casebox release newer than 0.1.0 for an Azure DevOps repository: 0.1.0 refuses its remote name.
 - An analysis model: your OpenAI key, or your Cursor login.
-- A GitHub token that can read the repository (a fine-grained token with Contents: read). The worker reads your current `AGENTS.md`, rules and skills with it when it drafts a proposal.
+- A token that can read the repository. The worker reads your current `AGENTS.md`, rules and skills with it when it drafts a proposal.
+  - GitHub: a fine-grained token with Contents: read.
+  - Azure DevOps Server: a personal access token with Code (Read). Create it in the collection under **User settings**, then **Personal access tokens**.
 
 ## Keep the trial private
 
 While you try Casebox alone:
 
-- Connect no git host or tracker in `casebox init`: press Enter when it asks for GitHub or Jira. Pull request authors and reviewers are other people, and their data ends the solo view for good.
+- Connect no git host or tracker in `casebox init`: press Enter when it asks for a GitHub token, an Azure DevOps token or Jira. Pull request authors and reviewers are other people, and their data ends the solo view for good.
 - Do not commit `.casebox/casebox.yml`. Add it to `.git/info/exclude`, your own ignore list: `echo /.casebox/ >> .git/info/exclude`.
 - Apply proposals without `--commit` (step 7). Your teammates see no change.
 
@@ -56,7 +59,8 @@ echo /.casebox/ >> .git/info/exclude
 ```
 
 1. A browser opens at a device page. Log in with the admin password, then click **Approve**.
-2. Press Enter to skip GitHub and Jira.
+2. On Azure DevOps, `init` shows the collection URL it found in your remote, such as `https://ado.example.com/tfs/DefaultCollection`. Press Enter to keep it, or type the correct URL. Then press Enter at the token prompt.
+3. Press Enter to skip Jira. On GitHub, also press Enter to skip the GitHub token.
 
 `init` also installs capture hooks for the Cursor CLI, Claude Code and Codex, so new sessions are captured as you work. `casebox pause` stops capture, and `casebox uninstall` removes the hooks.
 
@@ -87,6 +91,8 @@ casebox worker
 ```
 
 The worker runs `cursor-agent` in read-only ask mode, in an empty folder (`~/.casebox/analysis-workspace`). Each call uses one request of your Cursor plan. The model is `auto`. To choose a model, set `CASEBOX_ANALYSIS_MODEL` to a name from `cursor-agent --list-models`. Free plans can use `auto` only.
+
+On Azure DevOps Server, replace `export GITHUB_TOKEN=<read-only token>` with `export AZURE_DEVOPS_TOKEN=<Code (Read) token>`.
 
 Keep the worker running.
 
@@ -141,6 +147,23 @@ Casebox is worth your team's time if these hold:
 3. At least one applied proposal was followed by fewer corrections of its pattern.
 
 When you want your team to have a change: `casebox apply <id> --commit`, then commit it and open a pull request as usual.
+
+## Add your pull requests (optional)
+
+On Azure DevOps Server, Casebox can also read your pull requests, review threads and reverts, and count review corrections and reverts as steering. This ends the solo view for good, because the reviewers are other people.
+
+1. Create a personal access token with Code (Read) and Identity (Read).
+2. In the repository, run:
+
+   ```bash
+   export CASEBOX_AZURE_DEVOPS_TOKEN=<token>
+   casebox init --prompt-mode redacted
+   casebox doctor
+   ```
+
+3. Under **This repository**, `doctor` must show the collection as reachable and the token as able to read identities.
+
+The server polls every 5 minutes. The report then shows the pull requests' review corrections and reverts, for themes that at least 3 people stand behind. Tell me what the report shows for your pull requests.
 
 ## Add your team
 

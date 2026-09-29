@@ -24,6 +24,11 @@ public sealed record GitHubSecret(
 
 public sealed record JiraSettings(string Url, IReadOnlyList<string> Projects);
 
+// Azure DevOps Server: the collection URLs, and one personal access token per collection.
+public sealed record AzureDevOpsSettings(IReadOnlyList<string> Collections);
+
+public sealed record AzureDevOpsSecret(IReadOnlyDictionary<string, string> Tokens);
+
 public sealed record IntegrationStatus(
     string Kind,
     JsonElement Config,
@@ -130,6 +135,24 @@ public sealed class IntegrationStore(
             JsonSerializer.Deserialize<TConfig>(r.Config, Json)!,
             JsonSerializer.Deserialize<TSecret>(_protector.Unprotect(r.Secret), Json)!
         );
+    }
+
+    // The settings without the secret, for code that needs no credential.
+    public async Task<TConfig?> ConfigAsync<TConfig>(
+        string orgId,
+        string kind,
+        CancellationToken ct
+    )
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        var config = await connection.QuerySingleOrDefaultAsync<string>(
+            new CommandDefinition(
+                "SELECT config::text FROM casebox.integrations WHERE org_id = @Org AND kind = @Kind",
+                new { Org = orgId, Kind = kind },
+                cancellationToken: ct
+            )
+        );
+        return config is null ? default : JsonSerializer.Deserialize<TConfig>(config, Json);
     }
 
     public async Task<IReadOnlyList<IntegrationStatus>> ListAsync(

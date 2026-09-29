@@ -70,5 +70,5 @@ This page lists every event Casebox records, by stream. Casebox stores each busi
 | Event | Fields |
 | --- | --- |
 | `workspace.created v1` | `{ name: string }` |
-| `workspace.repo_added v1` | `{ repo: string }` |
+| `workspace.repo_added v1` | `{ collection: string?, host: string?, repo: string }` |
 | `workspace.repo_removed v1` | `{ repo: string }` |

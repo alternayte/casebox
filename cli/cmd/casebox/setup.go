@@ -45,7 +45,7 @@ var promptModes = []struct{ name, explain string }{
 }
 
 func newInitCommand() *cobra.Command {
-	var server, workspace, mode, jiraURL string
+	var server, workspace, mode, jiraURL, adoCollection string
 	var jiraProjects []string
 	var githubIssues bool
 	cmd := &cobra.Command{
@@ -65,6 +65,10 @@ func newInitCommand() *cobra.Command {
 			if state.Repo == "" {
 				return errors.New("this repository has no origin remote; Casebox names repositories by their remote, such as github.com/acme/app")
 			}
+			if repo.IsAzureDevOpsServices(state.Repo) {
+				return errors.New("this repository is on Azure DevOps Services (the cloud); Casebox reads Azure DevOps Server 2022 or later, and GitHub")
+			}
+			collection, onAzureDevOps := repo.AzureDevOpsCollection(state.Remote)
 			workspace = firstOf(workspace, cfg.Workspace, workspaceName(state.Repo))
 
 			client, who, err := login(ctx, server, out)
@@ -99,7 +103,14 @@ func newInitCommand() *cobra.Command {
 			if err != nil && api.StatusOf(err) != http.StatusConflict {
 				return err
 			}
-			if err := client.Do(ctx, http.MethodPost, "/api/v1/workspaces/"+workspace+"/repos", map[string]string{"repo": state.Repo}, nil); err != nil {
+			addRepo := map[string]string{"repo": state.Repo}
+			if onAzureDevOps {
+				if collection, err = connectAzureDevOps(ctx, client, out, in, firstOf(adoCollection, collection)); err != nil {
+					return err
+				}
+				addRepo["collection"] = collection
+			}
+			if err := client.Do(ctx, http.MethodPost, "/api/v1/workspaces/"+workspace+"/repos", addRepo, nil); err != nil {
 				return err
 			}
 			fmt.Fprintf(out, "  %s is in workspace %s.\n", state.Repo, workspace)
@@ -109,7 +120,7 @@ func newInitCommand() *cobra.Command {
 			}
 			fmt.Fprintf(out, "  Wrote %s. Commit it when your team joins: casebox join reads it.\n", repo.ConfigPath)
 
-			if err := connectIntegrations(ctx, client, cmd, in, out, jiraURL, jiraProjects, githubIssues); err != nil {
+			if err := connectIntegrations(ctx, client, in, out, !onAzureDevOps, jiraURL, jiraProjects, githubIssues); err != nil {
 				return err
 			}
 			return setUpMachine(ctx, client, server, *settings.PromptMode, out)
@@ -121,25 +132,52 @@ func newInitCommand() *cobra.Command {
 	cmd.Flags().StringVar(&jiraURL, "jira-url", "", "the Jira Data Center URL, such as https://jira.example.com")
 	cmd.Flags().StringSliceVar(&jiraProjects, "jira-project", nil, "a Jira project key, such as PAY; repeat for more")
 	cmd.Flags().BoolVar(&githubIssues, "github-issues", false, "track GitHub Issues as work items")
+	cmd.Flags().StringVar(&adoCollection, "ado-collection", "", "the Azure DevOps Server collection URL, such as https://ado.example.com/tfs/DefaultCollection (default: from the remote)")
 	return cmd
 }
 
-// connectIntegrations connects GitHub (a fine-grained token) and Jira Data Center (a personal
-// access token). Tokens come from CASEBOX_GITHUB_TOKEN and CASEBOX_JIRA_TOKEN, or a hidden prompt,
-// never from flags, which end up in shell history. Each step can be skipped and run again later.
-func connectIntegrations(ctx context.Context, client *api.Client, cmd *cobra.Command, in *bufio.Reader, out io.Writer, jiraURL string, jiraProjects []string, githubIssues bool) error {
-	step(out, "GitHub")
-	token := os.Getenv("CASEBOX_GITHUB_TOKEN")
+// connectAzureDevOps confirms the collection URL of an Azure DevOps Server remote and stores a
+// personal access token for it. The token comes from CASEBOX_AZURE_DEVOPS_TOKEN or a hidden prompt;
+// without one the repository is enrolled, and the server reads no pull requests.
+func connectAzureDevOps(ctx context.Context, client *api.Client, out io.Writer, in *bufio.Reader, collection string) (string, error) {
+	step(out, "Azure DevOps Server")
+	if answer := linePrompt(out, in, fmt.Sprintf("  Collection URL [%s]: ", collection)); answer != "" {
+		collection = answer
+	}
+	collection = strings.TrimRight(collection, "/")
+	token := os.Getenv("CASEBOX_AZURE_DEVOPS_TOKEN")
 	if token == "" {
-		token = secretPrompt(out, in, "  Fine-grained token with read access to contents, pull requests, issues and checks (Enter skips): ")
+		token = secretPrompt(out, in, "  Personal access token with Code (Read) and Identity (Read) (Enter skips): ")
 	}
 	if token == "" {
-		fmt.Fprintln(out, "  Skipped. Casebox sees no pull requests until GitHub is connected.")
-	} else {
-		if err := client.Do(ctx, http.MethodPut, "/api/v1/integrations/github", map[string]any{"mode": "token", "token": token, "issues": githubIssues}, nil); err != nil {
-			return fmt.Errorf("connect GitHub: %w", err)
+		fmt.Fprintln(out, "  Skipped. Casebox reads no pull requests from this collection until it has a token.")
+		return collection, nil
+	}
+	if err := client.Do(ctx, http.MethodPut, "/api/v1/integrations/azure-devops", map[string]string{"url": collection, "token": token}, nil); err != nil {
+		return "", fmt.Errorf("connect Azure DevOps: %w", err)
+	}
+	fmt.Fprintln(out, "  Connected. The server polls every 5 minutes.")
+	return collection, nil
+}
+
+// connectIntegrations connects GitHub (a fine-grained token), unless the repository is on Azure
+// DevOps, and Jira Data Center (a personal access token). Tokens come from CASEBOX_GITHUB_TOKEN and CASEBOX_JIRA_TOKEN, or a hidden prompt,
+// never from flags, which end up in shell history. Each step can be skipped and run again later.
+func connectIntegrations(ctx context.Context, client *api.Client, in *bufio.Reader, out io.Writer, github bool, jiraURL string, jiraProjects []string, githubIssues bool) error {
+	if github {
+		step(out, "GitHub")
+		token := os.Getenv("CASEBOX_GITHUB_TOKEN")
+		if token == "" {
+			token = secretPrompt(out, in, "  Fine-grained token with read access to contents, pull requests, issues and checks (Enter skips): ")
 		}
-		fmt.Fprintln(out, "  Connected. The server polls every 5 minutes.")
+		if token == "" {
+			fmt.Fprintln(out, "  Skipped. Casebox sees no pull requests until GitHub is connected.")
+		} else {
+			if err := client.Do(ctx, http.MethodPut, "/api/v1/integrations/github", map[string]any{"mode": "token", "token": token, "issues": githubIssues}, nil); err != nil {
+				return fmt.Errorf("connect GitHub: %w", err)
+			}
+			fmt.Fprintln(out, "  Connected. The server polls every 5 minutes.")
+		}
 	}
 
 	step(out, "Jira Data Center")

@@ -71,7 +71,7 @@ queuebox:
 worker:
   enabled: false
   replicas: 1
-  # A Secret with CASEBOX_WORKER_TOKEN, GITHUB_TOKEN and the analysis model settings
+  # A Secret with CASEBOX_WORKER_TOKEN, GITHUB_TOKEN (or AZURE_DEVOPS_TOKEN) and the analysis model settings
   # (CASEBOX_ANALYSIS_PROVIDER, CASEBOX_ANALYSIS_MODEL, the API key), as environment variables.
   envSecret: ""
   resources: {}

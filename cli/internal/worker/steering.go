@@ -22,7 +22,7 @@ import (
 type Steering struct {
 	Client      *api.Client
 	MirrorRoot  string
-	GitHubToken string
+	Remotes     *gitmirror.Remotes
 	Model       *analysis.Client // nil when this host has no analysis model
 	Concurrency int
 }
@@ -153,7 +153,7 @@ func (s Steering) commitTexts(ctx context.Context, windows []steering.Window) (m
 		m, ok := mirrors[w.Repo]
 		if !ok {
 			var err error
-			if m, err = gitmirror.Open(ctx, s.MirrorRoot, w.Repo, s.GitHubToken); err != nil {
+			if m, err = gitmirror.Open(ctx, s.MirrorRoot, w.Repo, s.Remotes); err != nil {
 				return nil, err
 			}
 			mirrors[w.Repo] = m
@@ -232,12 +232,17 @@ func (s Steering) PR(ctx context.Context, job Job) (any, error) {
 	if err := json.Unmarshal(job.Payload, &p); err != nil || p.Repo == "" || p.Number <= 0 {
 		return nil, Permanent{errors.New("the job names no repository or pull request")}
 	}
-	m, err := gitmirror.Open(ctx, s.MirrorRoot, p.Repo, s.GitHubToken)
+	m, err := gitmirror.Open(ctx, s.MirrorRoot, p.Repo, s.Remotes)
 	if err != nil {
 		return nil, err
 	}
-	ref := fmt.Sprintf("refs/pull/%d/head", p.Number)
+	ref := m.Remote.PullRef(p.Number)
+	// Azure DevOps drops a pull request's ref when it completes; its head can still be fetched by
+	// commit while a branch or the merge keeps it.
 	if err := m.Fetch(ctx, "+"+ref+":"+ref); err != nil {
+		if p.HeadSHA != "" {
+			_ = m.Fetch(ctx, p.HeadSHA)
+		}
 		if _, err2 := m.Git(ctx, "cat-file", "-e", p.HeadSHA+"^{commit}"); p.HeadSHA == "" || err2 != nil {
 			return nil, fmt.Errorf("fetch %s of %s: %w", ref, p.Repo, err)
 		}

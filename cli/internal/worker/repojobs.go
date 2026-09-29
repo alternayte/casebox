@@ -20,9 +20,9 @@ import (
 
 // RepoJobs reads the extra refs of a repository: Entire checkpoints and git-ai notes.
 type RepoJobs struct {
-	Client      *api.Client
-	MirrorRoot  string
-	GitHubToken string // from the worker's environment; the server never holds it
+	Client     *api.Client
+	MirrorRoot string
+	Remotes    *gitmirror.Remotes // with the worker's tokens; the server never holds them
 }
 
 type repoPayload struct {
@@ -143,7 +143,7 @@ func (r RepoJobs) open(ctx context.Context, job Job) (repoPayload, *gitmirror.Mi
 	if p.SinceDays <= 0 {
 		p.SinceDays = 183
 	}
-	m, err := gitmirror.Open(ctx, r.MirrorRoot, p.Repo, r.GitHubToken)
+	m, err := gitmirror.Open(ctx, r.MirrorRoot, p.Repo, r.Remotes)
 	return p, m, err
 }
 

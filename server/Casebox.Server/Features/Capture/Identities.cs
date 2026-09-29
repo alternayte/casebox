@@ -6,7 +6,7 @@ namespace Casebox.Server.Features.Capture;
 
 // Replaces identity marks with subject IDs from the Deedbox pseudonymizer, in memory, before any
 // write. An email the CLI did not mark is tokenized too, so no raw address is ever stored.
-public sealed partial class Identities(IPseudonyms pseudonyms)
+public sealed partial class Identities(IPseudonyms pseudonyms, Privacy.Roster roster, DeedboxContext context)
 {
     [GeneratedRegex(@"⟦cbx:(?<kind>[a-z]+):(?<value>[^⟧]{1,320})⟧")]
     private static partial Regex Mark();
@@ -26,14 +26,17 @@ public sealed partial class Identities(IPseudonyms pseudonyms)
         _ => Deedbox.PseudonymPeriod.Quarter(at),
     };
 
-    // The subject of one identity mark, for fields that hold exactly one person.
-    public async Task<string?> SubjectOfMarkAsync(string? mark, string period, CancellationToken ct)
+    // The subject of one identity mark, for fields that hold exactly one person, and whether the
+    // roster mapped it. Unmapped subjects never count toward k.
+    public async Task<(string Subject, bool Mapped)?> SubjectOfMarkAsync(string? mark, string period, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(mark)) return null;
         var match = Mark().Match(mark);
-        return match.Success && match.Length == mark.Length
-            ? await SubjectAsync(match.Groups["kind"].Value, match.Groups["value"].Value, period, ct)
-            : null;
+        if (!match.Success || match.Length != mark.Length) return null;
+        var identity = Identity(match.Groups["kind"].Value, match.Groups["value"].Value);
+        if (identity is null) return null;
+        var canonical = await roster.CanonicalOfAsync(context.TenantId, identity, ct);
+        return (await SubjectForAsync(canonical ?? identity, period, ct), canonical is not null);
     }
 
     public async Task<string> TokenizeAsync(string text, string period, CancellationToken ct)
@@ -45,14 +48,19 @@ public sealed partial class Identities(IPseudonyms pseudonyms)
 
     private async Task<string> SubjectAsync(string kind, string value, string period, CancellationToken ct)
     {
-        var identity = kind switch
-        {
-            "email" or "github" or "account" => $"{kind}:{value.Trim().ToLowerInvariant()}",
-            "name" => $"name:{value.Trim()}",
-            _ => null,
-        };
-        if (identity is null || identity.Length <= kind.Length + 1) return "[identity]";
+        var identity = Identity(kind, value);
+        if (identity is null) return "[identity]";
+        var canonical = await roster.CanonicalOfAsync(context.TenantId, identity, ct);
+        return await SubjectForAsync(canonical ?? identity, period, ct);
+    }
 
+    public static string? Identity(string kind, string value) =>
+        kind is "email" or "github" or "account" or "name" or "jira" && value.Trim().Length > 0
+            ? Privacy.Roster.Normalize($"{kind}:{value}")
+            : null;
+
+    private async Task<string> SubjectForAsync(string identity, string period, CancellationToken ct)
+    {
         var key = $"{period}|{identity}";
         if (!_cache.TryGetValue(key, out var subject))
         {

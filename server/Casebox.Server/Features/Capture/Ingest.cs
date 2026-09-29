@@ -64,7 +64,8 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
         Validate(batch);
 
         var session = batch.Session;
-        var person = await identities.SubjectOfMarkAsync(session.Person, Identities.PeriodOf(settings.PseudonymPeriod, session.StartedAt), ct)
+        var sessionPeriod = Identities.PeriodOf(settings.PseudonymPeriod, session.StartedAt);
+        var (person, mapped) = await identities.SubjectOfMarkAsync(session.Person, sessionPeriod, ct)
             ?? throw new DomainException("The session's person must be one identity mark.");
 
         var rows = new List<object>(batch.Events.Count);
@@ -98,8 +99,8 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
         var now = clock.GetUtcNow();
         await connection.ExecuteAsync(new CommandDefinition(
             """
-            INSERT INTO casebox.sessions (org_id, id, agent, agent_version, model, repo, branch, head_start, head_end, person, work_item, source, started_at, ended_at, created_at, updated_at)
-            VALUES (@Org, @Id, @Agent, @AgentVersion, @Model, @Repo, @Branch, @HeadStart, @HeadEnd, @Person, @WorkItem, @Source, @StartedAt, @EndedAt, @Now, @Now)
+            INSERT INTO casebox.sessions (org_id, id, agent, agent_version, model, repo, branch, head_start, head_end, person, person_mapped, period, work_item, source, started_at, ended_at, created_at, updated_at)
+            VALUES (@Org, @Id, @Agent, @AgentVersion, @Model, @Repo, @Branch, @HeadStart, @HeadEnd, @Person, @Mapped, @Period, @WorkItem, @Source, @StartedAt, @EndedAt, @Now, @Now)
             ON CONFLICT (org_id, id) DO UPDATE SET
                 agent_version = COALESCE(EXCLUDED.agent_version, sessions.agent_version),
                 model = COALESCE(EXCLUDED.model, sessions.model),
@@ -108,6 +109,8 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
                 head_start = COALESCE(sessions.head_start, EXCLUDED.head_start),
                 head_end = COALESCE(EXCLUDED.head_end, sessions.head_end),
                 work_item = COALESCE(EXCLUDED.work_item, sessions.work_item),
+                person = CASE WHEN EXCLUDED.person_mapped AND NOT sessions.person_mapped THEN EXCLUDED.person ELSE sessions.person END,
+                person_mapped = sessions.person_mapped OR EXCLUDED.person_mapped,
                 started_at = LEAST(sessions.started_at, EXCLUDED.started_at),
                 ended_at = GREATEST(sessions.ended_at, EXCLUDED.ended_at),
                 updated_at = EXCLUDED.updated_at
@@ -115,7 +118,7 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
             new
             {
                 Org = orgId, session.Id, session.Agent, session.AgentVersion, session.Model, Repo = session.Repo?.ToLowerInvariant(), session.Branch,
-                session.HeadStart, session.HeadEnd, Person = person, session.WorkItem, session.Source, session.StartedAt, session.EndedAt, Now = now,
+                session.HeadStart, session.HeadEnd, Person = person, Mapped = mapped, Period = sessionPeriod, session.WorkItem, session.Source, session.StartedAt, session.EndedAt, Now = now,
             },
             transaction, cancellationToken: ct));
 

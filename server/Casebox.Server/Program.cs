@@ -11,6 +11,7 @@ using Casebox.Server.Features.Health;
 using Casebox.Server.Features.Inbox;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Orgs;
+using Casebox.Server.Features.Privacy;
 using Casebox.Server.Features.Tokens;
 using Casebox.Server.Features.Workspaces;
 using Casebox.Server.Infrastructure;
@@ -58,6 +59,11 @@ builder.Services.AddRateLimiter(o =>
 });
 
 builder.Services.AddSingleton<JobQueue>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<Roster>();
+builder.Services.AddScoped<Erasure>();
+builder.Services.AddSingleton<Retention>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Retention>());
 builder.Services.AddScoped<Identities>();
 builder.Services.AddScoped<CaptureStore>();
 builder.Services.AddSingleton<BlobStore>(sp => options.Blobs.Store switch
@@ -109,6 +115,7 @@ api.MapDeviceLogin();
 api.MapOrg();
 api.MapWorkspaces();
 api.MapTokens();
+api.MapPrivacy();
 
 app.MapGroup("").RequireRateLimiting(IngestRateLimit).MapIngest();
 app.MapGroup("").RequireRateLimiting(IngestRateLimit).MapOtlp();

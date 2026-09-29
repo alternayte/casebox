@@ -71,3 +71,13 @@ public sealed class IdleJobHandler : IJobResultHandler
 
     public Task HandleAsync(JobResult result, CancellationToken ct) => Task.CompletedTask;
 }
+
+// The roster a GitHub organisation or Jira project would give: two identities of one person.
+public sealed class TestRoster : Casebox.Server.Features.Privacy.IRosterSource
+{
+    public const string Canonical = "github:ada-roster";
+    public const string Email = "email:ada.roster@example.com";
+
+    public Task<IReadOnlyList<Casebox.Server.Features.Privacy.RosterPerson>> PeopleAsync(string orgId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<Casebox.Server.Features.Privacy.RosterPerson>>([new(Canonical, [Email, "jira:ada"])]);
+}

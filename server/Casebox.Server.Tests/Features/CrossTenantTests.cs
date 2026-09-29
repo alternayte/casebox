@@ -108,6 +108,7 @@ public sealed class CrossTenantTests(StackFixture stack)
             session = new { id = a.SessionId, agent = "claude-code", source = "import", person = "⟦cbx:email:b@example.com⟧", startedAt = DateTimeOffset.UtcNow },
             events = new[] { new { seq = 0, at = DateTimeOffset.UtcNow, kind = "prompt", text = "B writes into its own session" } },
         }, Caller.Ingest),
+        new("POST", "/api/v1/privacy/erasures", new { identity = "email:alpha-owner@example.com" }, Caller.Admin),
         new("POST", "/v1/logs", new { resourceLogs = Array.Empty<object>() }, Caller.Ingest),
         new("POST", "/v1/metrics", new { resourceMetrics = Array.Empty<object>() }, Caller.Ingest),
     ];
@@ -125,7 +126,7 @@ public sealed class CrossTenantTests(StackFixture stack)
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         var known = new[] { "api", "v1", "worker", "auth", "local", "oidc", "login", "logout", "csrf", "me", "methods", "device", "code", "approve", "token", "devices", "accounts", "role", "org", "settings",
             "workspaces", "repos", "recipe", "validation", "confirmation", "tokens", "jobs", "lease", "heartbeat", "complete", "fail", "blobs",
-            "ingest", "config", "sessions", "logs", "metrics" };
+            "ingest", "config", "sessions", "logs", "metrics", "privacy", "erasures" };
         var normalized = new List<string>();
         foreach (var s in segments)
         {

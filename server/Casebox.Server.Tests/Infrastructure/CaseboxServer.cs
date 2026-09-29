@@ -58,6 +58,7 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
             services.AddScoped<IInboxHandler, TestInboxHandler>();
             services.AddSingleton<IJobResultHandler, TestJobHandler>();
             services.AddSingleton<IJobResultHandler, IdleJobHandler>();
+            services.AddSingleton<Casebox.Server.Features.Privacy.IRosterSource, TestRoster>();
         });
     }
 

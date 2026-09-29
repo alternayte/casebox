@@ -1,7 +1,7 @@
 <Project>
   <!-- The Deedbox family ships in lockstep; every package pins the same version. -->
   <PropertyGroup>
-    <DeedboxVersion>0.4.0</DeedboxVersion>
+    <DeedboxVersion>0.4.1</DeedboxVersion>
   </PropertyGroup>
 
   <ItemGroup>

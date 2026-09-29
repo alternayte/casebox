@@ -1,5 +1,7 @@
-# Design doc stays local
+# The design doc, the build log and the build specs stay local
 docs/SDD.md
+PROGRESS.md
+docs/specs/
 
 bin/
 obj/

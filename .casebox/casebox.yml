@@ -1,0 +1,10 @@
+version: 1
+workspace: casebox
+repos:
+  - github.com/alternayte/casebox
+work_items:
+  github_issues: true
+harness:
+  globs: [AGENTS.md, CLAUDE.md, ".cursor/rules/**", ".claude/skills/**", ".agents/skills/**", ".mcp.json"]
+capture:
+  redact: []   # extra secret patterns (regular expressions) to remove before anything leaves a machine

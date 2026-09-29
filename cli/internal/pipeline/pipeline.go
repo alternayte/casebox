@@ -53,18 +53,16 @@ func Open(ctx context.Context, dir string) (*Repo, error) {
 	if err != nil {
 		return nil, err
 	}
+	return New(root, cfg, repo.Current(ctx, root), capture.Mark("email", email), authorNames(ctx, root))
+}
+
+// New builds a pipeline from parts, for the worker, which reads a mirror instead of a checkout.
+func New(root string, cfg repo.Config, state repo.State, person string, names []string) (*Repo, error) {
 	redactor, err := capture.NewRedactor(cfg.Capture.Redact)
 	if err != nil {
 		return nil, errors.New("a capture.redact pattern in casebox.yml is not a valid regular expression: " + err.Error())
 	}
-	return &Repo{
-		Root:     root,
-		Config:   cfg,
-		State:    repo.Current(ctx, root),
-		Person:   capture.Mark("email", email),
-		redactor: redactor,
-		marker:   capture.NewMarker(authorNames(ctx, root)),
-	}, nil
+	return &Repo{Root: root, Config: cfg, State: state, Person: person, redactor: redactor, marker: capture.NewMarker(names)}, nil
 }
 
 // Session fills in what the repository knows about a session.
@@ -126,6 +124,9 @@ func keepText(mode, kind string) bool {
 func (r *Repo) relative(path string) string {
 	if !filepath.IsAbs(path) {
 		return filepath.ToSlash(path)
+	}
+	if r.Root == "" {
+		return filepath.Base(path)
 	}
 	// git reports the root with symlinks resolved (/private/var on macOS); agents report paths as
 	// they see them (/var), so both sides are resolved before comparing.

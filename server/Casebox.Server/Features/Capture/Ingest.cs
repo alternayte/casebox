@@ -53,7 +53,8 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
         "rewind", "human_edit", "compaction", "session_end", "api_request", "unknown",
     ];
 
-    private static readonly HashSet<string> Agents = ["claude-code", "codex", "cursor-cli"];
+    // Captured directly: Claude Code, Codex, Cursor CLI. Through Entire checkpoints also: OpenCode, Pi, Copilot CLI.
+    private static readonly HashSet<string> Agents = ["claude-code", "codex", "cursor-cli", "opencode", "pi", "copilot-cli"];
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
@@ -151,7 +152,7 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
         if (string.IsNullOrWhiteSpace(s.Id) || s.Id.Length > 200 || !s.Id.StartsWith($"{s.Agent}:", StringComparison.Ordinal))
             throw new DomainException("A session ID is '<agent>:<native id>', at most 200 characters.");
         if (!Agents.Contains(s.Agent)) throw new DomainException($"Unknown agent '{s.Agent}'.");
-        if (s.Source is not ("import" or "hook" or "otel")) throw new DomainException($"Unknown source '{s.Source}'.");
+        if (s.Source is not ("import" or "hook" or "otel" or "entire")) throw new DomainException($"Unknown source '{s.Source}'.");
         if (batch.Events.Count > MaxEventsPerBatch) throw new DomainException($"A batch holds at most {MaxEventsPerBatch} events.");
         foreach (var e in batch.Events)
         {
@@ -183,10 +184,11 @@ public static class Ingest
             return Results.Ok(new CaptureConfig(org.Settings.PromptMode, org.Settings.PromptMode is not null));
         });
 
-        ingest.MapPost("/sessions", async (CaptureBatch batch, HttpContext http, IEventStore store, CaptureStore capture) =>
+        ingest.MapPost("/sessions", async (CaptureBatch batch, HttpContext http, IEventStore store, CaptureStore capture, WorkItems.Linker linker) =>
         {
             var (org, _) = await store.Load<Organisation>(Organisation.StreamId);
             var stored = await capture.StoreAsync(http.User.OrgId(), org.Settings, batch, http.RequestAborted);
+            await linker.LinkSessionAsync(batch.Session.Id, http.RequestAborted);
             return Results.Ok(new { accepted = batch.Events.Count, stored });
         });
     }

@@ -11,6 +11,13 @@ public sealed class CaseboxOptions
     public KeysOptions Keys { get; set; } = new();
     public BlobOptions Blobs { get; set; } = new();
     public QueueBoxOptions QueueBox { get; set; } = new();
+    public GitHubOptions GitHub { get; set; } = new();
+
+    public sealed class GitHubOptions
+    {
+        // api.github.com, or a GitHub Enterprise Server's API root such as https://ghe.example.com/api/v3/.
+        public Uri ApiUrl { get; set; } = new("https://api.github.com/");
+    }
 
     // The port of /internal/effects and /healthz. It is never exposed outside the cluster or compose network.
     public int ManagementPort { get; set; } = 8081;

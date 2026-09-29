@@ -7,17 +7,23 @@ using Casebox.Server.Features.Auth;
 using Casebox.Server.Features.Blobs;
 using Casebox.Server.Features.Capture;
 using Casebox.Server.Features.Effects;
+using Casebox.Server.Features.GitHub;
 using Casebox.Server.Features.Health;
 using Casebox.Server.Features.Inbox;
+using Casebox.Server.Features.Jira;
+using Casebox.Server.Features.Integrations;
 using Casebox.Server.Features.Jobs;
 using Casebox.Server.Features.Orgs;
 using Casebox.Server.Features.Privacy;
+using Casebox.Server.Features.Repos;
 using Casebox.Server.Features.Tokens;
+using Casebox.Server.Features.WorkItems;
 using Casebox.Server.Features.Workspaces;
 using Casebox.Server.Infrastructure;
 using Casebox.Server.Infrastructure.Database;
 using Dapper;
 using Deedbox;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
@@ -60,6 +66,32 @@ builder.Services.AddRateLimiter(o =>
 
 builder.Services.AddSingleton<JobQueue>();
 builder.Services.AddMemoryCache();
+builder.Services.AddDataProtection().SetApplicationName("casebox");
+builder.Services.AddOptions<Microsoft.AspNetCore.DataProtection.KeyManagement.KeyManagementOptions>()
+    .Configure<NpgsqlDataSource>((o, ds) => o.XmlRepository = new PostgresKeyRepository(ds));
+builder.Services.AddSingleton<IntegrationStore>();
+builder.Services.AddSingleton<GitHubClients>();
+builder.Services.AddHttpClient("github");
+builder.Services.AddHttpClient("jira");
+builder.Services.AddHttpClient("queuebox");
+builder.Services.AddScoped<Linker>();
+builder.Services.AddSingleton<IJobResultHandler, EntireFetchResult>();
+builder.Services.AddSingleton<IJobResultHandler, GitAiFetchResult>();
+builder.Services.AddSingleton<RepoJobScheduler>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RepoJobScheduler>());
+builder.Services.AddScoped<GitHubReader>();
+builder.Services.AddSingleton<GitHubPoller>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<GitHubPoller>());
+builder.Services.AddSingleton<JiraPoller>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<JiraPoller>());
+builder.Services.AddSingleton<IRosterSource, GitHubRosterSource>();
+builder.Services.AddSingleton<IRosterSource, JiraRosterSource>();
+builder.Services.AddScoped<IInboxHandler, PullRequestHandler>();
+builder.Services.AddScoped<IInboxHandler, IssueHandler>();
+builder.Services.AddScoped<IInboxHandler, RevertCommitHandler>();
+builder.Services.AddScoped<IInboxHandler, JiraIssueHandler>();
+foreach (var githubEvent in new[] { "pull_request", "pull_request_review", "pull_request_review_comment", "check_run", "workflow_run", "push", "issues" })
+    builder.Services.AddScoped<IInboxHandler>(sp => new GitHubNoticeHandler(sp.GetRequiredService<GitHubPoller>()) { EventType = githubEvent });
 builder.Services.AddSingleton<Roster>();
 builder.Services.AddScoped<Erasure>();
 builder.Services.AddSingleton<Retention>();
@@ -75,7 +107,10 @@ builder.Services.AddSingleton<BlobStore>(sp => options.Blobs.Store switch
 });
 
 builder.Services.AddHttpClient<PollPublisher>();
-builder.Services.AddHostedService(sp => ActivatorUtilities.CreateInstance<InboxConsumer>(sp, InboxSources.Poll));
+// One consumer per QueueBox source. AddHostedService would keep only the first registration of a
+// type, so each consumer is registered as its own IHostedService.
+foreach (var source in new[] { InboxSources.Poll, GitHubWebhooks.Source })
+    builder.Services.AddSingleton<IHostedService>(sp => ActivatorUtilities.CreateInstance<InboxConsumer>(sp, source));
 
 builder.Services.AddHttpClient<QueueBoxHealthCheck>();
 builder.Services.AddHealthChecks()
@@ -116,13 +151,17 @@ api.MapOrg();
 api.MapWorkspaces();
 api.MapTokens();
 api.MapPrivacy();
+api.MapIntegrations();
+api.MapWorkItems();
 
 app.MapGroup("").RequireRateLimiting(IngestRateLimit).MapIngest();
 app.MapGroup("").RequireRateLimiting(IngestRateLimit).MapOtlp();
+app.MapGitHubWebhooks();
 
 var worker = app.MapGroup("/worker/v1");
 worker.MapWorkerJobs();
 worker.MapWorkerBlobs();
+worker.MapRepoJobs();
 
 app.MapOpenApi();
 app.MapFallbackToFile("index.html");

@@ -3,11 +3,24 @@
 stream org (Organisation)
   org.created v1 { name: string, settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }
   org.erasure_performed v1 { sessions: int32, subjects: int32 }
+  org.integration_configured v1 { connected: bool, kind: string }
   org.member_role_changed v1 { accountId: string, role: enum{Viewer=0, Member=1, Admin=2, Owner=3} }
   org.period_retired v1 { period: string, subjects: int32 }
   org.settings_changed v1 { settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }
   org.token_issued v1 { kind: string, name: string, tokenId: string }
   org.token_revoked v1 { tokenId: string }
+
+stream work_item (WorkItem)
+  work_item.ci_observed v1 { at: date-time, check: string, conclusion: string, number: int32, repo: string, sha: string }
+  work_item.fix_observed v1 { at: date-time, fixedBy: string, lines: int32, number: int32, repo: string, source: enum{Explicit=0, Branch=1, PullRequest=2, SameBranch=3, SameWorkItem=4} }
+  work_item.imported v1 { createdAt: date-time, key: string, provider: string, repo: string? }
+  work_item.merged v1 { at: date-time, number: int32, repo: string, sha: string }
+  work_item.pr_linked v1 { confidence: enum{Low=0, High=1, Explicit=2}, number: int32, repo: string, source: enum{Explicit=0, Branch=1, PullRequest=2, SameBranch=3, SameWorkItem=4} }
+  work_item.revert_observed v1 { at: date-time, number: int32, repo: string, revertedBy: string }
+  work_item.review_observed v1 { at: date-time, comments: int32, number: int32, repo: string, reviewId: int64, reviewer: string, state: string }
+  work_item.session_linked v1 { confidence: enum{Low=0, High=1, Explicit=2}, sessionId: string, source: enum{Explicit=0, Branch=1, PullRequest=2, SameBranch=3, SameWorkItem=4} }
+  work_item.session_reassigned v1 { sessionId: string, toWorkItem: string }
+  work_item.snapshot_captured v1 { reason: enum{FirstLinked=0, WorkStarted=1, TextChanged=2, Resolved=3}, snapshot: { assignee: string?, description: string?, hash: string, labels: [string], resolved: bool, status: string?, title: string, type: string? } }
 
 stream workspace (Workspace)
   workspace.created v1 { name: string }

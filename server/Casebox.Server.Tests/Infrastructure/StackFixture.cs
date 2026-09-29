@@ -42,6 +42,8 @@ public sealed class StackFixture : IAsyncLifetime
 
     public string S3Url => $"http://localhost:{_s3!.GetMappedPublicPort(9000)}";
 
+    public FakeServices Fakes { get; } = new();
+
     public CaseboxServer ServerA { get; private set; } = null!;
 
     public CaseboxServer ServerB { get; private set; } = null!;
@@ -105,6 +107,7 @@ public sealed class StackFixture : IAsyncLifetime
         foreach (var container in new[] { _queueBox, _oidc, _s3, _postgres })
             if (container is not null) await container.DisposeAsync();
         await _network.DisposeAsync();
+        await Fakes.DisposeAsync();
     }
 
     public static string RepoRoot()

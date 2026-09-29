@@ -52,6 +52,7 @@ public sealed class CaseboxServer : WebApplicationFactory<Program>
         builder.UseSetting("Casebox:QueueBox:HealthUrl", _stack.QueueBoxHealthUrl.ToString());
         builder.UseSetting("Casebox:QueueBox:PollToken", StackFixture.PollToken);
         builder.UseSetting("Casebox:QueueBox:EffectsToken", StackFixture.EffectsToken);
+        builder.UseSetting("Casebox:GitHub:ApiUrl", _stack.Fakes.GitHubApi.ToString());
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IEffectHandler>(Effects);

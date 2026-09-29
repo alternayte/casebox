@@ -52,6 +52,18 @@ routes:
     destination: effect-notify
 
 sources:
+  # GitHub App webhooks, after the server checked their HMAC and reduced each delivery to a notice
+  # that holds no identity. GitHub's delivery ID is the idempotency key, so a redelivery is stored once.
+  github:
+    type: http
+    path: /github
+    idempotencyKeyHeader: X-GitHub-Delivery
+    eventTypeHeader: X-GitHub-Event
+    consumption: pull
+    auth:
+      type: bearer
+      token: ${CASEBOX_POLL_TOKEN}
+
   # The server's GitHub and Jira pollers. A repeated poll of the same state has the same key and
   # is stored once.
   poll:

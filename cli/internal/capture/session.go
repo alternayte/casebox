@@ -37,8 +37,12 @@ const (
 	KindUnknown      = "unknown"
 )
 
-// HookSeqBase keeps hook sequence numbers apart from import sequence numbers.
-const HookSeqBase = 1_000_000_000
+// Sequence ranges keep sources apart within one session: import from 0, hooks from 1e9, OTel
+// (server side) from 2e9, Entire checkpoints from 3e9.
+const (
+	HookSeqBase   = 1_000_000_000
+	EntireSeqBase = 3_000_000_000
+)
 
 // Event is one thing that happened in a session.
 type Event struct {

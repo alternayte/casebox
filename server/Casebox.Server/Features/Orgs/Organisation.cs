@@ -49,6 +49,9 @@ public static class OrgEvents
 
     public sealed record TokenRevoked(string TokenId);
 
+    // An Admin connected (or removed) an integration. No secret is recorded.
+    public sealed record IntegrationConfigured(string Kind, bool Connected);
+
     // An erasure by identity. The identity itself is never recorded.
     public sealed record ErasurePerformed(int Subjects, int Sessions);
 

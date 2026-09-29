@@ -22,6 +22,10 @@ public sealed class Roster(IEnumerable<IRosterSource> sources, IMemoryCache cach
     public async Task<string?> CanonicalOfAsync(string orgId, string identity, CancellationToken ct) =>
         (await MapAsync(orgId, ct)).GetValueOrDefault(identity);
 
+    // Every person's name the roster knows, for tokenizing names in free text.
+    public async Task<IReadOnlyList<string>> NamesAsync(string orgId, CancellationToken ct) =>
+        (await MapAsync(orgId, ct)).Keys.Where(k => k.StartsWith("name:", StringComparison.Ordinal)).Select(k => k["name:".Length..]).ToList();
+
     // Every identity of the person behind an identity, the identity itself included.
     public async Task<IReadOnlyList<string>> AliasesOfAsync(string orgId, string identity, CancellationToken ct)
     {
@@ -35,17 +39,12 @@ public sealed class Roster(IEnumerable<IRosterSource> sources, IMemoryCache cach
     {
         if (cache.TryGetValue(Key(orgId), out Dictionary<string, string>? cached) && cached is not null) return cached;
 
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var people = new List<RosterPerson>();
         foreach (var source in sources)
         {
             try
             {
-                foreach (var person in await source.PeopleAsync(orgId, ct))
-                {
-                    map[Normalize(person.Canonical)] = Normalize(person.Canonical);
-                    foreach (var identity in person.Identities)
-                        map.TryAdd(Normalize(identity), Normalize(person.Canonical));
-                }
+                people.AddRange(await source.PeopleAsync(orgId, ct));
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
             {
@@ -55,8 +54,36 @@ public sealed class Roster(IEnumerable<IRosterSource> sources, IMemoryCache cach
             }
         }
 
+        var map = Merge(people);
         cache.Set(Key(orgId), map, Lifetime);
         return map;
+    }
+
+    // People from different sources who share an identity (a GitHub login and a Jira account with
+    // one email) are one person. The canonical identity prefers GitHub, then Jira, then email.
+    public static Dictionary<string, string> Merge(IEnumerable<RosterPerson> people)
+    {
+        var parent = new Dictionary<string, string>(StringComparer.Ordinal);
+        string Find(string x)
+        {
+            while (parent[x] != x) x = parent[x] = parent[parent[x]];
+            return x;
+        }
+
+        foreach (var person in people)
+        {
+            var ids = person.Identities.Append(person.Canonical).Select(Normalize).Distinct(StringComparer.Ordinal).ToList();
+            foreach (var id in ids) parent.TryAdd(id, id);
+            foreach (var id in ids.Skip(1))
+            {
+                var (a, b) = (Find(ids[0]), Find(id));
+                if (a != b) parent[b] = a;
+            }
+        }
+
+        static int Rank(string id) => id.StartsWith("github:", StringComparison.Ordinal) ? 0 : id.StartsWith("jira:", StringComparison.Ordinal) ? 1 : id.StartsWith("email:", StringComparison.Ordinal) ? 2 : 3;
+        var canonical = parent.Keys.GroupBy(Find).ToDictionary(g => g.Key, g => g.OrderBy(Rank).ThenBy(x => x, StringComparer.Ordinal).First());
+        return parent.Keys.ToDictionary(id => id, id => canonical[Find(id)], StringComparer.Ordinal);
     }
 
     public static string Normalize(string identity)

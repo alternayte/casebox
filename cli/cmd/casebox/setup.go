@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/alternayte/casebox/cli/internal/api"
 	"github.com/alternayte/casebox/cli/internal/config"
@@ -43,7 +44,9 @@ var promptModes = []struct{ name, explain string }{
 }
 
 func newInitCommand() *cobra.Command {
-	var server, workspace, mode string
+	var server, workspace, mode, jiraURL string
+	var jiraProjects []string
+	var githubIssues bool
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up this repository and this machine (admin)",
@@ -105,13 +108,84 @@ func newInitCommand() *cobra.Command {
 			}
 			fmt.Fprintf(out, "  Wrote %s. Commit it, so teammates can run casebox join.\n", repo.ConfigPath)
 
+			if err := connectIntegrations(ctx, client, cmd, in, out, jiraURL, jiraProjects, githubIssues); err != nil {
+				return err
+			}
 			return setUpMachine(ctx, client, server, *settings.PromptMode, out)
 		},
 	}
 	cmd.Flags().StringVar(&server, "server", "", "the Casebox server (default: casebox.yml, then http://localhost:8080)")
 	cmd.Flags().StringVar(&workspace, "workspace", "", "the workspace name (default: the repository name)")
 	cmd.Flags().StringVar(&mode, "prompt-mode", "", "off, redacted or full; without it, init asks")
+	cmd.Flags().StringVar(&jiraURL, "jira-url", "", "the Jira Data Center URL, such as https://jira.example.com")
+	cmd.Flags().StringSliceVar(&jiraProjects, "jira-project", nil, "a Jira project key, such as PAY; repeat for more")
+	cmd.Flags().BoolVar(&githubIssues, "github-issues", false, "track GitHub Issues as work items")
 	return cmd
+}
+
+// connectIntegrations connects GitHub (a fine-grained token) and Jira Data Center (a personal
+// access token). Tokens come from CASEBOX_GITHUB_TOKEN and CASEBOX_JIRA_TOKEN, or a hidden prompt,
+// never from flags, which end up in shell history. Each step can be skipped and run again later.
+func connectIntegrations(ctx context.Context, client *api.Client, cmd *cobra.Command, in *bufio.Reader, out io.Writer, jiraURL string, jiraProjects []string, githubIssues bool) error {
+	step(out, "GitHub")
+	token := os.Getenv("CASEBOX_GITHUB_TOKEN")
+	if token == "" {
+		token = secretPrompt(out, in, "  Fine-grained token with read access to contents, pull requests, issues and checks (Enter skips): ")
+	}
+	if token == "" {
+		fmt.Fprintln(out, "  Skipped. Casebox sees no pull requests until GitHub is connected.")
+	} else {
+		if err := client.Do(ctx, http.MethodPut, "/api/v1/integrations/github", map[string]any{"mode": "token", "token": token, "issues": githubIssues}, nil); err != nil {
+			return fmt.Errorf("connect GitHub: %w", err)
+		}
+		fmt.Fprintln(out, "  Connected. The server polls every 5 minutes.")
+	}
+
+	step(out, "Jira Data Center")
+	if jiraURL == "" {
+		jiraURL = linePrompt(out, in, "  Jira URL (Enter skips): ")
+	}
+	if jiraURL == "" {
+		fmt.Fprintln(out, "  Skipped.")
+		return nil
+	}
+	if len(jiraProjects) == 0 {
+		if keys := linePrompt(out, in, "  Project keys, comma-separated (such as PAY,OPS): "); keys != "" {
+			jiraProjects = strings.Split(keys, ",")
+		}
+	}
+	jiraToken := os.Getenv("CASEBOX_JIRA_TOKEN")
+	if jiraToken == "" {
+		jiraToken = secretPrompt(out, in, "  Personal access token: ")
+	}
+	if len(jiraProjects) == 0 || jiraToken == "" {
+		return errors.New("Jira needs project keys and a personal access token; run casebox init again to connect it")
+	}
+	if err := client.Do(ctx, http.MethodPut, "/api/v1/integrations/jira", map[string]any{"url": jiraURL, "token": jiraToken, "projects": jiraProjects}, nil); err != nil {
+		return fmt.Errorf("connect Jira: %w", err)
+	}
+	fmt.Fprintln(out, "  Connected. The server polls every 5 minutes.")
+	return nil
+}
+
+func linePrompt(out io.Writer, in *bufio.Reader, prompt string) string {
+	fmt.Fprint(out, prompt)
+	line, _ := in.ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
+// secretPrompt reads without echo on a terminal, and a plain line otherwise (tests, pipes).
+func secretPrompt(out io.Writer, in *bufio.Reader, prompt string) string {
+	fmt.Fprint(out, prompt)
+	if fd := int(os.Stdin.Fd()); term.IsTerminal(fd) {
+		secret, err := term.ReadPassword(fd)
+		fmt.Fprintln(out)
+		if err == nil {
+			return strings.TrimSpace(string(secret))
+		}
+	}
+	line, _ := in.ReadString('\n')
+	return strings.TrimSpace(line)
 }
 
 func newJoinCommand() *cobra.Command {

@@ -102,12 +102,25 @@ public sealed class CrossTenantTests(StackFixture stack)
         new("POST", $"/worker/v1/jobs/{a.JobId}/fail", new { workerId = "a-worker", error = "x", retryable = false }, Caller.Worker),
         new("GET", $"/worker/v1/blobs/{a.BlobHash}", null, Caller.Worker),
         new("PUT", $"/worker/v1/blobs/{a.BlobHash}", Encoding.UTF8.GetBytes("not A's bytes"), Caller.Worker),
+        new("POST", "/worker/v1/sessions", new
+        {
+            session = new { id = a.SessionId, agent = "claude-code", source = "entire", person = "⟦cbx:email:b@example.com⟧", startedAt = DateTimeOffset.UtcNow },
+            events = new[] { new { seq = 3_000_000_000, at = DateTimeOffset.UtcNow, kind = "prompt", text = "B's own session" } },
+        }, Caller.Worker),
+        new("POST", "/worker/v1/attributions", new { repo = "github.com/alpha-secret/repo", commits = Array.Empty<object>() }, Caller.Worker),
         new("GET", "/ingest/v1/config", null, Caller.Ingest),
         new("POST", "/ingest/v1/sessions", new
         {
             session = new { id = a.SessionId, agent = "claude-code", source = "import", person = "⟦cbx:email:b@example.com⟧", startedAt = DateTimeOffset.UtcNow },
             events = new[] { new { seq = 0, at = DateTimeOffset.UtcNow, kind = "prompt", text = "B writes into its own session" } },
         }, Caller.Ingest),
+        new("GET", "/api/v1/integrations/", null, Caller.Admin),
+        new("PUT", "/api/v1/integrations/github", new { mode = "token", token = "" }, Caller.Admin),
+        new("PUT", "/api/v1/integrations/jira", new { url = "not a url", token = "", projects = Array.Empty<string>() }, Caller.Admin),
+        new("DELETE", "/api/v1/integrations/unknown", null, Caller.Admin),
+        new("GET", "/api/v1/work-items/", null, Caller.Admin),
+        new("GET", "/api/v1/work-items/timeline?id=wi:jira:PAY-1", null, Caller.Admin),
+        new("PUT", $"/api/v1/sessions/{a.SessionId}/work-item", new { workItem = "wi:jira:PAY-1" }, Caller.Admin),
         new("POST", "/api/v1/privacy/erasures", new { identity = "email:alpha-owner@example.com" }, Caller.Admin),
         new("POST", "/v1/logs", new { resourceLogs = Array.Empty<object>() }, Caller.Ingest),
         new("POST", "/v1/metrics", new { resourceMetrics = Array.Empty<object>() }, Caller.Ingest),
@@ -123,10 +136,11 @@ public sealed class CrossTenantTests(StackFixture stack)
     // Normalizes a pattern or a concrete path to "METHOD /segment/{}/…" so the two compare.
     private static string Route(string method, string path)
     {
-        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var segments = path.Split('?')[0].Split('/', StringSplitOptions.RemoveEmptyEntries);
         var known = new[] { "api", "v1", "worker", "auth", "local", "oidc", "login", "logout", "csrf", "me", "methods", "device", "code", "approve", "token", "devices", "accounts", "role", "org", "settings",
             "workspaces", "repos", "recipe", "validation", "confirmation", "tokens", "jobs", "lease", "heartbeat", "complete", "fail", "blobs",
-            "ingest", "config", "sessions", "logs", "metrics", "privacy", "erasures" };
+            "ingest", "config", "sessions", "logs", "metrics", "privacy", "erasures",
+            "integrations", "github", "jira", "work-items", "timeline", "work-item", "attributions" };
         var normalized = new List<string>();
         foreach (var s in segments)
         {

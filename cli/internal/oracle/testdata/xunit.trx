@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="5b0e2f36-6c1a-4f0e-9a0e-0d6c4c1f2b11" name="runner@build-7 2026-09-29 10:12:01" runUser="runner" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-29T10:12:01.4413021+00:00" queuing="2026-09-29T10:12:01.4413025+00:00" start="2026-09-29T10:11:59.8830140+00:00" finish="2026-09-29T10:12:01.4598817+00:00" />
+  <TestSettings name="default" id="0f9b6a3e-2d5c-4c8e-8a4d-7f3f1c2e9d01">
+    <Deployment runDeploymentRoot="runner_build-7_2026-09-29_10_12_01" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="a1d2c3b4-0001-4000-8000-000000000001" testId="7c0f5a6e-1111-4f00-9000-000000000001" testName="Shop.Tests.CalcTests.Adds" computerName="build-7" duration="00:00:00.0021934" startTime="2026-09-29T10:12:00.9921883+00:00" endTime="2026-09-29T10:12:00.9943817+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1d2c3b4-0001-4000-8000-000000000001" />
+    <UnitTestResult executionId="a1d2c3b4-0002-4000-8000-000000000002" testId="7c0f5a6e-1111-4f00-9000-000000000002" testName="Shop.Tests.CalcTests.Subtracts" computerName="build-7" duration="00:00:00.0153310" startTime="2026-09-29T10:12:00.9950212+00:00" endTime="2026-09-29T10:12:01.0103522+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1d2c3b4-0002-4000-8000-000000000002">
+      <Output>
+        <StdOut>computing 5 - 3</StdOut>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ
+Expected: 3
+Actual:   2</Message>
+          <StackTrace>   at Shop.Tests.CalcTests.Subtracts() in /work/shop/tests/Shop.Tests/CalcTests.cs:line 18
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a1d2c3b4-0003-4000-8000-000000000003" testId="7c0f5a6e-1111-4f00-9000-000000000003" testName="Shop.Tests.CalcTests.NeedsDatabase" computerName="build-7" duration="00:00:00.0000001" startTime="2026-09-29T10:12:01.0110000+00:00" endTime="2026-09-29T10:12:01.0110001+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1d2c3b4-0003-4000-8000-000000000003">
+      <Output>
+        <StdOut>needs a database</StdOut>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a1d2c3b4-0004-4000-8000-000000000004" testId="7c0f5a6e-1111-4f00-9000-000000000004" testName="Shop.Tests.CalcTests.Divides(a: 6, b: 3, expected: 2)" computerName="build-7" duration="00:00:00.0004120" startTime="2026-09-29T10:12:01.0120000+00:00" endTime="2026-09-29T10:12:01.0124120+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1d2c3b4-0004-4000-8000-000000000004" />
+    <UnitTestResult executionId="a1d2c3b4-0005-4000-8000-000000000005" testId="7c0f5a6e-1111-4f00-9000-000000000005" testName="Shop.Tests.CalcTests.Divides(a: 1, b: 0, expected: 0)" computerName="build-7" duration="00:00:01.2500000" startTime="2026-09-29T10:12:01.0130000+00:00" endTime="2026-09-29T10:12:02.2630000+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1d2c3b4-0005-4000-8000-000000000005">
+      <Output>
+        <ErrorInfo>
+          <Message>System.DivideByZeroException : Attempted to divide by zero.</Message>
+          <StackTrace>   at Shop.Calc.Divide(Int32 a, Int32 b) in /work/shop/src/Shop/Calc.cs:line 9
+   at Shop.Tests.CalcTests.Divides(Int32 a, Int32 b, Int32 expected) in /work/shop/tests/Shop.Tests/CalcTests.cs:line 27</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Shop.Tests.CalcTests.Adds" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="7c0f5a6e-1111-4f00-9000-000000000001">
+      <Execution id="a1d2c3b4-0001-4000-8000-000000000001" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Shop.Tests.CalcTests" name="Shop.Tests.CalcTests.Adds" />
+    </UnitTest>
+    <UnitTest name="Shop.Tests.CalcTests.Subtracts" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="7c0f5a6e-1111-4f00-9000-000000000002">
+      <Execution id="a1d2c3b4-0002-4000-8000-000000000002" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Shop.Tests.CalcTests" name="Shop.Tests.CalcTests.Subtracts" />
+    </UnitTest>
+    <UnitTest name="Shop.Tests.CalcTests.NeedsDatabase" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="7c0f5a6e-1111-4f00-9000-000000000003">
+      <Execution id="a1d2c3b4-0003-4000-8000-000000000003" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Shop.Tests.CalcTests" name="Shop.Tests.CalcTests.NeedsDatabase" />
+    </UnitTest>
+    <UnitTest name="Shop.Tests.CalcTests.Divides(a: 6, b: 3, expected: 2)" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="7c0f5a6e-1111-4f00-9000-000000000004">
+      <Execution id="a1d2c3b4-0004-4000-8000-000000000004" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Shop.Tests.CalcTests" name="Shop.Tests.CalcTests.Divides(a: 6, b: 3, expected: 2)" />
+    </UnitTest>
+    <UnitTest name="Shop.Tests.CalcTests.Divides(a: 1, b: 0, expected: 0)" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="7c0f5a6e-1111-4f00-9000-000000000005">
+      <Execution id="a1d2c3b4-0005-4000-8000-000000000005" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="Shop.Tests.CalcTests" name="Shop.Tests.CalcTests.Divides(a: 1, b: 0, expected: 0)" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="7c0f5a6e-1111-4f00-9000-000000000001" executionId="a1d2c3b4-0001-4000-8000-000000000001" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7c0f5a6e-1111-4f00-9000-000000000002" executionId="a1d2c3b4-0002-4000-8000-000000000002" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7c0f5a6e-1111-4f00-9000-000000000003" executionId="a1d2c3b4-0003-4000-8000-000000000003" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7c0f5a6e-1111-4f00-9000-000000000004" executionId="a1d2c3b4-0004-4000-8000-000000000004" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7c0f5a6e-1111-4f00-9000-000000000005" executionId="a1d2c3b4-0005-4000-8000-000000000005" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="4" passed="2" failed="2" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.8.2+699d445a1a (64-bit .NET 10.0.0)
+[xUnit.net 00:00:00.12]   Discovering: Shop.Tests
+[xUnit.net 00:00:00.31]   Finished:    Shop.Tests</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

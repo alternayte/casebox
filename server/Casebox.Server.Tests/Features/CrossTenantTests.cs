@@ -343,6 +343,39 @@ public sealed class CrossTenantTests(StackFixture stack)
                 Caller.Worker
             ),
             new("GET", "/worker/v1/steering/examples", null, Caller.Worker),
+            new("GET", "/api/v1/cases/?workspace=" + a.Workspace, null, Caller.Admin),
+            new("GET", "/api/v1/cases/queue?workspace=" + a.Workspace, null, Caller.Admin),
+            new("GET", "/api/v1/cases/00000000000000000000", null, Caller.Admin),
+            new("GET", "/api/v1/cases/00000000000000000000/validations", null, Caller.Admin),
+            new("GET", "/api/v1/cases/00000000000000000000/oracle", null, Caller.Admin),
+            new(
+                "PUT",
+                "/api/v1/cases/00000000000000000000/instruction",
+                new { text = "B's words" },
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/cases/00000000000000000000/assertions",
+                new { assertions = new[] { new { kind = "forbidden_file", path = "x" } } },
+                Caller.Admin
+            ),
+            new("POST", "/api/v1/cases/00000000000000000000/approval", null, Caller.Admin),
+            new(
+                "POST",
+                "/api/v1/cases/approvals",
+                new { ids = new[] { "00000000000000000000" } },
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/cases/00000000000000000000/rejection",
+                new { reason = "b" },
+                Caller.Admin
+            ),
+            new("POST", "/api/v1/cases/00000000000000000000/retirement", null, Caller.Admin),
+            new("POST", $"/api/v1/workspaces/{a.Workspace}/mining", null, Caller.Admin),
+            new("GET", "/worker/v1/cases/00000000000000000000/source", null, Caller.Worker),
             new("POST", "/v1/logs", new { resourceLogs = Array.Empty<object>() }, Caller.Ingest),
             new(
                 "POST",
@@ -431,6 +464,18 @@ public sealed class CrossTenantTests(StackFixture stack)
             "agreement",
             "windows",
             "examples",
+            "cases",
+            "queue",
+            "instruction",
+            "assertions",
+            "approval",
+            "approvals",
+            "rejection",
+            "retirement",
+            "mining",
+            "source",
+            "validations",
+            "oracle",
         };
         var normalized = new List<string>();
         foreach (var s in segments)

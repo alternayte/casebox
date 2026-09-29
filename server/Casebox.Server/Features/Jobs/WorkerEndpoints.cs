@@ -74,6 +74,7 @@ public static class WorkerEndpoints
                         body.WorkerId,
                         body.Result,
                         store,
+                        http.RequestServices,
                         http.RequestAborted
                     )
                 )

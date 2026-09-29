@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="4" failures="1" errors="1" time="2.113">
+  <testsuite name="cart" errors="0" failures="1" skipped="1" timestamp="2026-09-29T10:50:01" time="1.204" tests="4">
+    <testcase classname="cart adds an item" name="cart adds an item" time="0.004">
+    </testcase>
+    <testcase classname="cart totals › with a discount" name="cart totals › with a discount" time="0.011">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 90
+Received: 100
+    at Object.toBe (/work/shop/web/src/cart.test.ts:21:28)
+    at Promise.then.completed (/work/shop/web/node_modules/jest-circus/build/utils.js:298:28)</failure>
+    </testcase>
+    <testcase classname="cart totals › with tax" name="cart totals › with tax" time="0.002">
+    </testcase>
+    <testcase classname="cart ships abroad" name="cart ships abroad" time="0">
+      <skipped/>
+    </testcase>
+  </testsuite>
+  <testsuite name="src/checkout.test.ts" errors="1" failures="0" skipped="0" timestamp="2026-09-29T10:50:02" time="0" tests="0">
+  </testsuite>
+</testsuites>

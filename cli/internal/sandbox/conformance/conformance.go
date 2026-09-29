@@ -22,6 +22,12 @@ const Image = "alpine:3.20"
 // ServiceImage is the service the suite starts beside a sandbox.
 const ServiceImage = "redis:7-alpine"
 
+// EgressAllowed is the host the egress subtest allows, and EgressAllowedURL a stable page on it.
+const (
+	EgressAllowed    = "proxy.golang.org"
+	EgressAllowedURL = "https://proxy.golang.org/golang.org/x/text/@v/list"
+)
+
 // Run checks one provider. Every sandbox it starts is destroyed before it returns.
 func Run(t *testing.T, p sandbox.Provider) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
@@ -162,6 +168,74 @@ func Run(t *testing.T, p sandbox.Provider) {
 		}
 		if res := exec(ctx, t, p, sb, sandbox.Command{Args: []string{"sh", "-c", "nc -w 3 1.1.1.1 443 </dev/null && echo reached"}, Timeout: 20 * time.Second}); strings.Contains(string(res.Stdout), "reached") {
 			t.Fatal("a sandbox with network none reached the internet")
+		}
+	})
+
+	// A provider that returns sandbox.ErrUnsupported for Egress skips this subtest; any other
+	// error fails it.
+	t.Run("egress allow-list", func(t *testing.T) {
+		withService := spec
+		withService.Services = []sandbox.Service{{Name: "cache", Image: ServiceImage}}
+		ref, err := p.Prepare(ctx, withService)
+		if err != nil {
+			t.Fatalf("Prepare with a service: %v", err)
+		}
+		sb, err := p.Start(ctx, ref, sandbox.StartOptions{Egress: []string{EgressAllowed}})
+		if errors.Is(err, sandbox.ErrUnsupported) {
+			t.Skipf("the provider does not support egress allow-lists: %v", err)
+		}
+		if err != nil {
+			t.Fatalf("Start with an egress allow-list: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := p.Destroy(context.Background(), sb); err != nil {
+				t.Errorf("Destroy: %v", err)
+			}
+		})
+		fetch := func(url string) sandbox.ExecResult {
+			return exec(ctx, t, p, sb, sandbox.Command{Args: []string{"wget", "-q", "-O", "/dev/null", "-T", "20", url}, Timeout: 60 * time.Second})
+		}
+		var last sandbox.ExecResult
+		for attempt := 0; attempt < 3; attempt++ {
+			if last = fetch(EgressAllowedURL); last.ExitCode == 0 {
+				break
+			}
+			time.Sleep(2 * time.Second)
+		}
+		if last.ExitCode != 0 {
+			t.Fatalf("the allowed host %s is not reachable over HTTPS: exit %d: %s", EgressAllowed, last.ExitCode, last.Stderr)
+		}
+		for _, url := range []string{"https://github.com/", "http://github.com/", "https://" + EgressAllowed + ":8443/"} {
+			if res := fetch(url); res.ExitCode == 0 {
+				t.Fatalf("%s was reachable, but it is not on the allow-list", url)
+			}
+		}
+		// wget sends GET https://… to the proxy; most tools send CONNECT, so check that too.
+		connect := func(target string) string {
+			script := `p=${HTTPS_PROXY#http://}; p=${p%/}; printf 'CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n' "$0" "$0" | nc -w 5 "${p%:*}" "${p##*:}" | head -n 1`
+			return string(exec(ctx, t, p, sb, sandbox.Command{Args: []string{"sh", "-c", script, target}, Timeout: 30 * time.Second}).Stdout)
+		}
+		if line := connect(EgressAllowed + ":443"); !strings.Contains(line, " 200 ") {
+			t.Fatalf("CONNECT to the allowed host answered %q, want 200", line)
+		}
+		if line := connect("github.com:443"); strings.Contains(line, " 200 ") {
+			t.Fatalf("CONNECT to github.com answered %q", line)
+		}
+		if res := exec(ctx, t, p, sb, sandbox.Command{Args: []string{"sh", "-c", "nc -w 3 1.1.1.1 443 </dev/null && echo reached"}, Timeout: 20 * time.Second}); strings.Contains(string(res.Stdout), "reached") {
+			t.Fatal("a raw connection to 1.1.1.1:443 went around the proxy")
+		}
+		if res := exec(ctx, t, p, sb, sandbox.Command{Args: []string{"nslookup", "github.com"}, Timeout: 20 * time.Second}); res.ExitCode == 0 {
+			t.Fatalf("the sandbox resolved an outside name: %s", res.Stdout)
+		}
+		reached := false
+		for deadline := time.Now().Add(60 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
+			if res := exec(ctx, t, p, sb, sandbox.Command{Args: []string{"sh", "-c", "printf 'PING\\r\\n' | nc -w 2 cache 6379"}, Timeout: 10 * time.Second}); strings.Contains(string(res.Stdout), "PONG") {
+				reached = true
+				break
+			}
+		}
+		if !reached {
+			t.Fatal("a sandbox with an egress allow-list cannot reach its service by name")
 		}
 	})
 

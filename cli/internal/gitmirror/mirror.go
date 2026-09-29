@@ -53,7 +53,27 @@ func Open(ctx context.Context, root, repo, token string) (*Mirror, error) {
 			_, _ = m.Git(ctx, "fetch", "--quiet", m.URL, spec)
 		}
 	}
+	m.followRemoteHead(ctx)
 	return m, nil
+}
+
+// followRemoteHead points the mirror's HEAD at the remote's default branch, so HEAD in the mirror
+// is the default branch as on the host. When the remote does not say, HEAD stays as it is.
+func (m *Mirror) followRemoteHead(ctx context.Context) {
+	out, err := m.Git(ctx, "ls-remote", "--symref", m.URL, "HEAD")
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		ref, rest, ok := strings.Cut(strings.TrimPrefix(line, "ref: "), "\t")
+		if !ok || !strings.HasPrefix(line, "ref: ") || strings.TrimSpace(rest) != "HEAD" || !strings.HasPrefix(ref, "refs/heads/") {
+			continue
+		}
+		if _, err := m.Git(ctx, "rev-parse", "--verify", "--quiet", ref); err == nil {
+			_, _ = m.Git(ctx, "symbolic-ref", "HEAD", ref)
+		}
+		return
+	}
 }
 
 // Fetch fetches refspecs from the repository's remote into the mirror.

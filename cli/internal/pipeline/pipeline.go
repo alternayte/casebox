@@ -71,8 +71,9 @@ func New(root string, cfg repo.Config, state repo.State, person string, names []
 	return &Repo{Root: root, Config: cfg, State: state, Person: person, redactor: redactor, marker: capture.NewMarker(names)}, nil
 }
 
-// Session fills in what the repository knows about a session: its harness at the start and, once
-// it has ended, how many commits the developer made.
+// Session fills in what the repository knows about a session: its base commit (the last commit on
+// its branch at or before its start), its harness at the start and, once it has ended, how many
+// commits the developer made.
 func (r *Repo) Session(ctx context.Context, s capture.Session) capture.Session {
 	s.Person = r.Person
 	if s.Repo == "" {
@@ -83,6 +84,11 @@ func (r *Repo) Session(ctx context.Context, s capture.Session) capture.Session {
 	}
 	if s.WorkItem == "" {
 		s.WorkItem = config.CurrentLink(r.Root)
+	}
+	if s.BaseCommit == "" && r.Root != "" {
+		if commit, err := repo.CommitBefore(ctx, r.Root, s.Branch, s.StartedAt); err == nil {
+			s.BaseCommit = commit
+		}
 	}
 	if s.Harness == nil {
 		s.Harness = r.harness(ctx, s)
@@ -115,10 +121,10 @@ func (r *Repo) harness(ctx context.Context, s capture.Session) *capture.Harness 
 	}
 	commit := s.HeadStart
 	if commit == "" {
-		var err error
-		if commit, err = repo.CommitBefore(ctx, r.Root, s.Branch, s.StartedAt); err != nil {
-			return nil
-		}
+		commit = s.BaseCommit
+	}
+	if commit == "" {
+		return nil
 	}
 	globs := r.Config.HarnessGlobs()
 	path, err := config.Path("cache", "harness", hash(strings.Join(globs, "\n"))+"-"+commit+".json")

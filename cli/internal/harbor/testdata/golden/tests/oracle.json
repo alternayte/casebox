@@ -1,0 +1,8 @@
+{
+  "failToPass": [
+    "example.com/shop/store::TestPut"
+  ],
+  "passToPass": [
+    "example.com/shop/store::TestGet"
+  ]
+}

@@ -1,11 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { api } from "@/lib/api";
 import { agentName, groupByName, groupBys, taskTypeName, taskTypes, type GroupBy } from "@/lib/labels";
+import { useWorkspaces } from "@/lib/workspaces";
 import { Button, Field, Input, Select } from "@/ui/kit";
 import type { Filters } from "./types";
-
-type Workspace = { name: string; repos: string[] };
 
 // The period and filters of the report. Applying writes them to the URL, so a view is a link.
 export function FilterBar({
@@ -19,7 +16,7 @@ export function FilterBar({
   onApply: (f: Filters) => void;
   showGroupBy?: boolean;
 }) {
-  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => api<Workspace[]>("GET", "/api/v1/workspaces") });
+  const workspaces = useWorkspaces();
   // The parent keys this component on the applied filters, so the draft restarts when they change.
   const [draft, setDraft] = useState<Filters>(value);
 

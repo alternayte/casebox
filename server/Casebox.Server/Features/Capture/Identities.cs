@@ -81,6 +81,56 @@ public sealed partial class Identities(
 
     private readonly Dictionary<string, string> _cache = new(StringComparer.Ordinal);
 
+    // Every string of a JSON document from outside, such as a worker's job result, redacted and
+    // tokenized like any external text.
+    public async Task<string> TokenizeJsonAsync(
+        System.Text.Json.JsonElement element,
+        string period,
+        CancellationToken ct
+    )
+    {
+        var node = System.Text.Json.Nodes.JsonNode.Parse(element.GetRawText());
+        await WalkAsync(node, period, ct);
+        return node?.ToJsonString() ?? "null";
+    }
+
+    private async Task WalkAsync(
+        System.Text.Json.Nodes.JsonNode? node,
+        string period,
+        CancellationToken ct
+    )
+    {
+        switch (node)
+        {
+            case System.Text.Json.Nodes.JsonObject obj:
+                foreach (var (key, child) in obj.ToList())
+                {
+                    if (
+                        child is System.Text.Json.Nodes.JsonValue v
+                        && v.TryGetValue(out string? text)
+                    )
+                        obj[key] = await TokenizeExternalAsync(text, period, ct);
+                    else
+                        await WalkAsync(child, period, ct);
+                }
+
+                break;
+            case System.Text.Json.Nodes.JsonArray array:
+                for (var i = 0; i < array.Count; i++)
+                {
+                    if (
+                        array[i] is System.Text.Json.Nodes.JsonValue v
+                        && v.TryGetValue(out string? text)
+                    )
+                        array[i] = await TokenizeExternalAsync(text, period, ct);
+                    else
+                        await WalkAsync(array[i], period, ct);
+                }
+
+                break;
+        }
+    }
+
     public static string PeriodOf(Orgs.PseudonymPeriod period, DateTimeOffset at) =>
         period switch
         {

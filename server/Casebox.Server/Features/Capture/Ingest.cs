@@ -24,7 +24,8 @@ public sealed record CapturedSession(
     string? WorkItem,
     string Person,
     CapturedHarness? Harness = null,
-    int? Commits = null
+    int? Commits = null,
+    string? BaseCommit = null
 );
 
 // The harness files of a session's commit: the hash of their sorted "<path> <blob sha>" lines.
@@ -167,9 +168,9 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
             new CommandDefinition(
                 """
                 INSERT INTO casebox.sessions (org_id, id, agent, agent_version, model, repo, branch, head_start, head_end, person, person_mapped, period, work_item, source, started_at, ended_at,
-                    harness_hash, commits, created_at, updated_at)
+                    harness_hash, commits, base_commit, created_at, updated_at)
                 VALUES (@Org, @Id, @Agent, @AgentVersion, @Model, @Repo, @Branch, @HeadStart, @HeadEnd, @Person, @Mapped, @Period, @WorkItem, @Source, @StartedAt, @EndedAt,
-                    @HarnessHash, @Commits, @Now, @Now)
+                    @HarnessHash, @Commits, @BaseCommit, @Now, @Now)
                 ON CONFLICT (org_id, id) DO UPDATE SET
                     agent_version = COALESCE(EXCLUDED.agent_version, sessions.agent_version),
                     model = COALESCE(EXCLUDED.model, sessions.model),
@@ -183,6 +184,7 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
                     started_at = LEAST(sessions.started_at, EXCLUDED.started_at),
                     ended_at = GREATEST(sessions.ended_at, EXCLUDED.ended_at),
                     harness_hash = COALESCE(sessions.harness_hash, EXCLUDED.harness_hash),
+                base_commit = COALESCE(sessions.base_commit, EXCLUDED.base_commit),
                     commits = GREATEST(sessions.commits, EXCLUDED.commits),
                     updated_at = EXCLUDED.updated_at
                 """,
@@ -208,6 +210,7 @@ public sealed class CaptureStore(Identities identities, NpgsqlDataSource db, Tim
                     Commits = session.Source == "entire"
                         ? Math.Max(session.Commits ?? 1, 1)
                         : session.Commits,
+                    session.BaseCommit,
                     Now = now,
                 },
                 transaction,

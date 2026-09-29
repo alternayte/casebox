@@ -87,6 +87,10 @@ func TestASessionCountsTheDevelopersCommitsUntilHalfAnHourAfterItsEnd(t *testing
 		}
 	}
 	commit("dev@example.com", start.Add(-10*time.Minute))
+	before, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
 	commit("dev@example.com", start.Add(20*time.Minute))
 	commit("other@example.com", start.Add(30*time.Minute))
 	commit("dev@example.com", start.Add(80*time.Minute))
@@ -102,6 +106,14 @@ func TestASessionCountsTheDevelopersCommitsUntilHalfAnHourAfterItsEnd(t *testing
 	}
 	if open.Harness == nil || len(open.Harness.Files) != 0 {
 		t.Fatalf("harness = %+v, want an empty harness read from the commit before the start", open.Harness)
+	}
+	if want := strings.TrimSpace(string(before)); open.BaseCommit != want {
+		t.Fatalf("base commit = %q, want the last commit before the start %q", open.BaseCommit, want)
+	}
+	// The base commit is found even when the hooks recorded HEAD at the start.
+	hooked := r.Session(context.Background(), capture.Session{ID: "codex:3", Agent: "codex", StartedAt: start, HeadStart: "0123456789abcdef0123456789abcdef01234567"})
+	if hooked.BaseCommit != open.BaseCommit {
+		t.Fatalf("base commit with headStart = %q, want %q", hooked.BaseCommit, open.BaseCommit)
 	}
 	end := start.Add(time.Hour)
 	ended := r.Session(context.Background(), capture.Session{ID: "codex:2", Agent: "codex", StartedAt: start, EndedAt: &end})

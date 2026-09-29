@@ -210,6 +210,9 @@ func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.Sta
 	if len(from.RefServices()) > 0 {
 		return sandbox.Sandbox{}, errors.New("kiln: services are not supported: Kiln's template API takes no services")
 	}
+	if len(opts.Egress) > 0 {
+		return sandbox.Sandbox{}, fmt.Errorf("kiln: an egress allow-list per sandbox: %w: Kiln sets egress_allow per template, and casebox templates allow none", sandbox.ErrUnsupported)
+	}
 	if opts.Network != sandbox.NetworkNone {
 		return sandbox.Sandbox{}, fmt.Errorf("kiln: network %q is not supported: Kiln sets egress per template and has no unrestricted egress", opts.Network)
 	}

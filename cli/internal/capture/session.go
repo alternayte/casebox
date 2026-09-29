@@ -20,7 +20,8 @@ type Session struct {
 	WorkItem     string     `json:"workItem,omitempty"`
 	Person       string     `json:"person"`
 	Harness      *Harness   `json:"harness,omitempty"`
-	Commits      *int       `json:"commits,omitempty"` // the developer's commits from start to 30 minutes after the end
+	Commits      *int       `json:"commits,omitempty"`    // the developer's commits from start to 30 minutes after the end
+	BaseCommit   string     `json:"baseCommit,omitempty"` // the last commit on the branch at or before the start
 }
 
 // Harness names the harness files at the session's start: Hash is the SHA-256 of the sorted

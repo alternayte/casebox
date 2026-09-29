@@ -1,0 +1,19 @@
+diff --git a/store/store_test.go b/store/store_test.go
+--- a/store/store_test.go
++++ b/store/store_test.go
+@@ -3,3 +3,5 @@ package store
+ import "testing"
+ 
+ func TestGet(t *testing.T) {}
++
++func TestGetMissing(t *testing.T) {}
+diff --git a/store/put_test.go b/store/put_test.go
+new file mode 100644
+--- /dev/null
++++ b/store/put_test.go
+@@ -0,0 +1,5 @@
++package store
++
++import "testing"
++
++func TestPut(t *testing.T) { Put("k", "v") }

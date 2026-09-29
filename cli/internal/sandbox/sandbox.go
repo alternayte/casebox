@@ -26,6 +26,11 @@ type Provider interface {
 // ErrNotFound is returned by any call on a sandbox that does not exist or was destroyed.
 var ErrNotFound = errors.New("the sandbox does not exist")
 
+// ErrUnsupported is returned, wrapped with the reason, when a provider cannot honour a start
+// option, such as an egress allow-list. The conformance suite skips only the checks of such an
+// option, and only for this error.
+var ErrUnsupported = errors.New("the sandbox provider does not support this")
+
 // User is the uid every sandbox command runs as, unless the runner asks for root.
 const User = 10001
 
@@ -138,7 +143,13 @@ const (
 
 // StartOptions cap a sandbox.
 type StartOptions struct {
-	Network  Network
+	Network Network
+	// Egress lists the hosts a sandbox with network none may reach, as exact names or "*.domain"
+	// wildcards, over HTTPS or HTTP on ports 443 and 80, through a proxy the provider runs beside
+	// it; HTTPS_PROXY, HTTP_PROXY and NO_PROXY point every command at it. Nothing else is reachable:
+	// no other host, no DNS outside, no raw connection. A provider that cannot honour it returns
+	// ErrUnsupported.
+	Egress   []string
 	CPUs     float64       // default 2
 	MemoryMB int           // default 4096
 	Lifetime time.Duration // default 2 hours; the provider destroys it after this

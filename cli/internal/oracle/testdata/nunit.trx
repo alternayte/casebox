@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c3e8d2a0-51b4-4e39-8f0f-6c2b9e1d7a40" name="runner@build-7 2026-09-29 10:20:44" runUser="runner" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-09-29T10:20:44.1022345+00:00" queuing="2026-09-29T10:20:44.1022349+00:00" start="2026-09-29T10:20:42.7780112+00:00" finish="2026-09-29T10:20:44.1190031+00:00" />
+  <TestSettings name="default" id="e1f2a3b4-2222-4c8e-8a4d-7f3f1c2e9d02">
+    <Deployment runDeploymentRoot="runner_build-7_2026-09-29_10_20_44" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="b2000000-0001-4000-8000-000000000001" testId="d9000000-0001-4000-8000-000000000001" testName="Rounds(2.5,2)" computerName="build-7" duration="00:00:00.0180000" startTime="2026-09-29T10:20:43.5000000+00:00" endTime="2026-09-29T10:20:43.5180000+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b2000000-0001-4000-8000-000000000001" />
+    <UnitTestResult executionId="b2000000-0002-4000-8000-000000000002" testId="d9000000-0002-4000-8000-000000000002" testName="Rounds(3.5,4)" computerName="build-7" duration="00:00:00.0010000" startTime="2026-09-29T10:20:43.5190000+00:00" endTime="2026-09-29T10:20:43.5200000+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b2000000-0002-4000-8000-000000000002">
+      <Output>
+        <ErrorInfo>
+          <Message>  Expected: 4
+  But was:  3
+</Message>
+          <StackTrace>   at Shop.Tests.MoneyTests.Rounds(Decimal value, Decimal expected) in /work/shop/tests/Shop.Tests/MoneyTests.cs:line 14
+</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b2000000-0003-4000-8000-000000000003" testId="d9000000-0003-4000-8000-000000000003" testName="FormatsCurrency" computerName="build-7" duration="00:00:00.0000010" startTime="2026-09-29T10:20:43.5210000+00:00" endTime="2026-09-29T10:20:43.5210010+00:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b2000000-0003-4000-8000-000000000003">
+      <Output>
+        <ErrorInfo>
+          <Message>locale data missing</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Rounds(2.5,2)" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="d9000000-0001-4000-8000-000000000001">
+      <Execution id="b2000000-0001-4000-8000-000000000001" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://NUnit3TestExecutor" className="Shop.Tests.MoneyTests" name="Rounds(2.5,2)" />
+    </UnitTest>
+    <UnitTest name="Rounds(3.5,4)" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="d9000000-0002-4000-8000-000000000002">
+      <Execution id="b2000000-0002-4000-8000-000000000002" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://NUnit3TestExecutor" className="Shop.Tests.MoneyTests" name="Rounds(3.5,4)" />
+    </UnitTest>
+    <UnitTest name="FormatsCurrency" storage="/work/shop/tests/shop.tests/bin/debug/net10.0/shop.tests.dll" id="d9000000-0003-4000-8000-000000000003">
+      <Execution id="b2000000-0003-4000-8000-000000000003" />
+      <TestMethod codeBase="/work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll" adapterTypeName="executor://NUnit3TestExecutor" className="Shop.Tests.MoneyTests" name="FormatsCurrency" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="d9000000-0001-4000-8000-000000000001" executionId="b2000000-0001-4000-8000-000000000001" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d9000000-0002-4000-8000-000000000002" executionId="b2000000-0002-4000-8000-000000000002" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d9000000-0003-4000-8000-000000000003" executionId="b2000000-0003-4000-8000-000000000003" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>NUnit Adapter 4.6.0.0: Test execution started
+Running all tests in /work/shop/tests/Shop.Tests/bin/Debug/net10.0/Shop.Tests.dll
+   NUnit3TestExecutor discovered 3 of 3 NUnit test cases using Current Discovery mode, Non-Explicit run
+NUnit Adapter 4.6.0.0: Test execution complete</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

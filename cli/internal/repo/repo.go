@@ -39,6 +39,7 @@ type Config struct {
 		Redact []string `yaml:"redact"`
 	} `yaml:"capture"`
 	Environment *Recipe `yaml:"environment"`
+	Cases       Cases   `yaml:"cases"`
 }
 
 // ErrNotEnrolled means the directory is not inside a repository with .casebox/casebox.yml.

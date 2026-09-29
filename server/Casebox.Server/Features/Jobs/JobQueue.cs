@@ -25,12 +25,14 @@ public interface IJobResultHandler
     Task HandleAsync(JobResult result, CancellationToken ct);
 }
 
+// Services are the request's own, with its organisation set, for handlers that tokenize text.
 public sealed record JobResult(
     string OrgId,
     Job Job,
     JsonElement Result,
     DbTransaction Transaction,
-    IEventStore Store
+    IEventStore Store,
+    IServiceProvider Services
 );
 
 public sealed class JobQueue(
@@ -213,6 +215,7 @@ public sealed class JobQueue(
         string workerId,
         JsonElement result,
         IEventStore store,
+        IServiceProvider services,
         CancellationToken ct
     )
     {
@@ -231,13 +234,25 @@ public sealed class JobQueue(
             : throw new InvalidOperationException(
                 $"No result handler is registered for job kind '{row.Kind}'."
             );
+        // A worker's result can hold a model's words: handlers see it, and it is stored, only redacted
+        // and tokenized.
+        var (org, _) = await store.Load<Orgs.Organisation>(Orgs.Organisation.StreamId, ct);
+        var stored = await services
+            .GetRequiredService<Capture.Identities>()
+            .TokenizeJsonAsync(
+                result,
+                Capture.Identities.PeriodOf(org.Settings.PseudonymPeriod, clock.GetUtcNow()),
+                ct
+            );
+        var tokenized = JsonDocument.Parse(stored).RootElement.Clone();
         await handler.HandleAsync(
             new JobResult(
                 orgId,
                 row.ToJob(),
-                result,
+                tokenized,
                 transaction,
-                store.UseTransaction(transaction)
+                store.UseTransaction(transaction),
+                services
             ),
             ct
         );
@@ -251,7 +266,7 @@ public sealed class JobQueue(
                 new
                 {
                     Id = jobId,
-                    Result = result.GetRawText(),
+                    Result = stored,
                     Now = clock.GetUtcNow(),
                 },
                 transaction,

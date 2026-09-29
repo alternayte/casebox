@@ -332,6 +332,9 @@ func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.Sta
 	if opts.Network != sandbox.NetworkNone && opts.Network != sandbox.NetworkOpen {
 		return sandbox.Sandbox{}, fmt.Errorf("the network %q is not none or open", opts.Network)
 	}
+	if len(opts.Egress) > 0 {
+		return sandbox.Sandbox{}, fmt.Errorf("daytona: an egress allow-list of host names: %w: Daytona's network allow list takes IPv4 CIDR blocks only", sandbox.ErrUnsupported)
+	}
 	services := from.RefServices()
 	if err := validateServices(services); err != nil {
 		return sandbox.Sandbox{}, err

@@ -11,3 +11,7 @@ export function useMe() {
 export function isMember(me: Me | undefined): boolean {
   return me !== undefined && me.role !== "viewer";
 }
+
+export function isAdmin(me: Me | undefined): boolean {
+  return me !== undefined && (me.role === "admin" || me.role === "owner");
+}

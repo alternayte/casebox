@@ -7,6 +7,10 @@
 // <lifetime>` as its command under docker-init and is started with --rm, so it stops and removes
 // itself when its lifetime ends; the services and the network it leaves behind are removed by the
 // next Start.
+//
+// A sandbox with an egress allow-list (egress.go) keeps its internal network and gains a proxy
+// container that sits on that network and on a second, open one. The proxy image is compiled from
+// the egressproxy source this binary embeds, in a pinned Go image, once per machine.
 package docker
 
 import (
@@ -171,7 +175,8 @@ func Dockerfile(spec sandbox.EnvSpec) (string, error) {
 }
 
 // Start runs a sandbox from an image or a snapshot: its services first, on the sandbox's own
-// network, then the sandbox container, capped and as the sandbox user.
+// network, then its egress proxy when opts.Egress lists hosts, then the sandbox container, capped
+// and as the sandbox user.
 func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.StartOptions) (sandbox.Sandbox, error) {
 	if from == nil || from.RefID() == "" {
 		return sandbox.Sandbox{}, errors.New("nothing to start the sandbox from")
@@ -182,6 +187,9 @@ func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.Sta
 	opts = opts.Defaults()
 	if opts.Network != sandbox.NetworkNone && opts.Network != sandbox.NetworkOpen {
 		return sandbox.Sandbox{}, fmt.Errorf("unknown network %q", opts.Network)
+	}
+	if err := checkEgress(opts, from.RefServices()); err != nil {
+		return sandbox.Sandbox{}, err
 	}
 	if err := p.reap(ctx); err != nil {
 		return sandbox.Sandbox{}, err
@@ -226,6 +234,15 @@ func (p *Provider) Start(ctx context.Context, from sandbox.Ref, opts sandbox.Sta
 		args = append(args, envArgs(svc.Env)...)
 		if _, err := p.docker(ctx, nil, append(args, svc.Image)...); err != nil {
 			return fail(fmt.Errorf("service %s: %w", svc.Name, err))
+		}
+	}
+	if len(opts.Egress) > 0 {
+		env, err := p.startProxy(ctx, id, labels, opts.Egress, from.RefServices())
+		if err != nil {
+			return fail(err)
+		}
+		for k, v := range env {
+			sb.Meta[metaEnv+k] = v
 		}
 	}
 	args := append([]string{
@@ -450,7 +467,8 @@ func (r *copyStream) wait() error {
 	return r.err
 }
 
-// Destroy removes the sandbox, its services and its network. Destroying twice is not an error.
+// Destroy removes the sandbox, its services, its egress proxy and its networks. Destroying twice is
+// not an error.
 func (p *Provider) Destroy(ctx context.Context, sb sandbox.Sandbox) error {
 	if sb.ID == "" {
 		return nil

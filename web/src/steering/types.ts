@@ -42,6 +42,8 @@ export type Theme = {
   prevention: { prevention: string; share: number }[];
   phases: { inSession: number; beforeMerge: number; afterMerge: number };
   quotes: { ref: string; text: string; day: string }[];
+  // The patterns of this what-went-wrong class, each with at least k people behind it.
+  patterns?: { id: string; title: string; status: string; advisory: boolean }[] | null;
 };
 
 export type Group = {

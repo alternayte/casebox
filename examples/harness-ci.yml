@@ -7,7 +7,8 @@ on:
   pull_request:
     paths: ["AGENTS.md", "CLAUDE.md", ".cursor/rules/**", ".claude/skills/**", ".agents/skills/**", ".mcp.json", ".casebox/casebox.yml"]
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "17 3 * * *" # nightly: the baseline
+    - cron: "47 4 * * 1" # weekly: the proposer, and the harness diet once a quarter
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   harness-ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,9 +30,13 @@ jobs:
         with:
           server: ${{ vars.CASEBOX_SERVER }}
           token: ${{ secrets.CASEBOX_TOKEN }}
+          mode: ${{ github.event.schedule == '47 4 * * 1' && 'propose' || '' }}
           worker: inline # optional: runs the jobs on this runner's Docker
           # fail-on: regression
         env:
           # The inline worker's model key and its clone token; the server never sees either.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The proposer's analysis model (docs/specs/steering.md, The analysis model).
+          CASEBOX_ANALYSIS_PROVIDER: anthropic
+          CASEBOX_ANALYSIS_MODEL: ${{ vars.CASEBOX_ANALYSIS_MODEL }}
           GITHUB_TOKEN: ${{ secrets.CASEBOX_GITHUB_TOKEN || github.token }}

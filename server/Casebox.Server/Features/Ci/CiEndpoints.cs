@@ -88,7 +88,18 @@ public static class CiEndpoints
         EvaluationEvents.Scored? Scored,
         string? Reason,
         IReadOnlyList<CaseRow> Cases,
-        BaselineInfo? Baseline
+        BaselineInfo? Baseline,
+        // A proposer run's proposals.
+        IReadOnlyList<ProposerProposal>? Proposals = null
+    );
+
+    public sealed record ProposerProposal(
+        string Id,
+        string? Pattern,
+        string Kind,
+        string Status,
+        string? Reason,
+        string? PrUrl
     );
 
     public static void MapCi(this RouteGroupBuilder api)
@@ -159,17 +170,20 @@ public static class CiEndpoints
                             org,
                             ResolveJob,
                             $"{ResolveJob}:{id}",
-                            new
-                            {
-                                ciRun = id,
-                                workspace = body.Workspace,
-                                spec,
-                                cases = cases.Select(c => new
+                            JsonSerializer.SerializeToElement(
+                                new
                                 {
-                                    caseId = c.Id,
-                                    repos = JsonDocument.Parse(c.Repos).RootElement,
-                                }),
-                            },
+                                    ciRun = id,
+                                    workspace = body.Workspace,
+                                    spec,
+                                    cases = cases.Select(c => new
+                                    {
+                                        caseId = c.Id,
+                                        repos = JsonDocument.Parse(c.Repos).RootElement,
+                                    }),
+                                },
+                                EvaluationResults.Json
+                            ),
                             3,
                             ct
                         );
@@ -254,6 +268,59 @@ public static class CiEndpoints
         CancellationToken ct
     )
     {
+        if (run.Kind == CiRuns.Proposer)
+        {
+            var proposals = (
+                await connection.QueryAsync<ProposerProposal>(
+                    new CommandDefinition(
+                        "SELECT id, pattern, kind, status, reason, pr_url FROM casebox.proposals WHERE org_id = @Org AND ci_run = @Run ORDER BY created_at",
+                        new { Org = org, Run = run.Id },
+                        cancellationToken: ct
+                    )
+                )
+            ).ToList();
+            // Running while a job of the run waits or works, or a proposal still searches or gates.
+            var busy = await connection.ExecuteScalarAsync<bool>(
+                new CommandDefinition(
+                    "SELECT EXISTS (SELECT 1 FROM casebox.jobs WHERE org_id = @Org AND payload->>'ciRun' = @Run AND status IN ('queued', 'leased'))",
+                    new { Org = org, Run = run.Id },
+                    cancellationToken: ct
+                )
+            );
+            busy |= proposals.Any(p => p.Status is "searching" or "gating");
+            var spent = await connection.ExecuteScalarAsync<decimal>(
+                new CommandDefinition(
+                    "SELECT coalesce(sum(spent_usd), 0) FROM casebox.evaluations WHERE org_id = @Org AND ci_run = @Run",
+                    new { Org = org, Run = run.Id },
+                    cancellationToken: ct
+                )
+            );
+            return new RunView(
+                run.Id,
+                run.Kind,
+                run.Workspace,
+                run.Repo,
+                null,
+                null,
+                busy ? "running" : "done",
+                run.Message,
+                null,
+                null,
+                0,
+                0,
+                null,
+                spent,
+                0,
+                0,
+                0,
+                null,
+                null,
+                null,
+                [],
+                null,
+                proposals
+            );
+        }
         if (run.EvaluationId is null)
             return new RunView(
                 run.Id,

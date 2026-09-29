@@ -16,7 +16,7 @@ inputs:
     description: A ci token, from `casebox token create --kind ci --name <name>` (an Admin).
     required: true
   mode:
-    description: pull_request or baseline. The default is pull_request on pull request events and baseline otherwise.
+    description: pull_request, baseline or propose (the weekly proposer). The default is pull_request on pull request events and baseline otherwise.
     required: false
     default: ""
   worker:
@@ -67,10 +67,10 @@ runs:
             *) mode=baseline ;;
           esac
         fi
-        args=(ci --worker "$INPUT_WORKER" --fail-on "$INPUT_FAIL_ON" --timeout "$INPUT_TIMEOUT")
         case "$mode" in
-          baseline) args+=(--baseline) ;;
-          pull_request) ;;
-          *) echo "mode must be pull_request or baseline, not $mode" >&2; exit 2 ;;
+          baseline) args=(ci --baseline --worker "$INPUT_WORKER" --timeout "$INPUT_TIMEOUT") ;;
+          pull_request) args=(ci --worker "$INPUT_WORKER" --fail-on "$INPUT_FAIL_ON" --timeout "$INPUT_TIMEOUT") ;;
+          propose) args=(propose --scheduled --worker "$INPUT_WORKER" --timeout "$INPUT_TIMEOUT") ;;
+          *) echo "mode must be pull_request, baseline or propose, not $mode" >&2; exit 2 ;;
         esac
         "$RUNNER_TEMP/casebox" "${args[@]}"

@@ -35,12 +35,15 @@ public sealed record OrgSettings(
     PseudonymPeriod PseudonymPeriod,
     Budgets Budgets,
     int? RetentionMonths = null,
-    int? TraceRetentionDays = null
+    int? TraceRetentionDays = null,
+    // The share of the monthly evaluation budget the proposer may spend (SDD section 9).
+    decimal? ProposerShare = null
 )
 {
     public const int MinimumK = 2;
     public const int DefaultRetentionMonths = 12;
     public const int DefaultTraceRetentionDays = 180;
+    public const decimal DefaultProposerShare = 0.3m;
 
     public static OrgSettings Defaults { get; } =
         new(null, 3, PseudonymPeriod.Quarter, new Budgets(500m, 150m, 50m));
@@ -53,6 +56,9 @@ public sealed record OrgSettings(
     // How long canonical trace events and telemetry are kept.
     [JsonIgnore]
     public int TraceRetention => TraceRetentionDays ?? DefaultTraceRetentionDays;
+
+    [JsonIgnore]
+    public decimal ProposerBudgetShare => ProposerShare ?? DefaultProposerShare;
 }
 
 public static class OrgEvents
@@ -128,6 +134,10 @@ public static class OrgDecider
             throw new DomainException("The retention window is 1 to 120 months.");
         if (settings.TraceRetentionDays is < 7 or > 3650)
             throw new DomainException("Trace retention is 7 to 3650 days.");
+        if (settings.ProposerShare is <= 0 or > 1)
+            throw new DomainException(
+                "The proposer's share of the monthly budget is above 0 and at most 1."
+            );
         return settings == org.Settings ? [] : [new OrgEvents.SettingsChanged(settings)];
     }
 }

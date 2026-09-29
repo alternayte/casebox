@@ -83,12 +83,97 @@ public sealed class FakeServices : IAsyncDisposable
         );
         app.MapGet(
             "/github/repos/{owner}/{name}/pulls",
-            (string owner, string name) =>
+            (string owner, string name, string? head) =>
                 Results.Json(
                     Repo($"{owner}/{name}")
-                        .Pulls.Values.OrderByDescending(p => p.UpdatedAt)
+                        .Pulls.Values.Where(p => head is null || $"{owner}:{p.HeadRef}" == head)
+                        .OrderByDescending(p => p.UpdatedAt)
                         .Select(p => p.Summary())
                 )
+        );
+        // Opening a pull request, and the Git Data API that makes its branch.
+        app.MapPost(
+            "/github/repos/{owner}/{name}/pulls",
+            async (string owner, string name, HttpRequest request) =>
+            {
+                var body = (await request.ReadFromJsonAsync<JsonObject>())!;
+                var repo = Repo($"{owner}/{name}");
+                lock (repo.Pulls)
+                {
+                    var pull = new FakePull(repo.Pulls.Keys.DefaultIfEmpty(900).Max() + 1)
+                    {
+                        Title = body["title"]!.GetValue<string>(),
+                        Body = body["body"]!.GetValue<string>(),
+                        HeadRef = body["head"]!.GetValue<string>(),
+                        AuthorLogin = "casebox-app[bot]",
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                    };
+                    repo.Pulls[pull.Number] = pull;
+                    return Results.Json(
+                        new
+                        {
+                            number = pull.Number,
+                            html_url = $"https://github.com/{owner}/{name}/pull/{pull.Number}",
+                        },
+                        statusCode: 201
+                    );
+                }
+            }
+        );
+        app.MapGet(
+            "/github/repos/{owner}/{name}/git/ref/heads/{**branch}",
+            (string owner, string name, string branch) =>
+                Repo($"{owner}/{name}").Refs.TryGetValue(branch, out var sha)
+                    ? Results.Json(new { @ref = $"refs/heads/{branch}", @object = new { sha } })
+                    : Results.NotFound()
+        );
+        app.MapGet(
+            "/github/repos/{owner}/{name}/git/commits/{sha}",
+            (string owner, string name, string sha) =>
+                Results.Json(new { sha, tree = new { sha = $"tree-{sha}" } })
+        );
+        app.MapPost(
+            "/github/repos/{owner}/{name}/git/trees",
+            async (string owner, string name, HttpRequest request) =>
+            {
+                var body = (await request.ReadFromJsonAsync<JsonObject>())!;
+                var repo = Repo($"{owner}/{name}");
+                lock (repo.Trees)
+                {
+                    repo.Trees.Add(body);
+                    return Results.Json(
+                        new { sha = $"tree-new-{repo.Trees.Count}" },
+                        statusCode: 201
+                    );
+                }
+            }
+        );
+        app.MapPost(
+            "/github/repos/{owner}/{name}/git/commits",
+            async (string owner, string name, HttpRequest request) =>
+            {
+                var body = (await request.ReadFromJsonAsync<JsonObject>())!;
+                return Results.Json(
+                    new { sha = $"commit-{body["tree"]!.GetValue<string>()}" },
+                    statusCode: 201
+                );
+            }
+        );
+        app.MapPost(
+            "/github/repos/{owner}/{name}/git/refs",
+            async (string owner, string name, HttpRequest request) =>
+            {
+                var body = (await request.ReadFromJsonAsync<JsonObject>())!;
+                var branch = body["ref"]!.GetValue<string>()["refs/heads/".Length..];
+                var repo = Repo($"{owner}/{name}");
+                lock (repo.Refs)
+                {
+                    if (!repo.Refs.TryAdd(branch, body["sha"]!.GetValue<string>()))
+                        return Results.UnprocessableEntity();
+                }
+                return Results.Json(body, statusCode: 201);
+            }
         );
         app.MapGet(
             "/github/repos/{owner}/{name}/pulls/{n:int}",
@@ -281,6 +366,8 @@ public sealed class FakeRepo(string fullName)
     public List<JsonObject> DefaultBranchCommits { get; } = [];
     public Dictionary<string, List<BlameRange>> Blame { get; } = [];
     public List<JsonObject> IssueComments { get; } = [];
+    public Dictionary<string, string> Refs { get; } = [];
+    public List<JsonObject> Trees { get; } = [];
 }
 
 public sealed class FakePull(int number)

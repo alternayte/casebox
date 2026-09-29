@@ -18,6 +18,7 @@ import (
 	"github.com/alternayte/casebox/cli/internal/cases"
 	"github.com/alternayte/casebox/cli/internal/config"
 	"github.com/alternayte/casebox/cli/internal/evaluate"
+	"github.com/alternayte/casebox/cli/internal/propose"
 	"github.com/alternayte/casebox/cli/internal/sandbox/providers"
 	"github.com/alternayte/casebox/cli/internal/worker"
 )
@@ -111,8 +112,11 @@ func workerHandlers(ctx context.Context, client *api.Client, out io.Writer) (map
 		"steering.pr":  steer.PR,
 		"mine":         caseJobs.Mine,
 	}
-	// Every worker resolves harness hashes for the nightly baseline: it needs only the mirrors.
+	// Every worker resolves harness hashes for the nightly baseline and lists the harness diet's
+	// removals: both need only the mirrors.
 	handlers["harness.resolve"] = evalJobs.Resolve
+	proposer := propose.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
+	handlers["propose.diet"] = proposer.Diet
 	// Only a worker with an analysis model leases classification jobs.
 	model, err := analysis.FromEnv()
 	switch {
@@ -121,6 +125,9 @@ func workerHandlers(ctx context.Context, client *api.Client, out io.Writer) (map
 		caseJobs.Model = steer.Model
 		evalJobs.Model = steer.Model
 		handlers["steering.classify"] = steer.Classify
+		handlers["pattern.cluster"] = steer.Cluster
+		proposer.Model = steer.Model
+		handlers["propose.search"] = proposer.Search
 		handlers["case.instruction"] = caseJobs.Instruction
 		fmt.Fprintf(out, "Analysis model: %s at %s; this worker classifies steering and drafts case instructions.\n", model, model.BaseURL)
 	case errors.Is(err, analysis.ErrNotConfigured):

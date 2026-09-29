@@ -76,8 +76,12 @@ public static class ReportShapes
         bool HarnessFixable,
         IReadOnlyList<PreventionShare> Prevention,
         Phases Phases,
-        IReadOnlyList<Quote> Quotes
+        IReadOnlyList<Quote> Quotes,
+        // The patterns of this what-went-wrong class (docs/specs/self-evolution.md).
+        IReadOnlyList<ThemePattern>? Patterns = null
     );
+
+    public sealed record ThemePattern(string Id, string Title, string Status, bool Advisory);
 
     public sealed record MixEntry(
         string Prevention,
@@ -536,6 +540,69 @@ public sealed class SteeringReports(NpgsqlDataSource db, DeedboxContext context,
                 )
             )
         );
+
+        var patterns = (
+            await connection.QueryAsync<(
+                string Id,
+                string Title,
+                string Status,
+                bool Advisory,
+                string WentWrong,
+                string? Label,
+                string Workspace
+            )>(
+                new CommandDefinition(
+                    "SELECT id, title, status, advisory, went_wrong, label, workspace FROM casebox.patterns WHERE org_id = @Org AND status <> 'dismissed' AND (@Workspace::text IS NULL OR workspace = @Workspace)",
+                    new { Org, q.Workspace },
+                    cancellationToken: ct
+                )
+            )
+        ).ToList();
+        // A pattern is a correction cluster: it shows only with k mapped people behind it now.
+        var shown =
+            new List<(
+                string Id,
+                string Title,
+                string Status,
+                bool Advisory,
+                string WentWrong,
+                string? Label,
+                string Workspace
+            )>();
+        foreach (var p in patterns)
+            if (
+                (
+                    await Patterns.PatternEndpoints.EvidenceAsync(connection, Org, p.Id, k, ct)
+                )?.MeetsK == true
+            )
+                shown.Add(p);
+        patterns = shown;
+        themes = themes
+            .Select(t =>
+                t with
+                {
+                    Patterns = patterns
+                        .Where(p =>
+                            p.WentWrong == t.WentWrong
+                            && (
+                                t.WentWrong != "other"
+                                || string.Equals(
+                                    p.Label?.Trim(),
+                                    t.Label,
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                        )
+                        .Select(p => new ReportShapes.ThemePattern(
+                            p.Id,
+                            p.Title,
+                            p.Status,
+                            p.Advisory
+                        ))
+                        .ToList(),
+                }
+            )
+            .ToList();
 
         return new ReportShapes.Report(
             new ReportShapes.Period(q.From, q.To),

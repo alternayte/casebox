@@ -347,6 +347,18 @@ function ThemeRow({ rank, t, max, filters }: { rank: number; t: Theme; max: numb
         </div>
         <ShareBar share={t.corrections / max} tone="signal" />
         {t.harnessFixable ? <Tag tone="ok">harness can fix</Tag> : <Tag>outside the harness</Tag>}
+        {t.patterns && t.patterns.length > 0 && (
+          <ul className="space-y-0.5 text-xs">
+            {t.patterns.map((p) => (
+              <li key={p.id}>
+                Pattern:{" "}
+                <Link to="/patterns/$id" params={{ id: p.id }} className="text-link hover:underline">
+                  {p.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <div className="space-y-3 text-xs">
         <div>

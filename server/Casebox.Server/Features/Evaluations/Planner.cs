@@ -50,9 +50,9 @@ public sealed class Planner(
     // A person's request. Baseline and harness CI evaluations come only from casebox ci.
     public Task<Plan> PlanAsync(EvaluationRequest body, CancellationToken ct)
     {
-        if (body.Purpose is Purpose.Baseline or Purpose.HarnessCi)
+        if (body.Purpose is Purpose.Baseline or Purpose.HarnessCi or Purpose.Search or Purpose.Gate)
             throw new DomainException(
-                "Baseline and harness CI evaluations are started by casebox ci, not requested directly."
+                "Baseline and harness CI evaluations are started by casebox ci, and search and gate evaluations by the proposer, not requested directly."
             );
         return PlanAsync(body, null, null, ct);
     }
@@ -62,7 +62,9 @@ public sealed class Planner(
         EvaluationRequest body,
         string? ciRun,
         IReadOnlyDictionary<string, BaselineScore>? scores,
-        CancellationToken ct
+        CancellationToken ct,
+        string? proposal = null,
+        int? candidate = null
     )
     {
         if (string.IsNullOrWhiteSpace(body.Workspace))
@@ -93,8 +95,10 @@ public sealed class Planner(
                 );
             changes = ["none"];
         }
-        else if (purpose == Purpose.HarnessCi && changes is not ["harness"])
-            throw new DomainException("Harness CI changes the harness and nothing else.");
+        else if (purpose is Purpose.HarnessCi or Purpose.Search && changes is not ["harness"])
+            throw new DomainException(
+                "Harness CI and proposal search change the harness and nothing else."
+            );
         else if (changes.Count != 1)
             throw new DomainException(
                 changes.Count == 0
@@ -177,7 +181,7 @@ public sealed class Planner(
             )
         ).ToDictionary(h => h.CaseId);
 
-        var runsBaseline = purpose != Purpose.HarnessCi;
+        var runsBaseline = purpose is not (Purpose.HarnessCi or Purpose.Search);
         var runsCandidate = purpose != Purpose.Baseline;
         var sides = (runsBaseline ? 1 : 0) + (runsCandidate ? 1 : 0);
         long baselineTokens = 0,
@@ -269,7 +273,9 @@ public sealed class Planner(
                 .Where(p => p.Key == request.Baseline.Model || p.Key == request.Candidate.Model)
                 .ToDictionary(p => p.Key, p => p.Value),
             ciRun,
-            scores
+            scores,
+            proposal,
+            candidate
         );
         return new Plan(requested, monthSpent, budgets.MonthlyUsd, budgets.ConfirmAboveUsd);
     }

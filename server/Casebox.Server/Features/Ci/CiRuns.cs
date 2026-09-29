@@ -31,6 +31,7 @@ public static class CiRuns
 {
     public const string Baseline = "baseline";
     public const string PullRequest = "pull_request";
+    public const string Proposer = "proposer";
 
     public const string Resolving = "resolving";
     public const string Skipped = "skipped";

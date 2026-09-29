@@ -17,27 +17,52 @@ stream evaluation (Evaluation)
   evaluation.cancelled v1 { by: string, reason: string }
   evaluation.checkpoint_evaluated v1 { cases: int32, delta: float64, level: float64, lower: float64, round: int32, upper: float64, verdict: enum{Better=0, Worse=1, Equivalent=2, Inconclusive=3} }
   evaluation.confirmed v1 { by: string }
-  evaluation.requested v1 { baseline: { agent: string, agentVersion: string, command: { logFormat: string?, logGlob: string?, template: string }?, effort: string?, harness: string, model: string, settings: { maxTurns: int32?, timeoutMinutes: int32?, tokenCap: int64? }, shared: { ref: string, repo: string }? }, baselineScores: map<{ costUsd: [decimal], evaluationId: string, harnessHash: string?, passed: [bool], scoredAt: date-time, seconds: [float64] }>?, candidate: { agent: string, agentVersion: string, command: { logFormat: string?, logGlob: string?, template: string }?, effort: string?, harness: string, model: string, settings: { maxTurns: int32?, timeoutMinutes: int32?, tokenCap: int64? }, shared: { ref: string, repo: string }? }, capUsd: decimal, cases: [{ caseId: string, weight: float64 }], change: string, ciRun: string?, delta: float64, estimate: { baselineTokens: int64, baselineUsd: decimal, candidateTokens: int64, candidateUsd: decimal, cases: int32, detectableEffect: float64?, maxMinutes: float64, minMinutes: float64, perRoundUsd: decimal, runs: int32, sandboxMinutes: float64, totalUsd: decimal }, mutableModel: bool, needsConfirmation: bool, prices: map<{ cacheRead: decimal?, cacheWrite: decimal?, input: decimal, output: decimal }>, purpose: enum{Compare=0, HarnessVsNone=1, HarnessCi=2, Gate=3, Baseline=4}, repeats: int32, split: string, workspace: string }
+  evaluation.requested v1 { baseline: { agent: string, agentVersion: string, command: { logFormat: string?, logGlob: string?, template: string }?, effort: string?, harness: string, model: string, overrides: string?, settings: { maxTurns: int32?, timeoutMinutes: int32?, tokenCap: int64? }, shared: { ref: string, repo: string }? }, baselineScores: map<{ costUsd: [decimal], evaluationId: string, harnessHash: string?, passed: [bool], scoredAt: date-time, seconds: [float64] }>?, candidate: { agent: string, agentVersion: string, command: { logFormat: string?, logGlob: string?, template: string }?, effort: string?, harness: string, model: string, overrides: string?, settings: { maxTurns: int32?, timeoutMinutes: int32?, tokenCap: int64? }, shared: { ref: string, repo: string }? }, candidateIndex: int32?, capUsd: decimal, cases: [{ caseId: string, weight: float64 }], change: string, ciRun: string?, delta: float64, estimate: { baselineTokens: int64, baselineUsd: decimal, candidateTokens: int64, candidateUsd: decimal, cases: int32, detectableEffect: float64?, maxMinutes: float64, minMinutes: float64, perRoundUsd: decimal, runs: int32, sandboxMinutes: float64, totalUsd: decimal }, mutableModel: bool, needsConfirmation: bool, prices: map<{ cacheRead: decimal?, cacheWrite: decimal?, input: decimal, output: decimal }>, proposal: string?, purpose: enum{Compare=0, HarnessVsNone=1, HarnessCi=2, Gate=3, Baseline=4, Search=5}, repeats: int32, split: string, workspace: string }
   evaluation.run_completed v1 { caseId: string, costUsd: decimal, evidence: string, passed: bool, repeat: int32, runId: string, seconds: float64, side: enum{Baseline=0, Candidate=1}, tokens: int64 }
   evaluation.run_failed v1 { caseId: string, reason: string, repeat: int32, runId: string, side: enum{Baseline=0, Candidate=1} }
   evaluation.scored v1 { cases: int32, passRate: float64, runs: int32 }
-  evaluation.verdict_reached v1 { baselineRate: float64, candidateRate: float64, cases: int32, costLower: float64?, costRatio: float64?, costUpper: float64?, delta: float64, durationLower: float64?, durationRatio: float64?, durationUpper: float64?, equivalentAndCheaper: bool, level: float64, lower: float64, purpose: enum{Compare=0, HarnessVsNone=1, HarnessCi=2, Gate=3, Baseline=4}?, reason: string?, regressions: [string]?, runs: int32, upper: float64, verdict: enum{Better=0, Worse=1, Equivalent=2, Inconclusive=3} }
+  evaluation.verdict_reached v1 { baselineRate: float64, candidateRate: float64, cases: int32, costLower: float64?, costRatio: float64?, costUpper: float64?, delta: float64, durationLower: float64?, durationRatio: float64?, durationUpper: float64?, equivalentAndCheaper: bool, level: float64, lower: float64, purpose: enum{Compare=0, HarnessVsNone=1, HarnessCi=2, Gate=3, Baseline=4, Search=5}?, reason: string?, regressions: [string]?, runs: int32, upper: float64, verdict: enum{Better=0, Worse=1, Equivalent=2, Inconclusive=3} }
 
 stream org (Organisation)
-  org.created v1 { name: string, settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }
+  org.created v1 { name: string, settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, proposerShare: decimal?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }
   org.erasure_performed v1 { sessions: int32, subjects: int32 }
   org.integration_configured v1 { connected: bool, kind: string }
   org.member_role_changed v1 { accountId: string, role: enum{Viewer=0, Member=1, Admin=2, Owner=3} }
   org.period_retired v1 { period: string, subjects: int32 }
-  org.settings_changed v1 { settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }
+  org.settings_changed v1 { settings: { budgets: { confirmAboveUsd: decimal, monthlyUsd: decimal, perEvaluationUsd: decimal }, k: int32, promptMode: enum{Off=0, Redacted=1, Full=2}?, proposerShare: decimal?, pseudonymPeriod: enum{Month=0, Quarter=1, Year=2}, retentionMonths: int32?, traceRetentionDays: int32? } }
   org.token_issued v1 { kind: string, name: string, tokenId: string }
   org.token_revoked v1 { tokenId: string }
+
+stream pattern (Pattern)
+  pattern.acknowledged v1 { by: string }
+  pattern.corrections_added v1 { refs: [string] }
+  pattern.detected v1 { advisory: bool, label: string?, path: string, prevention: string, refs: [string], summary: string, title: string, wentWrong: string, workspace: string }
+  pattern.dismissed v1 { by: string, reason: string }
+  pattern.reopened v1 { reason: string }
+  pattern.resolved v1 { after: float64, before: float64, proposal: string }
+
+stream proposal (Proposal)
+  proposal.candidate_merged v1 { candidate: { contentHash: string, edits: [{ file: string, heading: string?, new: string?, old: string?, op: string }], index: int32, mergedFrom: [int32]?, overrides: string, rationale: string } }
+  proposal.candidate_scored v1 { costRatio: float64?, delta: float64, evaluation: string, index: int32, lower: float64, runs: int32, upper: float64, wins: [string] }
+  proposal.drafted v1 { baseCommit: string, batch: [string], budgetRuns: int32, candidates: [{ contentHash: string, edits: [{ file: string, heading: string?, new: string?, old: string?, op: string }], index: int32, mergedFrom: [int32]?, overrides: string, rationale: string }], ciRun: string?, kind: enum{Edit=0, Removal=1}, pattern: string?, prices: map<{ cacheRead: decimal?, cacheWrite: decimal?, input: decimal, output: decimal }>, repeats: int32, repo: string, spec: { agent: string, agentVersion: string, command: { logFormat: string?, logGlob: string?, template: string }?, effort: string?, harness: string, model: string, overrides: string?, settings: { maxTurns: int32?, timeoutMinutes: int32?, tokenCap: int64? }, shared: { ref: string, repo: string }? }, workspace: string }
+  proposal.gate_failed v1 { checks: [{ detail: string, evidence: string, name: string, passed: bool }], evaluation: string }
+  proposal.gate_inconclusive v1 { checks: [{ detail: string, evidence: string, name: string, passed: bool }], evaluation: string?, reason: string }
+  proposal.gate_passed v1 { checks: [{ detail: string, evidence: string, name: string, passed: bool }], evaluation: string }
+  proposal.gate_requested v1 { evaluation: string, index: int32 }
+  proposal.merged v1 { at: date-time, commit: string? }
+  proposal.outcome_observed v1 { after: float64, afterN: int32, before: float64, beforeN: int32, fell: bool }
+  proposal.pr_opened v1 { branch: string, number: int32, repo: string, url: string }
+  proposal.rejected v1 { by: string, reason: string }
 
 stream steering (SteeringState)
   steering.classified v1 { confidence: float64, intent: enum{Correction=0, Direction=1, Clarification=2, Routine=3}, interventionId: string, model: string, prevention: enum{Instruction=0, Skill=1, ToolAccess=2, Verification=3, ClearerTicket=4, StrongerModel=5, Nothing=6}?, promptVersion: string, wentWrong: enum{MissedRequirement=0, BrokeConvention=1, WrongApproach=2, UnverifiedDone=3, WrongArea=4, OverEngineered=5, LackedDomainKnowledge=6, Environment=7, Other=8}?, wentWrongLabel: string? }
   steering.observed v1 { at: date-time, interventionId: string, number: int32?, period: string, person: string, personMapped: bool, phase: enum{InSession=0, BeforeMerge=1, AfterMerge=2}, refs: { commentId: int64?, commits: [string]?, restartedBy: string?, seqs: [int64]? }, repo: string, ruleIntent: enum{Correction=0, Direction=1, Clarification=2, Routine=3}?, sessionId: string?, signal: enum{FollowUp=0, Interruption=1, Denial=2, Rewind=3, HumanEdit=4, Abandoned=5, Restarted=6, HumanRewrite=7, ReviewChange=8, CiFix=9, Revert=10, Fix=11}, text: string? pd(person) }
   steering.relabeled v1 { by: string, intent: enum{Correction=0, Direction=1, Clarification=2, Routine=3}, interventionId: string, person: string, prevention: enum{Instruction=0, Skill=1, ToolAccess=2, Verification=3, ClearerTicket=4, StrongerModel=5, Nothing=6}?, wentWrong: enum{MissedRequirement=0, BrokeConvention=1, WrongApproach=2, UnverifiedDone=3, WrongArea=4, OverEngineered=5, LackedDomainKnowledge=6, Environment=7, Other=8}?, wentWrongLabel: string? }
   steering.unclassified v1 { confidence: float64?, interventionId: string, model: string?, promptVersion: string?, reason: enum{NoText=0, LowConfidence=1, InvalidOutput=2, ModelError=3} }
+
+stream suite (Suite)
+  suite.holdout_queried v1 { evaluation: string, proposal: string, rotation: int32 }
+  suite.rotated v1 { at: date-time, rotation: int32, toDev: [string], toHeldOut: [string] }
 
 stream work_item (WorkItem)
   work_item.ci_observed v1 { at: date-time, check: string, conclusion: string, number: int32, repo: string, sha: string }

@@ -103,6 +103,19 @@ public sealed class StatisticsTests(ITestOutputHelper output)
         string? reason
     ) => Assert.Equal(reason, InconclusiveReason(verdict, lower, upper, Delta, cases));
 
+    // The t-widening cannot push a pass-rate difference past ±100 points.
+    [Fact]
+    public void The_interval_stays_within_the_possible_difference()
+    {
+        var cases = Enumerable
+            .Range(0, 10)
+            .Select(i => Case($"c{i}", 1, [i >= 7], [true]))
+            .ToList();
+        var c = Evaluate(cases, 0.95, Delta, 2_000, 7);
+        Assert.InRange(c.Upper, c.Delta, 1);
+        Assert.InRange(c.Lower, -1, c.Delta);
+    }
+
     [Fact]
     public void Equivalence_under_no_effect_is_reported_at_30_60_and_120_cases()
     {

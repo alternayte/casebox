@@ -116,6 +116,9 @@ public static class Statistics
             new Rng(seed ^ 0x5041_5353_5241_5445UL)
         );
 
+        // A pass-rate difference lies in [−1, 1]; the t-widening can reach past it with few cases.
+        lower = Math.Max(-1, lower);
+        upper = Math.Min(1, upper);
         var verdict = Decide(lower, upper, delta, counted.Count);
         var cost = Ratio(
             counted,

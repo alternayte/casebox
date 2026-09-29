@@ -414,6 +414,35 @@ public sealed class CrossTenantTests(StackFixture stack)
                 Caller.Admin
             ),
             new("GET", "/api/v1/ci/runs/01J0000000000000000000000A", null, Caller.Admin),
+            new("GET", "/api/v1/patterns/?workspace=" + a.Workspace, null, Caller.Admin),
+            new("GET", "/api/v1/patterns/00000000000000000000", null, Caller.Admin),
+            new(
+                "POST",
+                "/api/v1/patterns/00000000000000000000/acknowledgement",
+                null,
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/patterns/00000000000000000000/dismissal",
+                new { reason = "b" },
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/proposer/runs",
+                new { workspace = a.Workspace, spec = CiSpec },
+                Caller.Admin
+            ),
+            new("GET", "/api/v1/proposals/?workspace=" + a.Workspace, null, Caller.Admin),
+            new("GET", "/api/v1/proposals/01J0000000000000000000000A", null, Caller.Admin),
+            new(
+                "POST",
+                "/api/v1/proposals/01J0000000000000000000000A/rejection",
+                new { reason = "b" },
+                Caller.Admin
+            ),
+            new("GET", "/worker/v1/patterns/00000000000000000000/evidence", null, Caller.Worker),
             new("GET", "/api/v1/cases/00000000000000000000/validations", null, Caller.Admin),
             new("GET", "/api/v1/cases/00000000000000000000/oracle", null, Caller.Admin),
             new(
@@ -554,6 +583,13 @@ public sealed class CrossTenantTests(StackFixture stack)
             "ci",
             "baselines",
             "pull-requests",
+            "patterns",
+            "acknowledgement",
+            "dismissal",
+            "proposer",
+            "proposals",
+            "rejection",
+            "evidence",
         };
         var normalized = new List<string>();
         foreach (var s in segments)

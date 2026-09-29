@@ -326,8 +326,16 @@ type harnessOverlay struct {
 // reused only while neither changed.
 func sideHarness(ctx context.Context, d deps, sealed []sealedRepo, spec agents.Spec) (harnessOverlay, error) {
 	h, err := selectHarness(ctx, sealed, spec.Harness)
-	if err != nil || spec.Shared == nil {
+	if err != nil {
 		return h, err
+	}
+	if spec.Overrides != "" {
+		if err := applyOverrides(ctx, d, sealed, &h, spec.Overrides); err != nil {
+			return harnessOverlay{}, err
+		}
+	}
+	if spec.Shared == nil {
+		return h, nil
 	}
 	dir, err := d.open(ctx, spec.Shared.Repo)
 	if err != nil {
@@ -352,6 +360,50 @@ func sideHarness(ctx context.Context, d deps, sealed []sealedRepo, spec agents.S
 	sum := sha256.Sum256([]byte("repo:" + h.hash + "\nshared:" + found.Hash))
 	h.hash = hex.EncodeToString(sum[:])
 	return h, nil
+}
+
+// Overrides are a proposal candidate's harness files: { repo, files: { path: content | null } }.
+type Overrides struct {
+	Repo  string             `json:"repo"`
+	Files map[string]*string `json:"files"`
+}
+
+// applyOverrides lays a candidate's files over the harness of its repository: a content replaces
+// or adds the file, null removes it. Every path must match that repository's harness globs, and
+// the hash changes with the overrides.
+func applyOverrides(ctx context.Context, d deps, sealed []sealedRepo, h *harnessOverlay, hash string) error {
+	raw, err := d.get(ctx, hash)
+	if err != nil {
+		return fmt.Errorf("read the harness overrides: %w", err)
+	}
+	var o Overrides
+	if err := json.Unmarshal(raw, &o); err != nil || o.Repo == "" {
+		return worker.Permanent{Err: fmt.Errorf("the harness overrides %s are not { repo, files }", short(hash))}
+	}
+	var target *sealedRepo
+	for i := range sealed {
+		if sealed[i].Repo == o.Repo {
+			target = &sealed[i]
+		}
+	}
+	if target == nil {
+		return worker.Permanent{Err: fmt.Errorf("the harness overrides name %s, which the case does not seal", o.Repo)}
+	}
+	globs := configAt(ctx, target.dir, "HEAD").HarnessGlobs()
+	for name, body := range o.Files {
+		if strings.HasPrefix(name, "/") || strings.Contains(name, "..") || !repo.MatchesAny(globs, name) {
+			return worker.Permanent{Err: fmt.Errorf("the harness override %s is not a harness file of %s", name, o.Repo)}
+		}
+		if body == nil {
+			delete(h.files, target.prefix+name)
+		} else {
+			h.files[target.prefix+name] = []byte(*body)
+		}
+	}
+	h.none = false
+	sum := sha256.Sum256([]byte("harness:" + h.hash + "\noverrides:" + hash))
+	h.hash = hex.EncodeToString(sum[:])
+	return nil
 }
 
 // refFor is the ref of one repository. "<repo>@<commit>" names one repository's commit, as harness

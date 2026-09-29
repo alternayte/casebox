@@ -34,6 +34,9 @@ type Spec struct {
 	Settings     Settings `json:"settings"`
 	Command      *Command `json:"command"`
 	Shared       *Shared  `json:"shared,omitempty"`
+	// Overrides is the blob hash of a proposal candidate's harness files, laid over the harness
+	// at Harness (docs/specs/self-evolution.md).
+	Overrides string `json:"overrides,omitempty"`
 }
 
 // Shared is a shared harness repository at a ref (casebox.yml harness.shared). Its files go into

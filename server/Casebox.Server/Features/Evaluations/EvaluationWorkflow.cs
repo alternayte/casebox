@@ -117,7 +117,7 @@ public sealed class EvaluationSteps(
         var checkpoint = Evaluate(e, id, round, level);
         // A smoke run never claims better or equivalent (SDD section 8, Harness CI).
         var smoke =
-            e.Request!.Purpose == Purpose.HarnessCi
+            e.Request!.Purpose is Purpose.HarnessCi or Purpose.Search
             && checkpoint.Verdict is Statistics.Verdict.Better or Statistics.Verdict.Equivalent;
         if (smoke)
             checkpoint = checkpoint with
@@ -260,7 +260,7 @@ public sealed class EvaluationSteps(
             c.CandidateRate,
             reason,
             e.Request!.Purpose,
-            e.Request.Purpose == Purpose.HarnessCi ? Regressions(e) : null
+            e.Request.Purpose is Purpose.HarnessCi or Purpose.Search ? Regressions(e) : null
         );
 
     public const string SmokeReason = "smoke";

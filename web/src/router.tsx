@@ -6,6 +6,8 @@ import { EvaluationList, type EvaluationsSearch } from "@/evaluations/Evaluation
 import { EvaluationPage } from "@/evaluations/EvaluationPage";
 import { RunPage } from "@/evaluations/RunPage";
 import { Device } from "@/pages/Device";
+import { PatternList, PatternPage, type PatternsSearch } from "@/proposer/Patterns";
+import { ProposalList, ProposalPage, type ProposalsSearch } from "@/proposer/Proposals";
 import { Login } from "@/pages/Login";
 import { AppShell } from "@/shell/AppShell";
 import { validateFilters } from "@/steering/filters";
@@ -141,6 +143,48 @@ const runRoute = createRoute({
   },
 });
 
+const workspaceSearch = (search: Record<string, unknown>): PatternsSearch & ProposalsSearch => ({
+  workspace: typeof search.workspace === "string" && search.workspace !== "" ? search.workspace : undefined,
+});
+
+const patternsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/patterns",
+  validateSearch: workspaceSearch,
+  component: function PatternsRoute() {
+    const navigate = patternsRoute.useNavigate();
+    return <PatternList search={patternsRoute.useSearch()} onSearch={(search) => navigate({ search })} />;
+  },
+});
+
+const patternRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/patterns/$id",
+  component: function PatternRoute() {
+    const { id } = patternRoute.useParams();
+    return <PatternPage key={id} id={id} />;
+  },
+});
+
+const proposalsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/proposals",
+  validateSearch: workspaceSearch,
+  component: function ProposalsRoute() {
+    const navigate = proposalsRoute.useNavigate();
+    return <ProposalList search={proposalsRoute.useSearch()} onSearch={(search) => navigate({ search })} />;
+  },
+});
+
+const proposalRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/proposals/$id",
+  component: function ProposalRoute() {
+    const { id } = proposalRoute.useParams();
+    return <ProposalPage key={id} id={id} />;
+  },
+});
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
@@ -164,7 +208,7 @@ const deviceRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([appRoute.addChildren([overviewRoute, themeRoute, workRoute, workItemRoute, casesRoute, caseRoute, evaluationsRoute, evaluationRoute, runRoute]), loginRoute, deviceRoute]),
+  routeTree: rootRoute.addChildren([appRoute.addChildren([overviewRoute, themeRoute, workRoute, workItemRoute, patternsRoute, patternRoute, proposalsRoute, proposalRoute, casesRoute, caseRoute, evaluationsRoute, evaluationRoute, runRoute]), loginRoute, deviceRoute]),
 });
 
 declare module "@tanstack/react-router" {

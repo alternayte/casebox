@@ -162,8 +162,8 @@ const minimumVerdictCases = 10
 
 var compareAgents = []string{"claude-code", "codex", "cursor-cli", "command"}
 
-// Baseline and harness CI evaluations come only from casebox ci.
-var comparePurposes = []string{"compare", "harness_vs_none", "gate"}
+// Baseline and harness CI evaluations come only from casebox ci, and search and gate evaluations from the proposer.
+var comparePurposes = []string{"compare", "harness_vs_none"}
 
 func newCompareCommand() *cobra.Command {
 	var candidate, baseline, purpose string
@@ -223,7 +223,7 @@ func newCompareCommand() *cobra.Command {
 	cmd.Flags().Float64Var(&delta, "delta", 0.05, "the equivalence margin δ, as a share (0.05 is 5 points)")
 	cmd.Flags().Float64Var(&capUSD, "cap", 0, "the most this evaluation may spend in USD (the organisation's cap per evaluation is the upper bound)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "start without asking when the estimate needs no confirmation")
-	cmd.Flags().StringVar(&purpose, "purpose", "", "compare, harness_vs_none or gate (default compare; harness_vs_none for harness=none)")
+	cmd.Flags().StringVar(&purpose, "purpose", "", "compare or harness_vs_none (default compare; harness_vs_none for harness=none)")
 	_ = cmd.MarkFlagRequired("candidate")
 	return cmd
 }
@@ -372,7 +372,7 @@ func applyChange(base harnessSpec, change string) (harnessSpec, string, error) {
 func compareRequest(workspace string, base, cand harnessSpec, prices map[string]repo.Price, purpose string, repeats, cases int, delta, capUSD float64, capSet bool) (evaluationRequest, error) {
 	req := evaluationRequest{Workspace: workspace, Baseline: base, Candidate: cand, Repeats: repeats, Delta: delta, Purpose: purpose, Prices: prices}
 	if !contains(comparePurposes, purpose) {
-		return req, fmt.Errorf("--purpose %s: use compare, harness_vs_none or gate", purpose)
+		return req, fmt.Errorf("--purpose %s: use compare or harness_vs_none", purpose)
 	}
 	if repeats < 1 {
 		return req, errors.New("--repeats is at least 1")

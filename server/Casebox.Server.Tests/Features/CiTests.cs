@@ -21,9 +21,9 @@ public sealed class CiTests(StackFixture stack)
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private const string Repo = "github.com/acme/harness-ci";
-    private const string Hash = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
+    internal const string Hash = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
 
-    private static readonly object Spec = new
+    internal static readonly object Spec = new
     {
         agent = "claude-code",
         agentVersion = "2.1.0",
@@ -31,7 +31,7 @@ public sealed class CiTests(StackFixture stack)
         harness = "HEAD",
     };
 
-    private static readonly object Prices = new Dictionary<string, object>
+    internal static readonly object Prices = new Dictionary<string, object>
     {
         ["claude-sonnet-5-20260801"] = new
         {
@@ -225,7 +225,7 @@ public sealed class CiTests(StackFixture stack)
             ["globs"] = new JsonArray("AGENTS.md", ".claude/skills/**"),
         };
 
-    private static async Task<string> StartBaselineAsync(HttpClient ci, string workspace)
+    internal static async Task<string> StartBaselineAsync(HttpClient ci, string workspace)
     {
         var response = await ci.PostAsJsonAsync(
             "/api/v1/ci/baselines",
@@ -283,7 +283,7 @@ public sealed class CiTests(StackFixture stack)
 
     // Plays the inline worker of one CI run until the run reaches the state: it answers the
     // resolve job with one harness hash for every case, each run, and each verify by passes.
-    private static async Task<JsonElement> PlayAsync(
+    internal static async Task<JsonElement> PlayAsync(
         HttpClient ci,
         string ciRun,
         Func<JsonObject, string, bool> passes,

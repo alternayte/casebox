@@ -18,6 +18,9 @@ public enum Purpose
 
     // One side only: the nightly score of the default branch's harness, which harness CI reuses.
     Baseline,
+
+    // A proposal candidate on the dev batch, candidate side only against the cached baseline.
+    Search,
 }
 
 public enum EvaluationStatus
@@ -45,7 +48,10 @@ public sealed record HarnessSpec(
     string Harness,
     AgentSettings Settings,
     CommandTemplate? Command,
-    SharedHarness? Shared = null
+    SharedHarness? Shared = null,
+    // A blob of { repo, files: { path: content | null } } laid over the harness at the ref: a
+    // proposal's candidate edit, which is in no git ref (docs/specs/self-evolution.md).
+    string? Overrides = null
 )
 {
     public static readonly string[] Agents = ["claude-code", "codex", "cursor-cli", "command"];
@@ -67,7 +73,7 @@ public sealed record HarnessSpec(
         if (a.Effort != b.Effort)
             changes.Add("effort");
         // The repository's harness and the shared harness are both the harness: one change.
-        if (a.Harness != b.Harness || a.Shared != b.Shared)
+        if (a.Harness != b.Harness || a.Shared != b.Shared || a.Overrides != b.Overrides)
             changes.Add("harness");
         if (a.Settings != b.Settings)
             changes.Add("settings");
@@ -159,7 +165,10 @@ public static class EvaluationEvents
         // The CI run that asked for it (docs/specs/harness-ci.md), and for harness CI the cached
         // baseline per case.
         string? CiRun = null,
-        IReadOnlyDictionary<string, BaselineScore>? BaselineScores = null
+        IReadOnlyDictionary<string, BaselineScore>? BaselineScores = null,
+        // The proposal and candidate a search or gate evaluation scores.
+        string? Proposal = null,
+        int? CandidateIndex = null
     );
 
     public sealed record Confirmed(string By);
@@ -325,7 +334,7 @@ public sealed record Evaluation(
         Request?.Purpose switch
         {
             Purpose.Baseline => [Side.Baseline],
-            Purpose.HarnessCi => [Side.Candidate],
+            Purpose.HarnessCi or Purpose.Search => [Side.Candidate],
             _ => [Side.Baseline, Side.Candidate],
         };
 
@@ -359,7 +368,7 @@ public static class EvaluationDecider
                 "A baseline evaluation has one side: its candidate is its baseline."
             );
         if (
-            requested.Purpose == Purpose.HarnessCi
+            requested.Purpose is Purpose.HarnessCi or Purpose.Search
             && requested.Cases.Any(c => requested.BaselineScores?.ContainsKey(c.CaseId) != true)
         )
             throw new DomainException("Harness CI needs a cached baseline score for every case.");

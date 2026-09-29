@@ -175,7 +175,10 @@ public sealed class EvaluationDeciderTests
 }
 
 // Step 10 on the server: an evaluation on ten approved cases runs round by round through the job
-// queue, stops early once the verdict is clear, and never shows a held-out evaluation's cases.
+// queue, stops early once the verdict is clear, and never shows a held-out evaluation's cases. Its
+// worker fails every run job that is not its own, so it runs apart from the other classes that
+// play workers.
+[Collection(GitHubPolling.Name)]
 public sealed class EvaluationTests(StackFixture stack)
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;

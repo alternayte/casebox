@@ -278,6 +278,15 @@ public static class CaseDecider
             : [new CaseEvents.Approved(by)];
     }
 
+    // The suite's rotation moves an approved case between dev and held-out (docs/specs/self-evolution.md).
+    public static IEnumerable<object> Rotate(Case c, CaseSplit split)
+    {
+        Require(c);
+        if (c.Status != CaseStatus.Approved)
+            throw new DomainException("Only an approved case rotates between dev and held-out.");
+        return c.Split == split ? [] : [new CaseEvents.SplitAssigned(split)];
+    }
+
     public static IEnumerable<object> Reject(Case c, string reason, string by)
     {
         RequireOpen(c);

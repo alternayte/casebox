@@ -18,6 +18,9 @@ public static class WorkspaceEvents
     public sealed record RecipeValidated(string Hash, bool Passed, string? ReportBlob);
 
     public sealed record RecipeConfirmed(string Hash);
+
+    // casebox.yml's harness globs and shared harness repository (docs/specs/harness-ci.md).
+    public sealed record HarnessConfigured(IReadOnlyList<string> Globs, string? Shared);
 }
 
 public enum RecipeStatus
@@ -35,7 +38,9 @@ public sealed record Workspace(
     ImmutableSortedSet<string> Repos,
     string? RecipeHash,
     RecipeStatus RecipeStatus,
-    string? Recipe = null
+    string? Recipe = null,
+    ImmutableList<string>? HarnessGlobs = null,
+    string? SharedHarness = null
 ) : IState<Workspace>
 {
     public static Workspace Initial { get; } =
@@ -58,6 +63,11 @@ public sealed record Workspace(
                 RecipeStatus = e.Passed ? RecipeStatus.Validated : RecipeStatus.ValidationFailed,
             },
             WorkspaceEvents.RecipeConfirmed => state with { RecipeStatus = RecipeStatus.Confirmed },
+            WorkspaceEvents.HarnessConfigured e => state with
+            {
+                HarnessGlobs = [.. e.Globs],
+                SharedHarness = e.Shared,
+            },
             _ => state,
         };
 
@@ -144,6 +154,26 @@ public static partial class WorkspaceDecider
         if (workspace.RecipeStatus == RecipeStatus.Confirmed)
             throw new ConflictException("The recipe is already confirmed.");
         return [new WorkspaceEvents.RecipeValidated(hash, passed, reportBlob)];
+    }
+
+    // Recorded only when the globs or the shared repository changed.
+    public static IEnumerable<object> ConfigureHarness(
+        Workspace workspace,
+        IReadOnlyList<string> globs,
+        string? shared
+    )
+    {
+        if (!workspace.Exists)
+            throw new NotFoundException("The workspace does not exist.");
+        var normalized = string.IsNullOrWhiteSpace(shared) ? null : NormalizeRepo(shared);
+        var clean = globs.Select(g => g.Trim()).Where(g => g.Length > 0).Distinct().ToList();
+        if (
+            workspace.HarnessGlobs is { } current
+            && current.SequenceEqual(clean)
+            && workspace.SharedHarness == normalized
+        )
+            return [];
+        return [new WorkspaceEvents.HarnessConfigured(clean, normalized)];
     }
 
     public static IEnumerable<object> ConfirmRecipe(Workspace workspace, string hash)

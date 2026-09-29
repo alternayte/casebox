@@ -49,6 +49,10 @@ public sealed class WorkspaceProjection : Projection
                 )
         );
 
+        On<WorkspaceEvents.HarnessConfigured>(
+            (e, ctx) => Update(ctx, "shared_harness = @Shared", new { e.Shared })
+        );
+
         On<WorkspaceEvents.RecipeProposed>(
             (_, ctx) => Update(ctx, "recipe_status = 'proposed'", null)
         );

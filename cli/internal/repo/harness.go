@@ -119,3 +119,6 @@ func matchSegments(pattern, parts []string) bool {
 	}
 	return len(parts) == 0
 }
+
+// MatchesAny reports whether a repo-relative path matches any of the globs, as Harness matches them.
+func MatchesAny(globs []string, file string) bool { return matchAny(globs, file) }

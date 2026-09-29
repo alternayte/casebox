@@ -108,6 +108,16 @@ func newInitCommand() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(out, "  Wrote %s. Commit it, so teammates can run casebox join.\n", repo.ConfigPath)
+			// The server records the harness globs and the shared harness, which harness CI reads.
+			if _, cfg, err := repo.LoadConfig(ctx, root); err == nil {
+				body := map[string]any{"globs": cfg.HarnessGlobs(), "shared": nil}
+				if cfg.Harness.Shared != "" {
+					body["shared"] = cfg.Harness.Shared
+				}
+				if err := client.Do(ctx, http.MethodPut, "/api/v1/workspaces/"+workspace+"/harness", body, nil); err != nil {
+					return err
+				}
+			}
 
 			step(out, "Environment")
 			if err := proposeEnvironment(ctx, client, root, workspace, out); err != nil {

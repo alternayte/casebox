@@ -55,7 +55,9 @@ export function EvaluationPage({ id }: { id: string }) {
         </Link>
         <h1 className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl font-semibold tracking-tight">
           <span>
-            {changeName(e.change)}: {sideValue(e.baseline, e.change)} → {sideValue(e.candidate, e.change)}
+            {e.purpose === "baseline"
+              ? `Baseline score: ${agentName(e.baseline.agent)} ${e.baseline.agentVersion}, ${e.baseline.model}`
+              : `${changeName(e.change)}: ${sideValue(e.baseline, e.change)} → ${sideValue(e.candidate, e.change)}`}
           </span>
           <span className="flex items-center gap-1.5 self-center text-base">
             <StatusTag status={e.status} />
@@ -64,7 +66,12 @@ export function EvaluationPage({ id }: { id: string }) {
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
           <span className="font-mono">{e.id}</span> · {purposeName(e.purpose)} · workspace {e.workspace} · {heldOut ? "held-out set" : "dev set"} ·{" "}
-          {plural(e.cases, "case")} × 2 sides × {plural(e.repeats, "repeat")} · δ ±{(e.delta * 100).toFixed(1)} pts · requested {day(e.createdAt)}
+          {e.ci?.kind === "pull_request" && (
+            <>
+              {e.ci.repo}#{e.ci.number} at <span className="font-mono">{e.ci.headSha?.slice(0, 12)}</span> ·{" "}
+            </>
+          )}
+          {plural(e.cases, "case")} × {e.purpose === "baseline" || e.purpose === "harness_ci" ? "1 side" : "2 sides"} × {plural(e.repeats, "repeat")} · δ ±{(e.delta * 100).toFixed(1)} pts · requested {day(e.createdAt)}
         </p>
       </div>
 
@@ -152,6 +159,20 @@ function Actions({ e }: { e: EvaluationRow }) {
 
 function VerdictBlock({ e }: { e: EvaluationRow }) {
   const v = e.verdict;
+  if (e.scored)
+    return (
+      <div className="space-y-3">
+        <p className="text-sm">
+          <span className="font-mono text-2xl tabular-nums">{(e.scored.passRate * 100).toFixed(1)}%</span>{" "}
+          <span className="text-muted-foreground">
+            passed, over {plural(e.scored.runs, "run")} of {plural(e.scored.cases, "case")}
+          </span>
+        </p>
+        <p className="text-sm text-muted-foreground">
+          A baseline score compares nothing, so it has no verdict. Harness CI uses it as the baseline side of pull requests that change the harness.
+        </p>
+      </div>
+    );
   if (!v) {
     const text =
       e.status === "cancelled"
@@ -184,6 +205,19 @@ function VerdictBlock({ e }: { e: EvaluationRow }) {
         <span className="font-medium">Rule met: </span>
         {verdictRule(v, e.delta)}
       </p>
+      {e.purpose === "harness_ci" && (
+        <p className="text-sm">
+          <span className="font-medium">Regressions: </span>
+          {v.regressions && v.regressions.length > 0 ? (
+            <>
+              {plural(v.regressions.length, "case")} the baseline passed in every run and the candidate failed in every run:{" "}
+              <span className="font-mono text-xs">{v.regressions.join(", ")}</span>
+            </>
+          ) : (
+            "none. No case the baseline passed in every run failed with this change."
+          )}
+        </p>
+      )}
       {v.equivalentAndCheaper && (
         <p className="text-sm">
           <span className="font-medium">Equivalent and cheaper: </span>the same pass rate within ±{(e.delta * 100).toFixed(1)} pts, and the cost interval lies entirely

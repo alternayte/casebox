@@ -35,6 +35,8 @@ public static class WorkspaceEndpoints
         bool CanMine
     );
 
+    public sealed record HarnessBody(IReadOnlyList<string>? Globs, string? Shared);
+
     public static void MapWorkspaces(this RouteGroupBuilder api)
     {
         var workspaces = api.MapGroup("/workspaces").WithTags("Workspaces");
@@ -114,6 +116,18 @@ public static class WorkspaceEndpoints
                     Execute(store, name, w => WorkspaceDecider.RemoveRepo(w, repo))
             )
             .RequireAuthorization(Policies.Admin);
+
+        workspaces
+            .MapPut(
+                "/{name}/harness",
+                (string name, HarnessBody body, IEventStore store) =>
+                    Execute(
+                        store,
+                        name,
+                        w => WorkspaceDecider.ConfigureHarness(w, body.Globs ?? [], body.Shared)
+                    )
+            )
+            .RequireAuthorization(Policies.Member);
 
         workspaces
             .MapPut(

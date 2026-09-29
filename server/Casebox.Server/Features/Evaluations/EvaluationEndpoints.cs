@@ -46,7 +46,10 @@ public static class EvaluationEndpoints
         JsonElement? Verdict,
         string? Reason,
         DateTimeOffset CreatedAt,
-        DateTimeOffset UpdatedAt
+        DateTimeOffset UpdatedAt,
+        // A baseline evaluation's score, and the pull request or nightly run of harness CI.
+        JsonElement? Scored,
+        JsonElement? Ci
     );
 
     public sealed record CheckpointRow(
@@ -223,7 +226,7 @@ public static class EvaluationEndpoints
         // sees held-out cases, their traces or their results (SDD section 9).
         evaluations.MapGet(
             "/{id}/cases",
-            async (string id, HttpContext http, NpgsqlDataSource db) =>
+            async (string id, HttpContext http, NpgsqlDataSource db, IEventStore store) =>
             {
                 await using var connection = await db.OpenConnectionAsync(http.RequestAborted);
                 var row = await RowAsync(connection, http, id);
@@ -251,6 +254,19 @@ public static class EvaluationEndpoints
                         cancellationToken: http.RequestAborted
                     )
                 );
+                // Harness CI's baseline side is the cached score it was requested with.
+                var cached =
+                    row.Purpose == "harness_ci"
+                        ? (
+                            await store.Load<Evaluation>(
+                                Evaluation.StreamId(id),
+                                http.RequestAborted
+                            )
+                        )
+                            .State
+                            .Request
+                            ?.BaselineScores
+                        : null;
                 return Results.Ok(
                     runs.GroupBy(r => r.CaseId)
                         .Select(g =>
@@ -258,16 +274,17 @@ public static class EvaluationEndpoints
                             var done = g.Where(r => r.Status == "completed").ToList();
                             var b = done.Where(r => r.Side == "baseline").ToList();
                             var c = done.Where(r => r.Side == "candidate").ToList();
+                            var score = cached?.GetValueOrDefault(g.Key);
                             return new CaseResult(
                                 g.Key,
                                 g.First().Weight,
                                 g.First().Drift,
-                                b.Count,
-                                b.Count(r => r.Passed == true),
+                                score?.Passed.Count ?? b.Count,
+                                score?.Passed.Count(p => p) ?? b.Count(r => r.Passed == true),
                                 c.Count,
                                 c.Count(r => r.Passed == true),
                                 g.Count(r => r.Status == "failed"),
-                                b.Sum(r => r.Cost),
+                                score?.CostUsd.Sum() ?? b.Sum(r => r.Cost),
                                 c.Sum(r => r.Cost),
                                 g.Select(r => r.RunId).ToList()
                             );
@@ -414,7 +431,10 @@ public static class EvaluationEndpoints
 
     private const string Columns = """
         id, workspace, split, purpose, status, change, baseline::text AS baseline, candidate::text AS candidate, repeats, delta, cap_usd,
-        estimate::text AS estimate, mutable_model, cases, spent_usd, runs_completed, runs_failed, verdict::text AS verdict, reason, created_at, updated_at
+        estimate::text AS estimate, mutable_model, cases, spent_usd, runs_completed, runs_failed, verdict::text AS verdict, reason, created_at, updated_at,
+        scored::text AS scored,
+        (SELECT jsonb_build_object('kind', c.kind, 'repo', c.repo, 'number', c.number, 'headSha', c.head_sha)::text
+         FROM casebox.ci_runs c WHERE c.org_id = evaluations.org_id AND c.id = evaluations.ci_run) AS ci
         """;
 
     private sealed record Row(
@@ -438,7 +458,9 @@ public static class EvaluationEndpoints
         string? Verdict,
         string? Reason,
         DateTime CreatedAt,
-        DateTime UpdatedAt
+        DateTime UpdatedAt,
+        string? Scored,
+        string? Ci
     )
     {
         public EvaluationRow View() =>
@@ -463,7 +485,9 @@ public static class EvaluationEndpoints
                 Json(Verdict),
                 Reason,
                 Utc(CreatedAt),
-                Utc(UpdatedAt)
+                Utc(UpdatedAt),
+                Json(Scored),
+                Json(Ci)
             );
     }
 

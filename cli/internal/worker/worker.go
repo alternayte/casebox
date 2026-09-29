@@ -38,6 +38,10 @@ type Worker struct {
 	Version  string
 	Handlers map[string]Handler
 	Log      io.Writer
+	// Scope limits the worker to one CI run's jobs: the inline worker of casebox ci.
+	Scope string
+	// MaxIdle caps the wait between leases when no job waits (default 30 seconds).
+	MaxIdle time.Duration
 }
 
 // Run leases and runs jobs until ctx ends. When no job waits it backs off up to 30 seconds.
@@ -46,10 +50,18 @@ func (w *Worker) Run(ctx context.Context) error {
 	for k := range w.Handlers {
 		kinds = append(kinds, k)
 	}
+	maxIdle := w.MaxIdle
+	if maxIdle <= 0 {
+		maxIdle = 30 * time.Second
+	}
+	lease := map[string]any{"workerId": w.ID, "version": w.Version, "kinds": kinds}
+	if w.Scope != "" {
+		lease["scope"] = w.Scope
+	}
 	idle := time.Second
 	for ctx.Err() == nil {
 		var job Job
-		err := w.Client.Do(ctx, http.MethodPost, "/worker/v1/jobs/lease", map[string]any{"workerId": w.ID, "version": w.Version, "kinds": kinds}, &job)
+		err := w.Client.Do(ctx, http.MethodPost, "/worker/v1/jobs/lease", lease, &job)
 		switch {
 		case err != nil:
 			fmt.Fprintf(w.Log, "lease failed: %v\n", err)
@@ -64,8 +76,8 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 		case <-time.After(idle):
 		}
-		if idle < 30*time.Second {
-			idle *= 2
+		if idle < maxIdle {
+			idle = min(idle*2, maxIdle)
 		}
 	}
 	return ctx.Err()

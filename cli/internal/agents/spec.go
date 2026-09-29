@@ -33,6 +33,14 @@ type Spec struct {
 	Harness      string   `json:"harness"`
 	Settings     Settings `json:"settings"`
 	Command      *Command `json:"command"`
+	Shared       *Shared  `json:"shared,omitempty"`
+}
+
+// Shared is a shared harness repository at a ref (casebox.yml harness.shared). Its files go into
+// the agent's user-level configuration in the sandbox home (docs/specs/harness-ci.md).
+type Shared struct {
+	Repo string `json:"repo"`
+	Ref  string `json:"ref"`
 }
 
 // Settings cap a run. A nil field is unset: no max turns, the default timeout, no token cap.
@@ -128,6 +136,14 @@ func Validate(s Spec) error {
 	}
 	if strings.TrimSpace(s.Harness) == "" {
 		return errors.New("the spec names no harness: a git ref, or none")
+	}
+	if sh := s.Shared; sh != nil {
+		if s.Agent != ClaudeCode && s.Agent != Codex {
+			return fmt.Errorf("a shared harness goes into the agent's user-level configuration, and %s has none that Casebox knows; only %s and %s do", s.Agent, ClaudeCode, Codex)
+		}
+		if strings.TrimSpace(sh.Repo) == "" || strings.TrimSpace(sh.Ref) == "" || strings.HasPrefix(sh.Ref, "-") {
+			return errors.New("the shared harness names no repository or ref")
+		}
 	}
 	if v := s.Settings.MaxTurns; v != nil && *v < 1 {
 		return fmt.Errorf("settings.maxTurns is %d; it must be at least 1", *v)

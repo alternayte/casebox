@@ -81,6 +81,12 @@ public sealed class EvaluationSteps(
         )
             return;
 
+        if (e.Request!.Purpose == Purpose.Baseline)
+        {
+            await AdvanceBaselineAsync(e, id, streamId, ct);
+            return;
+        }
+
         var round = e.Checkpoints.Count + 1;
         if (e.Exhausted)
         {
@@ -109,6 +115,16 @@ public sealed class EvaluationSteps(
 
         var level = Statistics.Level(round, e.Repeats);
         var checkpoint = Evaluate(e, id, round, level);
+        // A smoke run never claims better or equivalent (SDD section 8, Harness CI).
+        var smoke =
+            e.Request!.Purpose == Purpose.HarnessCi
+            && checkpoint.Verdict is Statistics.Verdict.Better or Statistics.Verdict.Equivalent;
+        if (smoke)
+            checkpoint = checkpoint with
+            {
+                Verdict = Statistics.Verdict.Inconclusive,
+                EquivalentAndCheaper = false,
+            };
         await store.Execute<Evaluation>(
             streamId,
             s =>
@@ -138,13 +154,15 @@ public sealed class EvaluationSteps(
                             s,
                             checkpoint,
                             checkpoint.Verdict,
-                            Statistics.InconclusiveReason(
-                                checkpoint.Verdict,
-                                checkpoint.Lower,
-                                checkpoint.Upper,
-                                s.Delta,
-                                checkpoint.Cases
-                            )
+                            smoke
+                                ? SmokeReason
+                                : Statistics.InconclusiveReason(
+                                    checkpoint.Verdict,
+                                    checkpoint.Lower,
+                                    checkpoint.Upper,
+                                    s.Delta,
+                                    checkpoint.Cases
+                                )
                         )
                     ),
                 ct
@@ -184,6 +202,18 @@ public sealed class EvaluationSteps(
                     .ToList();
                 var b = runs.Where(r => r.Side == Side.Baseline).ToList();
                 var k = runs.Where(r => r.Side == Side.Candidate).ToList();
+                // Harness CI's baseline is the cached score of the default branch's harness.
+                if (e.Request?.BaselineScores?.GetValueOrDefault(c.CaseId) is { } cached)
+                    return new Statistics.CaseRuns(
+                        c.CaseId,
+                        c.Weight,
+                        cached.Passed,
+                        k.Select(r => r.Passed == true).ToList(),
+                        cached.CostUsd.Select(x => (double)x).ToList(),
+                        k.Select(r => (double)r.CostUsd).ToList(),
+                        cached.Seconds,
+                        k.Select(r => r.Seconds).ToList()
+                    );
                 return new Statistics.CaseRuns(
                     c.CaseId,
                     c.Weight,
@@ -228,8 +258,81 @@ public sealed class EvaluationSteps(
             verdict == Statistics.Verdict.Equivalent && c.EquivalentAndCheaper,
             c.BaselineRate,
             c.CandidateRate,
-            reason
+            reason,
+            e.Request!.Purpose,
+            e.Request.Purpose == Purpose.HarnessCi ? Regressions(e) : null
         );
+
+    public const string SmokeReason = "smoke";
+
+    // Cases the cached baseline passed in every run (at least 2) and the candidate failed in every
+    // completed run: what a smoke run can show at its size.
+    public static IReadOnlyList<string> Regressions(Evaluation e) =>
+        e
+            .Cases.Where(c =>
+            {
+                if (e.Request?.BaselineScores?.GetValueOrDefault(c.CaseId) is not { } cached)
+                    return false;
+                var candidate = e
+                    .Runs.Values.Where(r =>
+                        r.CaseId == c.CaseId && r.Side == Side.Candidate && !r.Failed
+                    )
+                    .ToList();
+                return cached.Passed.Count >= 2
+                    && cached.Passed.All(p => p)
+                    && candidate.Count > 0
+                    && candidate.All(r => r.Passed != true);
+            })
+            .Select(c => c.CaseId)
+            .ToList();
+
+    // A baseline evaluation runs its rounds in order and ends with scored: it compares nothing.
+    private async Task AdvanceBaselineAsync(
+        Evaluation e,
+        string id,
+        string streamId,
+        CancellationToken ct
+    )
+    {
+        var round = Enumerable.Range(1, e.Repeats).FirstOrDefault(r => !e.RoundDone(r));
+        if (e.Exhausted || round == 0)
+        {
+            await store.Execute<Evaluation>(
+                streamId,
+                s => EvaluationDecider.Score(s, Scored(s)),
+                ct
+            );
+            return;
+        }
+        if (e.Runs.Values.Any(r => r.Repeat == round))
+            return;
+        // The next round starts only when its estimate fits under the cap.
+        if (round > 1 && e.SpentUsd + e.Request!.Estimate.PerRoundUsd > e.CapUsd)
+        {
+            await store.Execute<Evaluation>(
+                streamId,
+                s =>
+                    s.Exhausted
+                        ? []
+                        : new object[] { new EvaluationEvents.BudgetExhausted(s.SpentUsd) }.Concat(
+                            EvaluationDecider.Score(s, Scored(s))
+                        ),
+                ct
+            );
+            return;
+        }
+        await StartRoundAsync(e, id, round, ct);
+    }
+
+    private static EvaluationEvents.Scored Scored(Evaluation e)
+    {
+        var done = e.Runs.Values.Where(r => !r.Failed).ToList();
+        return new EvaluationEvents.Scored(
+            done.Select(r => r.CaseId).Distinct().Count(),
+            done.Count,
+            done.Count == 0 ? 0 : (double)done.Count(r => r.Passed == true) / done.Count
+        );
+    }
 
     // One repeat of every case on both sides, in a random interleaved order seeded by the
     // evaluation and the round, so provider drift during the round hits both sides alike.
@@ -294,6 +397,7 @@ public sealed class EvaluationSteps(
                         ? (JsonElement?)null
                         : JsonDocument.Parse(c.Judge).RootElement,
                     prices = request.Prices,
+                    ciRun = request.CiRun,
                 },
                 EvaluationResults.Json
             );

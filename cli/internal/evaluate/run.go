@@ -121,9 +121,14 @@ func run(ctx context.Context, d deps, pl RunPayload) (RunAnswer, error) {
 	if err != nil {
 		return RunAnswer{}, err
 	}
-	overlay, err := selectHarness(ctx, sealed, pl.Spec.Harness)
+	overlay, err := sideHarness(ctx, d, sealed, pl.Spec)
 	if err != nil {
 		return RunAnswer{}, err
+	}
+	// The shared harness goes where this agent reads its user-level configuration.
+	userFiles, err := a.UserConfig(overlay.shared)
+	if err != nil {
+		return RunAnswer{}, worker.Permanent{Err: err}
 	}
 	denied, err := deniedPackages(ctx, d, pl.Repos)
 	if err != nil {
@@ -165,6 +170,9 @@ func run(ctx context.Context, d deps, pl RunPayload) (RunAnswer, error) {
 	}
 	home, runDir, err := prepareRun(ctx, p, sb, pl.Instruction)
 	if err != nil {
+		return RunAnswer{}, err
+	}
+	if err := runner.UserFiles(ctx, p, sb, home, userFiles); err != nil {
 		return RunAnswer{}, err
 	}
 	var limit int64
@@ -306,10 +314,58 @@ func Cost(u capture.Usage, p repo.Price) float64 {
 // harnessOverlay is a side's harness over the sealed repositories: the files to write (with the
 // layout prefix), the globs whose base files it replaces, and its files hash.
 type harnessOverlay struct {
-	files map[string][]byte
-	globs []string
-	none  bool
-	hash  string
+	files  map[string][]byte
+	globs  []string
+	none   bool
+	hash   string
+	shared map[string][]byte // the shared harness's files, by path in its repository
+}
+
+// sideHarness is the side's harness: the repositories' own harness at the spec's ref, and the
+// shared harness at its ref when the spec names one. The hash covers both, so a baseline score is
+// reused only while neither changed.
+func sideHarness(ctx context.Context, d deps, sealed []sealedRepo, spec agents.Spec) (harnessOverlay, error) {
+	h, err := selectHarness(ctx, sealed, spec.Harness)
+	if err != nil || spec.Shared == nil {
+		return h, err
+	}
+	dir, err := d.open(ctx, spec.Shared.Repo)
+	if err != nil {
+		return harnessOverlay{}, err
+	}
+	commit, err := repo.Resolve(ctx, dir, spec.Shared.Ref)
+	if err != nil || strings.HasPrefix(spec.Shared.Ref, "-") {
+		return harnessOverlay{}, worker.Permanent{Err: fmt.Errorf("the shared harness ref %q names no commit in %s", spec.Shared.Ref, spec.Shared.Repo)}
+	}
+	found, err := repo.Harness(ctx, dir, commit, configAt(ctx, dir, commit).HarnessGlobs())
+	if err != nil {
+		return harnessOverlay{}, err
+	}
+	h.shared = map[string][]byte{}
+	for _, f := range found.Files {
+		body, err := repo.ReadAt(ctx, dir, commit, f)
+		if err != nil {
+			return harnessOverlay{}, fmt.Errorf("read %s of %s at %s: %w", f, spec.Shared.Repo, short(commit), err)
+		}
+		h.shared[f] = body
+	}
+	sum := sha256.Sum256([]byte("repo:" + h.hash + "\nshared:" + found.Hash))
+	h.hash = hex.EncodeToString(sum[:])
+	return h, nil
+}
+
+// refFor is the ref of one repository. "<repo>@<commit>" names one repository's commit, as harness
+// CI does for a pull request: that repository uses the commit and the others their default branch.
+// Any other ref applies to every repository.
+func refFor(ref, repoName string) string {
+	i := strings.LastIndex(ref, "@")
+	if i <= 0 || !strings.Contains(ref[:i], "/") || strings.ContainsAny(ref, "{}") {
+		return ref
+	}
+	if ref[:i] == repoName {
+		return ref[i+1:]
+	}
+	return "HEAD"
 }
 
 // selectHarness reads the side's harness. none removes the files the globs of casebox.yml at the
@@ -326,9 +382,9 @@ func selectHarness(ctx context.Context, sealed []sealedRepo, ref string) (harnes
 	for _, r := range sealed {
 		rev := "HEAD"
 		if !h.none {
-			commit, err := repo.Resolve(ctx, r.dir, ref)
-			if err != nil {
-				return harnessOverlay{}, worker.Permanent{Err: fmt.Errorf("the harness ref %q names no commit in %s", ref, r.Repo)}
+			commit, err := repo.Resolve(ctx, r.dir, refFor(ref, r.Repo))
+			if err != nil || strings.HasPrefix(refFor(ref, r.Repo), "-") {
+				return harnessOverlay{}, worker.Permanent{Err: fmt.Errorf("the harness ref %q names no commit in %s", refFor(ref, r.Repo), r.Repo)}
 			}
 			rev = commit
 		}

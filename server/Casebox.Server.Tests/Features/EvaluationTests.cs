@@ -470,8 +470,15 @@ public sealed class EvaluationTests(StackFixture stack)
         Assert.Equal(20, verified);
     }
 
+    private Task<string> ApprovedCasesAsync(int count) => ApprovedCasesAsync(stack, count);
+
     // Approved dev cases in a new workspace, written through the case stream as the review would.
-    private async Task<string> ApprovedCasesAsync(int count)
+    // Case i's source is "test:<workspace>:<i>".
+    internal static async Task<string> ApprovedCasesAsync(
+        StackFixture stack,
+        int count,
+        string repo = "github.com/acme/eval"
+    )
     {
         var admin = await stack.ServerA.AdminAsync();
         var workspace = $"eval-{Guid.NewGuid():N}"[..20];
@@ -479,11 +486,7 @@ public sealed class EvaluationTests(StackFixture stack)
             await admin.PostAsJsonAsync("/api/v1/workspaces", new { name = workspace }, Ct)
         ).EnsureSuccessStatusCode();
         (
-            await admin.PostAsJsonAsync(
-                $"/api/v1/workspaces/{workspace}/repos",
-                new { repo = "github.com/acme/eval" },
-                Ct
-            )
+            await admin.PostAsJsonAsync($"/api/v1/workspaces/{workspace}/repos", new { repo }, Ct)
         ).EnsureSuccessStatusCode();
         var recipe = JsonDocument
             .Parse(
@@ -533,7 +536,7 @@ public sealed class EvaluationTests(StackFixture stack)
                         $"test:{workspace}:{i}",
                         null,
                         CaseScope.Single,
-                        [new CaseRepo("github.com/acme/eval", "base", "merged", RepoRole.Sealed)],
+                        [new CaseRepo(repo, "base", "merged", RepoRole.Sealed)],
                         hash!,
                         new string('h', 64),
                         1

@@ -47,7 +47,23 @@ public sealed class Planner(
 
     private string Org => context.TenantId;
 
-    public async Task<Plan> PlanAsync(EvaluationRequest body, CancellationToken ct)
+    // A person's request. Baseline and harness CI evaluations come only from casebox ci.
+    public Task<Plan> PlanAsync(EvaluationRequest body, CancellationToken ct)
+    {
+        if (body.Purpose is Purpose.Baseline or Purpose.HarnessCi)
+            throw new DomainException(
+                "Baseline and harness CI evaluations are started by casebox ci, not requested directly."
+            );
+        return PlanAsync(body, null, null, ct);
+    }
+
+    // ciRun and scores are set by harness CI (docs/specs/harness-ci.md).
+    public async Task<Plan> PlanAsync(
+        EvaluationRequest body,
+        string? ciRun,
+        IReadOnlyDictionary<string, BaselineScore>? scores,
+        CancellationToken ct
+    )
     {
         if (string.IsNullOrWhiteSpace(body.Workspace))
             throw new DomainException("Name the workspace to evaluate on.");
@@ -67,8 +83,19 @@ public sealed class Planner(
         };
         Check(request.Baseline, "baseline");
         Check(request.Candidate, "candidate");
+        var purpose = request.Purpose ?? Purpose.Compare;
         var changes = HarnessSpec.Changes(request.Baseline, request.Candidate);
-        if (changes.Count != 1)
+        if (purpose == Purpose.Baseline)
+        {
+            if (changes.Count != 0)
+                throw new DomainException(
+                    "A baseline evaluation has one side: its candidate is its baseline."
+                );
+            changes = ["none"];
+        }
+        else if (purpose == Purpose.HarnessCi && changes is not ["harness"])
+            throw new DomainException("Harness CI changes the harness and nothing else.");
+        else if (changes.Count != 1)
             throw new DomainException(
                 changes.Count == 0
                     ? "The two sides are the same; an evaluation changes exactly one thing."
@@ -78,7 +105,6 @@ public sealed class Planner(
         var split = request.Split ?? "dev";
         if (split is not ("dev" or "held_out"))
             throw new DomainException("The split is dev or held_out.");
-        var purpose = request.Purpose ?? Purpose.Compare;
         if (split == "held_out" && purpose != Purpose.Gate)
             throw new DomainException("Only the proposal gate evaluates on the held-out split.");
         if (purpose == Purpose.HarnessVsNone && request.Candidate.Harness != "none")
@@ -151,6 +177,9 @@ public sealed class Planner(
             )
         ).ToDictionary(h => h.CaseId);
 
+        var runsBaseline = purpose != Purpose.HarnessCi;
+        var runsCandidate = purpose != Purpose.Baseline;
+        var sides = (runsBaseline ? 1 : 0) + (runsCandidate ? 1 : 0);
         long baselineTokens = 0,
             candidateTokens = 0;
         decimal baselineUsd = 0,
@@ -170,19 +199,26 @@ public sealed class Planner(
                     );
             var verifyMinutes = (c.Seconds ?? 120) / 60 + 1;
             var tokens = (long)(input + cacheRead + output) * repeats;
-            baselineTokens += tokens;
-            candidateTokens += tokens;
-            baselineUsd += Cost(prices[request.Baseline.Model], input, cacheRead, output) * repeats;
-            candidateUsd +=
-                Cost(prices[request.Candidate.Model], input, cacheRead, output) * repeats;
-            sandboxMinutes += (minutes + verifyMinutes) * 2 * repeats;
+            if (runsBaseline)
+            {
+                baselineTokens += tokens;
+                baselineUsd +=
+                    Cost(prices[request.Baseline.Model], input, cacheRead, output) * repeats;
+            }
+            if (runsCandidate)
+            {
+                candidateTokens += tokens;
+                candidateUsd +=
+                    Cost(prices[request.Candidate.Model], input, cacheRead, output) * repeats;
+            }
+            sandboxMinutes += (minutes + verifyMinutes) * sides * repeats;
             longest = Math.Max(longest, minutes + verifyMinutes);
         }
 
         var total = Math.Round(baselineUsd + candidateUsd, 2);
         var estimate = new Estimate(
             cases.Count,
-            cases.Count * 2 * repeats,
+            cases.Count * sides * repeats,
             baselineTokens,
             candidateTokens,
             Math.Round(baselineUsd, 2),
@@ -192,7 +228,9 @@ public sealed class Planner(
             Math.Round(longest * repeats, 1),
             Math.Round(sandboxMinutes, 1),
             Math.Round(total / repeats, 2),
-            repeats is >= 1 and <= 10 ? Statistics.DetectableEffect(cases.Count, repeats) : null
+            purpose != Purpose.Baseline && repeats is >= 1 and <= 10
+                ? Statistics.DetectableEffect(cases.Count, repeats)
+                : null
         );
 
         var monthStart = new DateTimeOffset(
@@ -229,7 +267,9 @@ public sealed class Planner(
             total > budgets.ConfirmAboveUsd,
             prices
                 .Where(p => p.Key == request.Baseline.Model || p.Key == request.Candidate.Model)
-                .ToDictionary(p => p.Key, p => p.Value)
+                .ToDictionary(p => p.Key, p => p.Value),
+            ciRun,
+            scores
         );
         return new Plan(requested, monthSpent, budgets.MonthlyUsd, budgets.ConfirmAboveUsd);
     }
@@ -250,7 +290,7 @@ public sealed class Planner(
             + (decimal)output * price.Output
         ) / 1_000_000m;
 
-    private static void Check(HarnessSpec spec, string side)
+    public static void Check(HarnessSpec spec, string side)
     {
         if (!HarnessSpec.Agents.Contains(spec.Agent))
             throw new DomainException(
@@ -264,6 +304,17 @@ public sealed class Planner(
             throw new DomainException($"The {side} names no harness: a git ref, or none.");
         if (spec.Agent == "command" && string.IsNullOrWhiteSpace(spec.Command?.Template))
             throw new DomainException($"The {side} uses the command agent without a template.");
+        if (spec.Shared is { } shared)
+        {
+            if (!HarnessSpec.SharedAgents.Contains(spec.Agent))
+                throw new DomainException(
+                    $"The {side} uses a shared harness, but {spec.Agent} has no user-level configuration to put it in; only claude-code and codex do."
+                );
+            if (string.IsNullOrWhiteSpace(shared.Repo) || string.IsNullOrWhiteSpace(shared.Ref))
+                throw new DomainException(
+                    $"The {side}'s shared harness names no repository or ref."
+                );
+        }
         if (spec.Settings.TimeoutMinutes is < 1 or > 240)
             throw new DomainException("A run's timeout is 1 to 240 minutes.");
     }

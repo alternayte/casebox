@@ -41,6 +41,7 @@ type Config struct {
 	Environment *Recipe          `yaml:"environment"`
 	Cases       Cases            `yaml:"cases"`
 	Evaluation  Evaluation       `yaml:"evaluation"`
+	Suites      Suites           `yaml:"suites"`
 	Prices      map[string]Price `yaml:"prices"`
 }
 

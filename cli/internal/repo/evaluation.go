@@ -60,3 +60,35 @@ func (c Config) PriceTable() (map[string]Price, error) {
 	}
 	return c.Prices, nil
 }
+
+// Suites are casebox.yml's suite sizes: the smoke suite of harness CI and the repeats of the full
+// suite, which the nightly baseline uses.
+type Suites struct {
+	Smoke struct {
+		Size    int `yaml:"size"`
+		Repeats int `yaml:"repeats"`
+	} `yaml:"smoke"`
+	Full struct {
+		Repeats int `yaml:"repeats"`
+	} `yaml:"full"`
+}
+
+// SmokeSuite is the smoke suite's size and repeats, 10 × 1 by default.
+func (c Config) SmokeSuite() (size, repeats int) {
+	size, repeats = c.Suites.Smoke.Size, c.Suites.Smoke.Repeats
+	if size <= 0 {
+		size = 10
+	}
+	if repeats <= 0 {
+		repeats = 1
+	}
+	return size, repeats
+}
+
+// FullRepeats is the full suite's repeats, 3 by default.
+func (c Config) FullRepeats() int {
+	if c.Suites.Full.Repeats <= 0 {
+		return 3
+	}
+	return c.Suites.Full.Repeats
+}

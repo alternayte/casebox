@@ -13,6 +13,8 @@ export type HarnessSpec = {
   harness: string;
   settings: AgentSettings;
   command: CommandTemplate | null;
+  // A shared harness repository at a ref (casebox.yml harness.shared).
+  shared?: { repo: string; ref: string } | null;
 };
 
 export type Estimate = {
@@ -51,7 +53,15 @@ export type VerdictReached = {
   baselineRate: number;
   candidateRate: number;
   reason: string | null;
+  // Harness CI: cases the baseline passed in every run and the candidate failed in every run.
+  regressions?: string[] | null;
 };
+
+// A baseline evaluation's end: it compares nothing, so it has no verdict.
+export type Scored = { cases: number; runs: number; passRate: number };
+
+// The pull request or nightly run behind a harness CI or baseline evaluation.
+export type CiRef = { kind: "baseline" | "pull_request"; repo: string; number: number | null; headSha: string | null };
 
 export type EvaluationStatus = "awaiting_confirmation" | "running" | "done" | "cancelled";
 
@@ -77,6 +87,8 @@ export type EvaluationRow = {
   reason: string | null;
   createdAt: string;
   updatedAt: string;
+  scored: Scored | null;
+  ci: CiRef | null;
 };
 
 export type Checkpoint = {

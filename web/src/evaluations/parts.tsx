@@ -68,6 +68,7 @@ const purposeNames: Record<string, string> = {
   harness_vs_none: "Harness vs no harness",
   harness_ci: "Harness CI",
   gate: "Proposal gate",
+  baseline: "Baseline score",
 };
 
 export const statusName = (s: string) => statusNames[s] ?? s.replaceAll("_", " ");
@@ -75,6 +76,9 @@ export const purposeName = (p: string) => purposeNames[p] ?? p.replaceAll("_", "
 
 // The server's Statistics.NoDifference: inconclusive, but the interval straddles 0 within ±2δ.
 export const noDifference = "no_difference";
+
+// The server's EvaluationSteps.SmokeReason: a smoke run never claims better or equivalent.
+export const smoke = "smoke";
 
 export function VerdictBadge({ verdict, cheaper, reason }: { verdict: Verdict | string; cheaper?: boolean; reason?: string | null }) {
   return (
@@ -90,6 +94,7 @@ export function VerdictBadge({ verdict, cheaper, reason }: { verdict: Verdict | 
       {verdictNames[verdict] ?? verdict}
       {cheaper ? " and cheaper" : ""}
       {verdict === "inconclusive" && reason === noDifference ? ": no difference detected" : ""}
+      {verdict === "inconclusive" && reason === smoke ? ": smoke run" : ""}
     </span>
   );
 }
@@ -117,7 +122,8 @@ export function sideValue(s: HarnessSpec, change: string): string {
     case "effort":
       return s.effort ?? "default";
     case "harness":
-      return s.harness === "none" ? "no harness" : s.harness;
+      if (s.harness === "none") return "no harness";
+      return s.shared ? `${s.harness} + ${s.shared.repo.split("/").pop()}@${s.shared.ref.slice(0, 12)}` : s.harness;
     case "settings":
       return settingsText(s);
     case "command":
@@ -137,10 +143,24 @@ export function settingsText(s: HarnessSpec): string {
 }
 
 export function ChangeText({ e }: { e: EvaluationRow }) {
+  if (e.purpose === "baseline")
+    return (
+      <span className="min-w-0">
+        <span className="text-muted-foreground">Score of</span>{" "}
+        <span className="font-mono text-xs">
+          {agentName(e.baseline.agent)} {e.baseline.agentVersion} · {e.baseline.model}
+        </span>
+      </span>
+    );
   return (
     <span className="min-w-0">
       <span className="text-muted-foreground">{changeName(e.change)}:</span>{" "}
       <span className="font-mono text-xs">{sideValue(e.baseline, e.change)}</span> → <span className="font-mono text-xs">{sideValue(e.candidate, e.change)}</span>
+      {e.ci?.kind === "pull_request" && (
+        <span className="block text-2xs text-muted-foreground">
+          {e.ci.repo}#{e.ci.number} at <span className="font-mono">{e.ci.headSha?.slice(0, 12)}</span>
+        </span>
+      )}
     </span>
   );
 }
@@ -160,6 +180,8 @@ export function verdictRule(v: VerdictReached, delta: number): string {
   if (v.reason === "budget") return "Inconclusive: the budget ran out. The next round would have passed the cap.";
   if (v.reason === noDifference)
     return `No difference detected: the ${l} interval straddles 0 and lies within ±${(delta * 200).toFixed(1)} pts (2δ), but not within ${margin} (δ), so the sides are not shown equivalent.`;
+  if (v.reason === smoke)
+    return "Inconclusive by rule: a smoke run compares with a cached baseline on a few cases, so it never claims better or equivalent. It checks for regressions.";
   if (v.reason) return `Inconclusive: ${v.reason}.`;
   if (v.cases < minimumCases) return `Inconclusive: only ${num(v.cases)} cases have completed runs on both sides. A verdict needs at least ${minimumCases}.`;
   return `Inconclusive: the ${l} interval neither lies on one side of 0 nor within ${margin}.`;

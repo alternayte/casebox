@@ -60,6 +60,18 @@ public sealed class GitHubClient(
         return items;
     }
 
+    // A write: POST, PATCH or PUT with a JSON body; the answer's JSON.
+    public async Task<JsonElement> SendJsonAsync(
+        HttpMethod method,
+        string path,
+        object body,
+        CancellationToken ct
+    )
+    {
+        using var response = await SendAsync(method, path, body, ct);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>(Json, ct)).Clone();
+    }
+
     public async Task<JsonElement> GraphQLAsync(
         string query,
         object variables,

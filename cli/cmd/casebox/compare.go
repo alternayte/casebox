@@ -45,6 +45,13 @@ type harnessSpec struct {
 	Harness      string           `json:"harness"`
 	Settings     agentSettings    `json:"settings"`
 	Command      *commandTemplate `json:"command"`
+	Shared       *sharedHarness   `json:"shared,omitempty"`
+}
+
+// sharedHarness is casebox.yml's harness.shared at a ref; HEAD is its default branch.
+type sharedHarness struct {
+	Repo string `json:"repo"`
+	Ref  string `json:"ref"`
 }
 
 type evaluationRequest struct {
@@ -155,7 +162,8 @@ const minimumVerdictCases = 10
 
 var compareAgents = []string{"claude-code", "codex", "cursor-cli", "command"}
 
-var comparePurposes = []string{"compare", "harness_vs_none", "harness_ci", "gate"}
+// Baseline and harness CI evaluations come only from casebox ci.
+var comparePurposes = []string{"compare", "harness_vs_none", "gate"}
 
 func newCompareCommand() *cobra.Command {
 	var candidate, baseline, purpose string
@@ -180,7 +188,7 @@ func newCompareCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			base, err := compareBaseline(cfg.Evaluation.Baseline, baseline, func() string { return defaultBranch(ctx, root) })
+			base, err := compareBaseline(cfg.Evaluation.Baseline, cfg.Harness.Shared, baseline, func() string { return defaultBranch(ctx, root) })
 			if err != nil {
 				return err
 			}
@@ -215,15 +223,18 @@ func newCompareCommand() *cobra.Command {
 	cmd.Flags().Float64Var(&delta, "delta", 0.05, "the equivalence margin δ, as a share (0.05 is 5 points)")
 	cmd.Flags().Float64Var(&capUSD, "cap", 0, "the most this evaluation may spend in USD (the organisation's cap per evaluation is the upper bound)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "start without asking when the estimate needs no confirmation")
-	cmd.Flags().StringVar(&purpose, "purpose", "", "compare, harness_vs_none, harness_ci or gate (default compare; harness_vs_none for harness=none)")
+	cmd.Flags().StringVar(&purpose, "purpose", "", "compare, harness_vs_none or gate (default compare; harness_vs_none for harness=none)")
 	_ = cmd.MarkFlagRequired("candidate")
 	return cmd
 }
 
 // compareBaseline starts from evaluation.baseline of casebox.yml and applies the --baseline
 // overrides. The harness is the default branch unless the overrides name one.
-func compareBaseline(cfg *repo.Baseline, overrides string, branch func() string) (harnessSpec, error) {
+func compareBaseline(cfg *repo.Baseline, shared, overrides string, branch func() string) (harnessSpec, error) {
 	var s harnessSpec
+	if shared != "" {
+		s.Shared = &sharedHarness{Repo: shared, Ref: "HEAD"}
+	}
 	if cfg != nil {
 		s = harnessSpec{Agent: cfg.Agent, AgentVersion: cfg.AgentVersion, Model: cfg.Model, Effort: optional(cfg.Effort),
 			Settings: agentSettings{MaxTurns: cfg.MaxTurns, TimeoutMinutes: cfg.TimeoutMinutes, TokenCap: cfg.TokenCap}}
@@ -331,6 +342,8 @@ func applyChange(base harnessSpec, change string) (harnessSpec, string, error) {
 		}
 		c.Harness = value
 		if value == "none" {
+			// No harness means none at all: the shared harness goes too.
+			c.Shared = nil
 			purpose = "harness_vs_none"
 		}
 	case "agent":
@@ -359,7 +372,7 @@ func applyChange(base harnessSpec, change string) (harnessSpec, string, error) {
 func compareRequest(workspace string, base, cand harnessSpec, prices map[string]repo.Price, purpose string, repeats, cases int, delta, capUSD float64, capSet bool) (evaluationRequest, error) {
 	req := evaluationRequest{Workspace: workspace, Baseline: base, Candidate: cand, Repeats: repeats, Delta: delta, Purpose: purpose, Prices: prices}
 	if !contains(comparePurposes, purpose) {
-		return req, fmt.Errorf("--purpose %s: use compare, harness_vs_none, harness_ci or gate", purpose)
+		return req, fmt.Errorf("--purpose %s: use compare, harness_vs_none or gate", purpose)
 	}
 	if repeats < 1 {
 		return req, errors.New("--repeats is at least 1")

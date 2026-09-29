@@ -24,9 +24,9 @@ public sealed class EvaluationResults : Projection
                     ctx,
                     """
                     INSERT INTO casebox.evaluations (org_id, id, workspace, split, purpose, status, change, baseline, candidate, repeats, delta, cap_usd,
-                        estimate, mutable_model, cases, created_at, updated_at)
+                        estimate, mutable_model, cases, ci_run, spec_key, created_at, updated_at)
                     VALUES (@Org, @Id, @Workspace, @Split, @Purpose, @Status, @Change, @Baseline::jsonb, @Candidate::jsonb, @Repeats, @Delta, @CapUsd,
-                        @Estimate::jsonb, @MutableModel, @Cases, @At, @At)
+                        @Estimate::jsonb, @MutableModel, @Cases, @CiRun, @SpecKey, @At, @At)
                     ON CONFLICT DO NOTHING
                     """,
                     new
@@ -44,6 +44,8 @@ public sealed class EvaluationResults : Projection
                         Estimate = JsonSerializer.Serialize(e.Estimate, Json),
                         e.MutableModel,
                         Cases = e.Cases.Count,
+                        e.CiRun,
+                        SpecKey = HarnessSpec.Key(e.Baseline),
                     }
                 )
         );
@@ -101,8 +103,17 @@ public sealed class EvaluationResults : Projection
             (e, ctx) =>
                 Exec(
                     ctx,
-                    "UPDATE casebox.evaluations SET status = 'done', verdict = @Verdict::jsonb, reason = coalesce(@Reason, reason), updated_at = @At WHERE org_id = @Org AND id = @Id",
+                    "UPDATE casebox.evaluations SET status = 'done', verdict = @Verdict::jsonb, reason = coalesce(@Reason, reason), done_at = @At, updated_at = @At WHERE org_id = @Org AND id = @Id",
                     new { Verdict = JsonSerializer.Serialize(e, Json), e.Reason }
+                )
+        );
+
+        On<EvaluationEvents.Scored>(
+            (e, ctx) =>
+                Exec(
+                    ctx,
+                    "UPDATE casebox.evaluations SET status = 'done', scored = @Scored::jsonb, done_at = @At, updated_at = @At WHERE org_id = @Org AND id = @Id",
+                    new { Scored = JsonSerializer.Serialize(e, Json) }
                 )
         );
 

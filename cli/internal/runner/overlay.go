@@ -142,3 +142,31 @@ func parentDirs(files []string) []string {
 	})
 	return dirs
 }
+
+// UserFiles writes a shared harness's files into the sandbox user's home, where the agent reads its
+// user-level configuration (docs/specs/harness-ci.md). Paths are relative to home.
+func UserFiles(ctx context.Context, p sandbox.Provider, sb sandbox.Sandbox, home string, files map[string][]byte) error {
+	if len(files) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, name := range names {
+		body := files[name]
+		if err := tw.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: name, Mode: 0o644, Size: int64(len(body)), Format: tar.FormatPAX}); err != nil {
+			return err
+		}
+		if _, err := tw.Write(body); err != nil {
+			return err
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return run(ctx, p, sb, sandbox.Command{Args: []string{"tar", "-x", "-f", "-", "-C", home}, Stdin: &buf}, "write the shared harness")
+}

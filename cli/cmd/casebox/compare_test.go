@@ -252,18 +252,18 @@ func TestTheCandidateChangesExactlyOneThing(t *testing.T) {
 func TestTheBaselineComesFromCaseboxYmlAndFlags(t *testing.T) {
 	thirty := 30
 	cfg := &repo.Baseline{Agent: "claude-code", AgentVersion: "2.4.1", Model: "claude-sonnet-5", TimeoutMinutes: &thirty}
-	s, err := compareBaseline(cfg, "", func() string { return "trunk" })
+	s, err := compareBaseline(cfg, "", "", func() string { return "trunk" })
 	if err != nil || s.Harness != "trunk" || s.Model != "claude-sonnet-5" || *s.Settings.TimeoutMinutes != 30 || s.Effort != nil {
 		t.Fatalf("baseline %+v, err %v", s, err)
 	}
-	s, err = compareBaseline(cfg, "agent=codex@0.9.0,model=gpt-6,harness=v2,effort=high", func() string { return "trunk" })
+	s, err = compareBaseline(cfg, "", "agent=codex@0.9.0,model=gpt-6,harness=v2,effort=high", func() string { return "trunk" })
 	if err != nil || s.Agent != "codex" || s.AgentVersion != "0.9.0" || s.Model != "gpt-6" || s.Harness != "v2" || *s.Effort != "high" {
 		t.Fatalf("baseline %+v, err %v", s, err)
 	}
-	if _, err := compareBaseline(nil, "", func() string { return "main" }); err == nil || !strings.Contains(err.Error(), "evaluation.baseline") {
+	if _, err := compareBaseline(nil, "", "", func() string { return "main" }); err == nil || !strings.Contains(err.Error(), "evaluation.baseline") {
 		t.Fatalf("err = %v", err)
 	}
-	if _, err := compareBaseline(nil, "agent=codex,model=gpt-6", func() string { return "main" }); err == nil || !strings.Contains(err.Error(), "pinned") {
+	if _, err := compareBaseline(nil, "", "agent=codex,model=gpt-6", func() string { return "main" }); err == nil || !strings.Contains(err.Error(), "pinned") {
 		t.Fatalf("err = %v", err)
 	}
 }

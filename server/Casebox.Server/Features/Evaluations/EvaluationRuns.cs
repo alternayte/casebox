@@ -144,6 +144,7 @@ public sealed class RunResultHandler(IServiceProvider services, TimeProvider clo
                     ? assertions
                     : (JsonElement?)null,
                 judge = payload.TryGetProperty("judge", out var judge) ? judge : (JsonElement?)null,
+                ciRun = payload.TryGetProperty("ciRun", out var ciRun) ? ciRun.GetString() : null,
             },
             EvaluationResults.Json
         );

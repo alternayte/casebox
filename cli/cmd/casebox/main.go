@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,7 +12,12 @@ import (
 )
 
 func main() {
-	if err := newRoot().Execute(); err != nil {
+	root := newRoot()
+	if err := root.Execute(); err != nil {
+		var exit exitError
+		if errors.As(err, &exit) {
+			os.Exit(exit.code)
+		}
 		os.Exit(1)
 	}
 }
@@ -27,6 +33,6 @@ func newRoot() *cobra.Command {
 	root.SetVersionTemplate(fmt.Sprintf("casebox %s\n", buildinfo.Version))
 	root.AddCommand(newUpCommand(), newDownCommand(), newPauseCommand(), newResumeCommand(), newLinkCommand(),
 		newImportCommand(), newHookCommand(), newCaptureCommand(), newInitCommand(), newJoinCommand(), newDoctorCommand(), newEraseCommand(), newWorkerCommand(), newEnvCommand(), newSteeringCommand(),
-		newMineCommand(), newReviewCommand(), newCasesCommand(), newCompareCommand())
+		newMineCommand(), newReviewCommand(), newCasesCommand(), newCompareCommand(), newCICommand(), newTokenCommand())
 	return root
 }

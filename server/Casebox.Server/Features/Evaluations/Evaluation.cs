@@ -15,6 +15,9 @@ public enum Purpose
     HarnessVsNone,
     HarnessCi,
     Gate,
+
+    // One side only: the nightly score of the default branch's harness, which harness CI reuses.
+    Baseline,
 }
 
 public enum EvaluationStatus
@@ -29,6 +32,10 @@ public sealed record AgentSettings(int? MaxTurns, int? TimeoutMinutes, long? Tok
 
 public sealed record CommandTemplate(string Template, string? LogGlob, string? LogFormat);
 
+// A shared harness repository (casebox.yml harness.shared) at a ref; the worker puts its files in
+// the agent's user-level configuration (docs/specs/harness-ci.md).
+public sealed record SharedHarness(string Repo, string Ref);
+
 // One side of an evaluation (SDD section 8, Harness specification).
 public sealed record HarnessSpec(
     string Agent,
@@ -37,10 +44,14 @@ public sealed record HarnessSpec(
     string? Effort,
     string Harness,
     AgentSettings Settings,
-    CommandTemplate? Command
+    CommandTemplate? Command,
+    SharedHarness? Shared = null
 )
 {
     public static readonly string[] Agents = ["claude-code", "codex", "cursor-cli", "command"];
+
+    // The agents that read user-level configuration a shared harness can go into.
+    public static readonly string[] SharedAgents = ["claude-code", "codex"];
 
     // What differs between two sides. An evaluation changes exactly one thing.
     public static IReadOnlyList<string> Changes(HarnessSpec a, HarnessSpec b)
@@ -55,13 +66,35 @@ public sealed record HarnessSpec(
             changes.Add("model");
         if (a.Effort != b.Effort)
             changes.Add("effort");
-        if (a.Harness != b.Harness)
+        // The repository's harness and the shared harness are both the harness: one change.
+        if (a.Harness != b.Harness || a.Shared != b.Shared)
             changes.Add("harness");
         if (a.Settings != b.Settings)
             changes.Add("settings");
         if (a.Command != b.Command)
             changes.Add("command");
         return changes;
+    }
+
+    // What identifies a baseline score apart from the harness refs, which move with every merge:
+    // SHA-256 of the agent, its version, the model, effort, settings, command and shared repository.
+    public static string Key(HarnessSpec spec)
+    {
+        var text = System.Text.Json.JsonSerializer.Serialize(
+            new
+            {
+                spec.Agent,
+                spec.AgentVersion,
+                spec.Model,
+                spec.Effort,
+                spec.Settings,
+                spec.Command,
+                Shared = spec.Shared?.Repo,
+            }
+        );
+        return Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text))
+        );
     }
 
     // A model ID that names no fixed version: an alias, "latest", or no date or version number.
@@ -95,6 +128,17 @@ public sealed record Estimate(
 // A case in the evaluation, with the weight its validation gave it.
 public sealed record EvaluationCase(string CaseId, double Weight);
 
+// A case's cached baseline score, which a harness CI evaluation uses as its baseline side: the
+// runs of the latest baseline evaluation that scored the case.
+public sealed record BaselineScore(
+    IReadOnlyList<bool> Passed,
+    IReadOnlyList<decimal> CostUsd,
+    IReadOnlyList<double> Seconds,
+    string? HarnessHash,
+    string EvaluationId,
+    DateTimeOffset ScoredAt
+);
+
 public static class EvaluationEvents
 {
     public sealed record Requested(
@@ -111,7 +155,11 @@ public static class EvaluationEvents
         Purpose Purpose,
         bool MutableModel,
         bool NeedsConfirmation,
-        IReadOnlyDictionary<string, Price> Prices
+        IReadOnlyDictionary<string, Price> Prices,
+        // The CI run that asked for it (docs/specs/harness-ci.md), and for harness CI the cached
+        // baseline per case.
+        string? CiRun = null,
+        IReadOnlyDictionary<string, BaselineScore>? BaselineScores = null
     );
 
     public sealed record Confirmed(string By);
@@ -163,8 +211,14 @@ public static class EvaluationEvents
         bool EquivalentAndCheaper,
         double BaselineRate,
         double CandidateRate,
-        string? Reason
+        string? Reason,
+        Purpose? Purpose = null,
+        // Harness CI: cases the baseline passed in every run and the candidate failed in every run.
+        IReadOnlyList<string>? Regressions = null
     );
+
+    // A baseline evaluation's end: it compares nothing, so it has no verdict.
+    public sealed record Scored(int Cases, int Runs, double PassRate);
 
     public sealed record BudgetExhausted(decimal SpentUsd);
 
@@ -250,7 +304,7 @@ public sealed record Evaluation(
             {
                 Checkpoints = s.Checkpoints.Add(x.Round),
             },
-            EvaluationEvents.VerdictReached => s with
+            EvaluationEvents.VerdictReached or EvaluationEvents.Scored => s with
             {
                 Verdict = true,
                 Status = EvaluationStatus.Done,
@@ -265,13 +319,19 @@ public sealed record Evaluation(
     public static string RunId(string caseId, Side side, int repeat) =>
         $"{caseId}:{(side == Side.Baseline ? "b" : "c")}:{repeat}";
 
-    // Every run of a round: one repeat of every case on both sides.
+    // The sides that run: a baseline evaluation runs its baseline only, and harness CI only its
+    // candidate, because its baseline comes from the cached score.
+    public Side[] Sides =>
+        Request?.Purpose switch
+        {
+            Purpose.Baseline => [Side.Baseline],
+            Purpose.HarnessCi => [Side.Candidate],
+            _ => [Side.Baseline, Side.Candidate],
+        };
+
+    // Every run of a round: one repeat of every case on each side that runs.
     public IEnumerable<(string RunId, string CaseId, Side Side)> RoundRuns(int round) =>
-        Cases.SelectMany(c =>
-            new[] { Side.Baseline, Side.Candidate }.Select(side =>
-                (RunId(c.CaseId, side, round), c.CaseId, side)
-            )
-        );
+        Cases.SelectMany(c => Sides.Select(side => (RunId(c.CaseId, side, round), c.CaseId, side)));
 
     public bool RoundDone(int round) => RoundRuns(round).All(r => Runs.ContainsKey(r.RunId));
 
@@ -294,6 +354,15 @@ public static class EvaluationDecider
             throw new DomainException("An evaluation runs 1 to 10 repeats.");
         if (requested.Delta is <= 0 or >= 0.5)
             throw new DomainException("The equivalence margin is between 0 and 0.5.");
+        if (requested.Purpose == Purpose.Baseline && requested.Candidate != requested.Baseline)
+            throw new DomainException(
+                "A baseline evaluation has one side: its candidate is its baseline."
+            );
+        if (
+            requested.Purpose == Purpose.HarnessCi
+            && requested.Cases.Any(c => requested.BaselineScores?.ContainsKey(c.CaseId) != true)
+        )
+            throw new DomainException("Harness CI needs a cached baseline score for every case.");
         if (requested.Estimate.TotalUsd > requested.CapUsd)
             throw new DomainException(
                 $"The estimate of {requested.Estimate.TotalUsd:0.00} USD is over this evaluation's cap of {requested.CapUsd:0.00} USD."
@@ -348,11 +417,27 @@ public static class EvaluationDecider
     )
     {
         Require(e);
+        if (e.Request?.Purpose == Purpose.Baseline)
+            throw new DomainException(
+                "A baseline evaluation compares nothing, so it has no verdict."
+            );
         if (e.Verdict || e.Status == EvaluationStatus.Cancelled)
             return [];
         if (verdict.Verdict != Statistics.Verdict.Inconclusive && verdict.Cases < MinimumCases)
             throw new DomainException($"No verdict is given below {MinimumCases} cases.");
         return [verdict];
+    }
+
+    public static IEnumerable<object> Score(Evaluation e, EvaluationEvents.Scored scored)
+    {
+        Require(e);
+        if (e.Request?.Purpose != Purpose.Baseline)
+            throw new DomainException(
+                "Only a baseline evaluation is scored; the others get a verdict."
+            );
+        if (e.Verdict || e.Status == EvaluationStatus.Cancelled)
+            return [];
+        return [scored];
     }
 
     public static IEnumerable<object> Cancel(Evaluation e, string by, string reason)

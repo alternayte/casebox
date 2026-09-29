@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { day, num } from "@/lib/format";
+import { day, num, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useWorkspaces } from "@/lib/workspaces";
 import { ErrorNote, Field, Loading, Select, Tag } from "@/ui/kit";
@@ -121,7 +121,16 @@ function Row({ e }: { e: EvaluationRow }) {
           </div>
         )}
       </td>
-      <td className={td}>{v ? <VerdictBadge verdict={v.verdict} cheaper={v.equivalentAndCheaper} reason={v.reason} /> : <span className="text-xs text-muted-foreground">None yet</span>}</td>
+      <td className={td}>
+        {v ? (
+          <VerdictBadge verdict={v.verdict} cheaper={v.equivalentAndCheaper} reason={v.reason} />
+        ) : e.scored ? (
+          <span className="text-xs">Scored {(e.scored.passRate * 100).toFixed(0)}%</span>
+        ) : (
+          <span className="text-xs text-muted-foreground">None yet</span>
+        )}
+        {v?.regressions && v.regressions.length > 0 && <div className="mt-0.5 text-2xs text-signal">{plural(v.regressions.length, "regression")}</div>}
+      </td>
       <td className={cn(td, "whitespace-nowrap text-right font-mono tabular-nums")}>{v ? pts(v.delta) : "—"}</td>
       <td className={cn(td, "whitespace-nowrap font-mono text-xs tabular-nums")}>
         {v ? (

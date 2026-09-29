@@ -194,6 +194,56 @@ public sealed class FakeServices : IAsyncDisposable
             }
         );
 
+        // Pull request comments, which harness CI posts and updates in place.
+        app.MapGet(
+            "/github/repos/{owner}/{name}/issues/{n:int}/comments",
+            (string owner, string name, int n) =>
+            {
+                lock (Repo($"{owner}/{name}").IssueComments)
+                    return Results.Json(
+                        Repo($"{owner}/{name}")
+                            .IssueComments.Where(c => c["number"]!.GetValue<int>() == n)
+                            .ToList()
+                    );
+            }
+        );
+        app.MapPost(
+            "/github/repos/{owner}/{name}/issues/{n:int}/comments",
+            async (string owner, string name, int n, HttpRequest request) =>
+            {
+                var body = (await request.ReadFromJsonAsync<JsonObject>())!;
+                var comments = Repo($"{owner}/{name}").IssueComments;
+                lock (comments)
+                {
+                    var comment = new JsonObject
+                    {
+                        ["id"] = comments.Count + 1000L,
+                        ["number"] = n,
+                        ["body"] = body["body"]!.GetValue<string>(),
+                    };
+                    comments.Add(comment);
+                    return Results.Json(comment, statusCode: 201);
+                }
+            }
+        );
+        app.MapPatch(
+            "/github/repos/{owner}/{name}/issues/comments/{id:long}",
+            async (string owner, string name, long id, HttpRequest request) =>
+            {
+                var body = (await request.ReadFromJsonAsync<JsonObject>())!;
+                var comments = Repo($"{owner}/{name}").IssueComments;
+                lock (comments)
+                {
+                    var comment = comments.FirstOrDefault(c => c["id"]!.GetValue<long>() == id);
+                    if (comment is null)
+                        return Results.NotFound();
+                    comment["body"] = body["body"]!.GetValue<string>();
+                    comment["edits"] = (comment["edits"]?.GetValue<int>() ?? 0) + 1;
+                    return Results.Json(comment);
+                }
+            }
+        );
+
         app.MapGet("/jira/rest/api/2/myself", () => Results.Json(new { name = "casebox-bot" }));
         app.MapGet(
             "/jira/rest/api/2/search",
@@ -230,6 +280,7 @@ public sealed class FakeRepo(string fullName)
     public List<JsonObject> Issues { get; } = [];
     public List<JsonObject> DefaultBranchCommits { get; } = [];
     public Dictionary<string, List<BlameRange>> Blame { get; } = [];
+    public List<JsonObject> IssueComments { get; } = [];
 }
 
 public sealed class FakePull(int number)

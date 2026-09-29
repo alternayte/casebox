@@ -225,6 +225,14 @@ func TestOverlay(t *testing.T) {
 	if _, err := runner.Overlay(ctx, p, sb, map[string][]byte{"src/main.go": nil}, globs, false); err == nil {
 		t.Fatal("Overlay wrote a file the harness globs do not match")
 	}
+	// A shared harness goes into the sandbox user's home, outside the repository and its diff.
+	home := sh(`printf %s "$HOME"`)
+	if err := runner.UserFiles(ctx, p, sb, home, map[string][]byte{".claude/CLAUDE.md": []byte("team rules\n"), ".claude/skills/review/SKILL.md": []byte("review\n")}); err != nil {
+		t.Fatalf("UserFiles: %v", err)
+	}
+	if got := sh("cat ~/.claude/CLAUDE.md ~/.claude/skills/review/SKILL.md; id -u; stat -c %u ~/.claude/CLAUDE.md"); got != "team rules\nreview\n10001\n10001" {
+		t.Fatalf("the shared harness in the home reads %q", got)
+	}
 	diff, err := runner.AgentDiff(ctx, p, sb)
 	if err != nil || len(diff) != 0 {
 		t.Fatalf("the overlay shows in the agent's diff: %q, %v", diff, err)

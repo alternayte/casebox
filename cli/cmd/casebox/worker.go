@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -55,56 +57,10 @@ func newWorkerCommand() *cobra.Command {
 				host, _ := os.Hostname()
 				id = fmt.Sprintf("%s-%d", host, os.Getpid())
 			}
-			mirrors, err := config.Path("worker", "mirrors")
+			client := api.New(server, token)
+			handlers, err := workerHandlers(cmd.Context(), client, cmd.OutOrStdout())
 			if err != nil {
 				return err
-			}
-			client := api.New(server, token)
-			jobs := worker.RepoJobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
-			steer := worker.Steering{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Concurrency: 4}
-			caseJobs := cases.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
-			evalJobs := evaluate.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Env: environ()}
-			handlers := map[string]worker.Handler{
-				"entire.fetch": jobs.Entire,
-				"gitai.fetch":  jobs.GitAI,
-				"steering.pr":  steer.PR,
-				"mine":         caseJobs.Mine,
-			}
-			// Only a worker with an analysis model leases classification jobs.
-			out := cmd.OutOrStdout()
-			model, err := analysis.FromEnv()
-			switch {
-			case err == nil:
-				steer.Model = analysis.New(model)
-				caseJobs.Model = steer.Model
-				evalJobs.Model = steer.Model
-				handlers["steering.classify"] = steer.Classify
-				handlers["case.instruction"] = caseJobs.Instruction
-				fmt.Fprintf(out, "Analysis model: %s at %s; this worker classifies steering and drafts case instructions.\n", model, model.BaseURL)
-			case errors.Is(err, analysis.ErrNotConfigured):
-				fmt.Fprintln(out, "Analysis model: not configured, so this worker does not classify steering or draft case instructions. Set CASEBOX_ANALYSIS_PROVIDER and CASEBOX_ANALYSIS_MODEL to enable it.")
-			default:
-				fmt.Fprintf(out, "Analysis model: %v. This worker does not classify steering or draft case instructions.\n", err)
-			}
-			// Only a worker whose sandbox provider answers prepares environments.
-			if provider, name, err := providers.Available(cmd.Context()); err == nil {
-				env := worker.Environments{Provider: provider, Name: name, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
-				handlers["env.build"] = env.Build
-				caseJobs.Provider = provider
-				handlers["case.validate"] = caseJobs.Validate
-				fmt.Fprintf(out, "Sandboxes: %s; this worker prepares environments, validates cases and verifies evaluation runs.\n", name)
-				evalJobs.Provider = provider
-				handlers["verify"] = evalJobs.Verify
-				// Only a worker with a model key runs agents.
-				runnable := evaluate.Available(evalJobs.Env)
-				if len(runnable) > 1 {
-					handlers["run"] = evalJobs.Run
-					fmt.Fprintf(out, "Agents: this worker runs %s.\n", strings.Join(runnable, ", "))
-				} else {
-					fmt.Fprintln(out, "Agents: no model key (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY), so this worker runs no evaluation runs.")
-				}
-			} else {
-				fmt.Fprintf(out, "Sandboxes: %v. This worker does not prepare environments, validate cases or run evaluations.\n", err)
 			}
 			w := &worker.Worker{
 				Client:   client,
@@ -115,7 +71,7 @@ func newWorkerCommand() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			fmt.Fprintf(out, "Worker %s is running against %s. Ctrl-C stops it.\n", id, server)
+			fmt.Fprintf(cmd.OutOrStdout(), "Worker %s is running against %s. Ctrl-C stops it.\n", id, server)
 			if err := w.Run(ctx); err != nil && !errors.Is(err, ctx.Err()) {
 				return err
 			}
@@ -136,4 +92,61 @@ func environ() map[string]string {
 		}
 	}
 	return env
+}
+
+// workerHandlers are the job kinds this host can run, and a line on each capability it lacks. The
+// inline worker of casebox ci uses the same set.
+func workerHandlers(ctx context.Context, client *api.Client, out io.Writer) (map[string]worker.Handler, error) {
+	mirrors, err := config.Path("worker", "mirrors")
+	if err != nil {
+		return nil, err
+	}
+	jobs := worker.RepoJobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
+	steer := worker.Steering{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Concurrency: 4}
+	caseJobs := cases.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
+	evalJobs := evaluate.Jobs{Client: client, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN"), Env: environ()}
+	handlers := map[string]worker.Handler{
+		"entire.fetch": jobs.Entire,
+		"gitai.fetch":  jobs.GitAI,
+		"steering.pr":  steer.PR,
+		"mine":         caseJobs.Mine,
+	}
+	// Every worker resolves harness hashes for the nightly baseline: it needs only the mirrors.
+	handlers["harness.resolve"] = evalJobs.Resolve
+	// Only a worker with an analysis model leases classification jobs.
+	model, err := analysis.FromEnv()
+	switch {
+	case err == nil:
+		steer.Model = analysis.New(model)
+		caseJobs.Model = steer.Model
+		evalJobs.Model = steer.Model
+		handlers["steering.classify"] = steer.Classify
+		handlers["case.instruction"] = caseJobs.Instruction
+		fmt.Fprintf(out, "Analysis model: %s at %s; this worker classifies steering and drafts case instructions.\n", model, model.BaseURL)
+	case errors.Is(err, analysis.ErrNotConfigured):
+		fmt.Fprintln(out, "Analysis model: not configured, so this worker does not classify steering or draft case instructions. Set CASEBOX_ANALYSIS_PROVIDER and CASEBOX_ANALYSIS_MODEL to enable it.")
+	default:
+		fmt.Fprintf(out, "Analysis model: %v. This worker does not classify steering or draft case instructions.\n", err)
+	}
+	// Only a worker whose sandbox provider answers prepares environments.
+	if provider, name, err := providers.Available(ctx); err == nil {
+		env := worker.Environments{Provider: provider, Name: name, MirrorRoot: mirrors, GitHubToken: os.Getenv("GITHUB_TOKEN")}
+		handlers["env.build"] = env.Build
+		caseJobs.Provider = provider
+		handlers["case.validate"] = caseJobs.Validate
+		fmt.Fprintf(out, "Sandboxes: %s; this worker prepares environments, validates cases and verifies evaluation runs.\n", name)
+		evalJobs.Provider = provider
+		handlers["verify"] = evalJobs.Verify
+		// Only a worker with a model key runs agents.
+		runnable := evaluate.Available(evalJobs.Env)
+		if len(runnable) > 1 {
+			handlers["run"] = evalJobs.Run
+			fmt.Fprintf(out, "Agents: this worker runs %s.\n", strings.Join(runnable, ", "))
+		} else {
+			fmt.Fprintln(out, "Agents: no model key (ANTHROPIC_API_KEY, OPENAI_API_KEY or CURSOR_API_KEY), so this worker runs no evaluation runs.")
+		}
+	} else {
+		fmt.Fprintf(out, "Sandboxes: %v. This worker does not prepare environments, validate cases or run evaluations.\n", err)
+	}
+	return handlers, nil
 }

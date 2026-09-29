@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alternayte/casebox/cli/internal/agents"
 	"github.com/alternayte/casebox/cli/internal/capture"
 	"github.com/alternayte/casebox/cli/internal/cases"
 	"github.com/alternayte/casebox/cli/internal/oracle"
@@ -244,5 +245,66 @@ func TestSelectHarness(t *testing.T) {
 
 	if _, err := selectHarness(ctx, sealed, "no-such-branch"); err == nil {
 		t.Fatal("a ref that names no commit was accepted")
+	}
+}
+
+// Harness CI's refs and the shared harness: "<repo>@<commit>" moves one repository and leaves the
+// others at their default branch; a shared harness adds its files and changes the hash; resolve
+// answers the hash a run of each case reports.
+func TestSideHarnessForHarnessCI(t *testing.T) {
+	ctx := context.Background()
+	api := newRepo(t)
+	base := api.commit("base", map[string]string{"AGENTS.md": "api main\n", "main.go": "package main\n"})
+	api.git("checkout", "-q", "-b", "pr")
+	pr := api.commit("pr", map[string]string{"AGENTS.md": "api pr\n"})
+	api.git("checkout", "-q", "main")
+	web := newRepo(t)
+	webBase := web.commit("base", map[string]string{"AGENTS.md": "web main\n"})
+	shared := newRepo(t)
+	shared.commit("shared", map[string]string{"AGENTS.md": "team rules\n", ".claude/skills/review/SKILL.md": "review\n"})
+
+	dirs := map[string]string{"example.com/api": api.dir, "example.com/web": web.dir, "example.com/shared": shared.dir}
+	d := deps{open: func(_ context.Context, name string) (string, error) { return dirs[name], nil }}
+	repos := []cases.CaseRepo{
+		{Repo: "example.com/api", Base: base, Role: cases.RoleSealed},
+		{Repo: "example.com/web", Base: webBase, Role: cases.RoleSealed},
+	}
+	sealed, err := openSealed(ctx, d, repos)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := sideHarness(ctx, d, sealed, agents.Spec{Harness: "example.com/api@" + pr})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(h.files["api/AGENTS.md"]) != "api pr\n" || string(h.files["web/AGENTS.md"]) != "web main\n" {
+		t.Fatalf("per-repository ref: %q", h.files)
+	}
+	if refFor("HEAD@{1}", "example.com/api") != "HEAD@{1}" || refFor("main", "example.com/web") != "main" {
+		t.Fatal("a plain ref must apply to every repository")
+	}
+
+	withShared, err := sideHarness(ctx, d, sealed, agents.Spec{Harness: "HEAD", Shared: &agents.Shared{Repo: "example.com/shared", Ref: "HEAD"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	without, err := sideHarness(ctx, d, sealed, agents.Spec{Harness: "HEAD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withShared.hash == without.hash || string(withShared.shared["AGENTS.md"]) != "team rules\n" || len(withShared.shared) != 2 {
+		t.Fatalf("shared harness: hash %s vs %s, files %q", withShared.hash, without.hash, withShared.shared)
+	}
+
+	var p ResolvePayload
+	p.Spec = agents.Spec{Harness: "HEAD", Shared: &agents.Shared{Repo: "example.com/shared", Ref: "HEAD"}}
+	p.Cases = append(p.Cases, struct {
+		CaseID string           `json:"caseId"`
+		Repos  []cases.CaseRepo `json:"repos"`
+	}{CaseID: "c1", Repos: repos})
+	answer, err := resolve(ctx, d, p)
+	if err != nil || answer.Hashes["c1"] != withShared.hash {
+		t.Fatalf("resolve: %v %v, want %s", answer, err, withShared.hash)
 	}
 }

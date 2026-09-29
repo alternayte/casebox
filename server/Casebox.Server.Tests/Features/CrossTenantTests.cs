@@ -99,6 +99,14 @@ public sealed class CrossTenantTests(StackFixture stack)
             [Workspace, Repo, TokenName, TokenId, JobId, BlobHash, AccountId];
     }
 
+    private static readonly object CiSpec = new
+    {
+        agent = "claude-code",
+        agentVersion = "2.1.0",
+        model = "claude-sonnet-5-20260801",
+        harness = "HEAD",
+    };
+
     private static IEnumerable<Sample> Samples(Resources a) =>
         [
             new("POST", "/api/v1/auth/local", new { password = "wrong" }, Caller.Admin),
@@ -375,6 +383,37 @@ public sealed class CrossTenantTests(StackFixture stack)
                 Caller.Admin
             ),
             new("GET", "/api/v1/evaluations/offer?workspace=" + a.Workspace, null, Caller.Admin),
+            new(
+                "PUT",
+                $"/api/v1/workspaces/{a.Workspace}/harness",
+                new { globs = new[] { "AGENTS.md" }, shared = "github.com/b/harness" },
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/ci/baselines",
+                new
+                {
+                    workspace = a.Workspace,
+                    spec = CiSpec,
+                    repeats = 1,
+                },
+                Caller.Admin
+            ),
+            new(
+                "POST",
+                "/api/v1/ci/pull-requests",
+                new
+                {
+                    workspace = a.Workspace,
+                    repo = Resources.Repo,
+                    number = 1,
+                    headSha = "abc",
+                    spec = CiSpec,
+                },
+                Caller.Admin
+            ),
+            new("GET", "/api/v1/ci/runs/01J0000000000000000000000A", null, Caller.Admin),
             new("GET", "/api/v1/cases/00000000000000000000/validations", null, Caller.Admin),
             new("GET", "/api/v1/cases/00000000000000000000/oracle", null, Caller.Admin),
             new(
@@ -511,6 +550,10 @@ public sealed class CrossTenantTests(StackFixture stack)
             "cancellation",
             "runs",
             "offer",
+            "harness",
+            "ci",
+            "baselines",
+            "pull-requests",
         };
         var normalized = new List<string>();
         foreach (var s in segments)

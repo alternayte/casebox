@@ -2,8 +2,8 @@ apiVersion: v2
 name: casebox
 description: Casebox for a team self-host - the server, QueueBox, and optional workers on an external Postgres.
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"
 home: https://github.com/alternayte/casebox
 sources:
   - https://github.com/alternayte/casebox

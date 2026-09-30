@@ -9,7 +9,7 @@ Everything runs on your laptop. Only the classification and drafting calls leave
 - Docker Desktop, running.
 - The Cursor CLI, logged in. Run `cursor-agent status` to check.
 - A git repository on GitHub or on Azure DevOps Server 2022 or later, in which you used the Cursor CLI. Its history is in `~/.cursor/projects/<folder>/agent-transcripts/`. Azure DevOps Services (dev.azure.com) is not supported.
-- A Casebox release newer than 0.1.0 for an Azure DevOps repository: 0.1.0 refuses its remote name.
+- Casebox 0.2.0 or later for an Azure DevOps repository: 0.1.0 refuses its remote name.
 - An analysis model: your OpenAI key, or your Cursor login.
 - A token that can read the repository. The worker reads your current `AGENTS.md`, rules and skills with it when it drafts a proposal.
   - GitHub: a fine-grained token with Contents: read.

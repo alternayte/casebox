@@ -81,6 +81,20 @@ casebox worker
 
 If the key is for Azure OpenAI, also set `CASEBOX_ANALYSIS_BASE_URL=https://<resource>.openai.azure.com/openai/v1`, and set `CASEBOX_ANALYSIS_MODEL` to your deployment name.
 
+**Your OpenRouter key:**
+
+```bash
+export CASEBOX_WORKER_TOKEN=$(casebox token create --kind worker --name laptop)
+export GITHUB_TOKEN=<read-only token>
+export CASEBOX_ANALYSIS_PROVIDER=openai
+export CASEBOX_ANALYSIS_BASE_URL=https://openrouter.ai/api/v1
+export CASEBOX_ANALYSIS_API_KEY=<your OpenRouter key>
+export CASEBOX_ANALYSIS_MODEL=<a model ID from openrouter.ai/models, such as openai/gpt-4.1-mini>
+casebox worker
+```
+
+Choose a model that supports JSON output (`response_format`): Casebox asks for a JSON answer on every call.
+
 **Your Cursor login (no key):**
 
 ```bash
